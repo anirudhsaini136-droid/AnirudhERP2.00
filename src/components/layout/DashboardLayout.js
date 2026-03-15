@@ -3,7 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import {
   LayoutDashboard, Building2, Users, UserCheck, Calendar, FileText,
-  Receipt, BarChart3, Package, ShoppingCart, Truck, Settings, Bell,
+  Receipt, BarChart3, Package, ShoppingCart, Settings, Bell,
   LogOut, ChevronDown, Menu, X, Clock, Briefcase, CreditCard,
   Shield, Home, FileSpreadsheet, UserCircle, ArrowLeftRight
 } from 'lucide-react';
@@ -33,6 +33,8 @@ const NAV_CONFIG = {
       { path: '/finance/invoices', label: 'Invoices', icon: FileSpreadsheet },
       { path: '/finance/expenses', label: 'Expenses', icon: Receipt },
       { path: '/finance/reports', label: 'Reports', icon: BarChart3 },
+      { path: '/inventory', label: 'Inventory', icon: Package },
+      { path: '/inventory/billing', label: 'Quick Bill', icon: ShoppingCart },
       { path: '/dashboard/settings', label: 'Settings', icon: Settings },
     ]
   },
@@ -57,14 +59,14 @@ const NAV_CONFIG = {
       { path: '/finance/reports', label: 'Reports', icon: BarChart3 },
     ]
   },
- inventory_admin: {
-  title: 'Inventory',
-  icon: Package,
-  items: [
-    { path: '/inventory', label: 'Products', icon: Package },
-    { path: '/inventory/billing', label: 'Quick Bill', icon: ShoppingCart },
-  ]
-},,
+  inventory_admin: {
+    title: 'Inventory',
+    icon: Package,
+    items: [
+      { path: '/inventory', label: 'Products', icon: Package },
+      { path: '/inventory/billing', label: 'Quick Bill', icon: ShoppingCart },
+    ]
+  },
   staff: {
     title: 'Staff Portal',
     icon: Home,
