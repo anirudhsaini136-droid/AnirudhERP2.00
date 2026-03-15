@@ -15,6 +15,8 @@ const PRODUCT_EMOJIS = {
   default: '📦'
 };
 
+const QUICK_CHARGES = ['Transport', 'Labour', 'Packaging', 'Installation', 'Delivery', 'Service'];
+
 function Toggle({ value, onChange, label, sublabel, color = 'gold' }) {
   const bg = value
     ? color === 'emerald' ? 'bg-emerald-500' : 'bg-gold-500'
@@ -38,6 +40,7 @@ export default function BillingPage() {
   const [products, setProducts] = useState([]);
   const [search, setSearch] = useState('');
   const [cart, setCart] = useState([]);
+  const [extraCharges, setExtraCharges] = useState([]);
   const [clientName, setClientName] = useState('');
   const [clientPhone, setClientPhone] = useState('');
   const [clientEmail, setClientEmail] = useState('');
@@ -53,6 +56,7 @@ export default function BillingPage() {
   const [customerSuggestions, setCustomerSuggestions] = useState([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [searchingCustomers, setSearchingCustomers] = useState(false);
+  const [editingPrice, setEditingPrice] = useState(null); // product_id being edited
   const searchRef = useRef(null);
   const suggestionsRef = useRef(null);
   const searchTimerRef = useRef(null);
@@ -74,7 +78,6 @@ export default function BillingPage() {
       .catch(() => {});
   }, [api]);
 
-  // Search customers as user types name
   useEffect(() => {
     if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
     if (clientName.length < 2) {
@@ -95,7 +98,6 @@ export default function BillingPage() {
     }, 300);
   }, [clientName, api]);
 
-  // Close suggestions on outside click
   useEffect(() => {
     const handler = (e) => {
       if (suggestionsRef.current && !suggestionsRef.current.contains(e.target)) {
@@ -135,6 +137,7 @@ export default function BillingPage() {
         image_url: product.image_url,
         category: product.category,
         unit_price: product.unit_price,
+        original_price: product.unit_price,
         quantity: 1,
         max_stock: product.current_stock
       }];
@@ -152,11 +155,36 @@ export default function BillingPage() {
     }).filter(Boolean));
   };
 
+  const updatePrice = (product_id, newPrice) => {
+    const p = parseFloat(newPrice);
+    if (isNaN(p) || p < 0) return;
+    setCart(prev => prev.map(i =>
+      i.product_id === product_id ? { ...i, unit_price: p } : i
+    ));
+  };
+
   const removeFromCart = (product_id) => {
     setCart(prev => prev.filter(i => i.product_id !== product_id));
   };
 
-  const subtotal = cart.reduce((s, i) => s + i.quantity * i.unit_price, 0);
+  // Extra charges
+  const addExtraCharge = (name = '') => {
+    setExtraCharges(prev => [...prev, { id: Date.now(), name, amount: 0 }]);
+  };
+
+  const updateCharge = (id, field, value) => {
+    setExtraCharges(prev => prev.map(c =>
+      c.id === id ? { ...c, [field]: field === 'amount' ? parseFloat(value) || 0 : value } : c
+    ));
+  };
+
+  const removeCharge = (id) => {
+    setExtraCharges(prev => prev.filter(c => c.id !== id));
+  };
+
+  const productsSubtotal = cart.reduce((s, i) => s + i.quantity * i.unit_price, 0);
+  const chargesTotal = extraCharges.reduce((s, c) => s + (c.amount || 0), 0);
+  const subtotal = productsSubtotal + chargesTotal;
   const taxAmount = subtotal * (taxRate / 100);
   const total = subtotal + taxAmount - discount;
 
@@ -168,8 +196,6 @@ export default function BillingPage() {
       `Hello ${custName || 'there'}!`,
       '',
       `Thank you for your recent purchase from *${storeName}*.`,
-      '',
-      `Here are your invoice details:`,
       '',
       `Invoice No: ${invoiceNumber || ''}`,
       `Amount: Rs. ${totalAmount}`,
@@ -189,26 +215,38 @@ export default function BillingPage() {
 
   const handleBill = async () => {
     if (!clientName.trim()) { toast.error('Customer name is required'); return; }
-    if (cart.length === 0) { toast.error('Add at least one product'); return; }
+    if (cart.length === 0 && extraCharges.length === 0) { toast.error('Add at least one product'); return; }
     if (sendWhatsApp && !clientPhone.trim()) { toast.error('Phone number is required to send on WhatsApp'); return; }
 
     setBilling(true);
     const savedName = clientName;
     const savedPhone = clientPhone;
 
+    // Build items — products + extra charges as line items
+    const billItems = cart.map(i => ({
+      product_id: i.product_id,
+      quantity: i.quantity,
+      unit_price: i.unit_price
+    }));
+
+    // Extra charges go as notes since bill endpoint only takes product items
+    const chargeNotes = extraCharges.length > 0
+      ? extraCharges.map(c => `${c.name}: Rs.${c.amount}`).join(', ')
+      : '';
+    const fullNotes = [notes, chargeNotes].filter(Boolean).join(' | ');
+
     try {
       const res = await api.post('/inventory/bill', {
         client_name: clientName,
         client_phone: clientPhone,
         client_email: clientEmail,
-        items: cart.map(i => ({ product_id: i.product_id, quantity: i.quantity, unit_price: i.unit_price })),
+        items: billItems,
         create_invoice: createInvoice || sendWhatsApp,
-        notes,
+        notes: fullNotes,
         discount_amount: discount,
         tax_rate: taxRate
       });
 
-      // Auto-save customer in background
       if (clientName.trim()) {
         api.post('/customers', {
           name: clientName,
@@ -220,6 +258,7 @@ export default function BillingPage() {
 
       setSuccess({ ...res.data, savedPhone, savedName });
       setCart([]);
+      setExtraCharges([]);
       setClientName('');
       setClientPhone('');
       setClientEmail('');
@@ -372,18 +411,20 @@ export default function BillingPage() {
 
         {/* Right — Bill panel */}
         <div className="w-full lg:w-96 space-y-4">
-          <div className="glass-card rounded-2xl p-5 space-y-4 sticky top-4">
+          <div className="glass-card rounded-2xl p-5 space-y-4 sticky top-4 max-h-[calc(100vh-2rem)] overflow-y-auto">
             <div className="flex items-center gap-2 border-b border-white/5 pb-3">
               <ShoppingCart size={18} className="text-gold-400" />
               <h2 className="font-display text-lg text-white">Bill</h2>
-              {cart.length > 0 && (
-                <span className="ml-auto text-xs text-gray-500">{cart.length} item{cart.length > 1 ? 's' : ''}</span>
+              {(cart.length > 0 || extraCharges.length > 0) && (
+                <span className="ml-auto text-xs text-gray-500">
+                  {cart.length} item{cart.length !== 1 ? 's' : ''}
+                  {extraCharges.length > 0 && ` + ${extraCharges.length} charge${extraCharges.length !== 1 ? 's' : ''}`}
+                </span>
               )}
             </div>
 
-            {/* Customer info with autocomplete */}
+            {/* Customer info */}
             <div className="space-y-2">
-              {/* Name with autocomplete */}
               <div className="relative" ref={suggestionsRef}>
                 <div className="relative">
                   <User size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
@@ -399,8 +440,6 @@ export default function BillingPage() {
                     <div className="absolute right-3 top-1/2 -translate-y-1/2 w-3 h-3 border border-gray-500 border-t-white rounded-full animate-spin" />
                   )}
                 </div>
-
-                {/* Suggestions dropdown */}
                 {showSuggestions && customerSuggestions.length > 0 && (
                   <div className="absolute top-full left-0 right-0 mt-1 bg-void border border-white/10 rounded-xl shadow-2xl z-50 overflow-hidden">
                     {customerSuggestions.map(c => (
@@ -425,64 +464,127 @@ export default function BillingPage() {
                   </div>
                 )}
               </div>
-
-              <Input
-                className="input-premium text-sm"
-                placeholder="Phone (for WhatsApp)"
-                value={clientPhone}
-                onChange={e => setClientPhone(e.target.value)}
-              />
-              <Input
-                className="input-premium text-sm"
-                placeholder="Email (optional)"
-                value={clientEmail}
-                onChange={e => setClientEmail(e.target.value)}
-              />
-              <Input
-                className="input-premium text-sm"
-                placeholder="GSTIN (optional)"
-                value={clientGstin}
-                onChange={e => setClientGstin(e.target.value.toUpperCase())}
-                maxLength={15}
-              />
+              <Input className="input-premium text-sm" placeholder="Phone (for WhatsApp)" value={clientPhone} onChange={e => setClientPhone(e.target.value)} />
+              <Input className="input-premium text-sm" placeholder="Email (optional)" value={clientEmail} onChange={e => setClientEmail(e.target.value)} />
+              <Input className="input-premium text-sm" placeholder="GSTIN (optional)" value={clientGstin} onChange={e => setClientGstin(e.target.value.toUpperCase())} maxLength={15} />
             </div>
 
-            {/* Cart items */}
-            {cart.length === 0 ? (
-              <div className="text-center py-8 text-gray-600 text-sm">
-                <ShoppingCart size={32} className="mx-auto mb-2 opacity-30" />
+            {/* Cart items with editable price */}
+            {cart.length === 0 && extraCharges.length === 0 ? (
+              <div className="text-center py-6 text-gray-600 text-sm">
+                <ShoppingCart size={28} className="mx-auto mb-2 opacity-30" />
                 Click products to add
               </div>
             ) : (
-              <div className="space-y-2 max-h-48 overflow-y-auto">
+              <div className="space-y-2">
                 {cart.map(item => (
-                  <div key={item.product_id} className="flex items-center gap-2 py-2 border-b border-white/[0.03]">
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs font-medium text-white truncate">{item.name}</p>
-                      <p className="text-xs text-gray-500">{fmt(item.unit_price)} each</p>
+                  <div key={item.product_id} className="py-2 border-b border-white/[0.03]">
+                    <div className="flex items-center gap-2">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-medium text-white truncate">{item.name}</p>
+                      </div>
+                      <div className="flex items-center gap-1 shrink-0">
+                        <button onClick={() => updateQty(item.product_id, -1)} className="w-6 h-6 rounded-lg bg-white/5 hover:bg-white/10 flex items-center justify-center text-gray-400 hover:text-white">
+                          <Minus size={10} />
+                        </button>
+                        <span className="w-6 text-center text-sm text-white font-bold">{item.quantity}</span>
+                        <button onClick={() => updateQty(item.product_id, 1)} className="w-6 h-6 rounded-lg bg-white/5 hover:bg-white/10 flex items-center justify-center text-gray-400 hover:text-white">
+                          <Plus size={10} />
+                        </button>
+                      </div>
+                      <button onClick={() => removeFromCart(item.product_id)} className="text-rose-400/40 hover:text-rose-400 shrink-0">
+                        <Trash2 size={11} />
+                      </button>
                     </div>
-                    <div className="flex items-center gap-1">
-                      <button onClick={() => updateQty(item.product_id, -1)} className="w-6 h-6 rounded-lg bg-white/5 hover:bg-white/10 flex items-center justify-center text-gray-400 hover:text-white">
-                        <Minus size={10} />
-                      </button>
-                      <span className="w-6 text-center text-sm text-white font-bold">{item.quantity}</span>
-                      <button onClick={() => updateQty(item.product_id, 1)} className="w-6 h-6 rounded-lg bg-white/5 hover:bg-white/10 flex items-center justify-center text-gray-400 hover:text-white">
-                        <Plus size={10} />
-                      </button>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-xs text-gold-400 font-bold">{fmt(item.quantity * item.unit_price)}</p>
-                      <button onClick={() => removeFromCart(item.product_id)} className="text-rose-400/50 hover:text-rose-400 mt-0.5">
-                        <Trash2 size={10} />
-                      </button>
+
+                    {/* Editable price row */}
+                    <div className="flex items-center justify-between mt-1.5 gap-2">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[10px] text-gray-600">Price:</span>
+                        {editingPrice === item.product_id ? (
+                          <input
+                            type="number"
+                            min="0"
+                            className="w-20 bg-white/10 border border-gold-500/40 rounded-lg px-2 py-0.5 text-xs text-gold-400 font-bold outline-none"
+                            value={item.unit_price}
+                            onChange={e => updatePrice(item.product_id, e.target.value)}
+                            onBlur={() => setEditingPrice(null)}
+                            autoFocus
+                          />
+                        ) : (
+                          <button
+                            onClick={() => setEditingPrice(item.product_id)}
+                            className="text-xs text-gold-400 font-bold hover:bg-gold-500/10 px-1.5 py-0.5 rounded-lg border border-transparent hover:border-gold-500/20 transition-all"
+                            title="Click to edit price"
+                          >
+                            {fmt(item.unit_price)}
+                            {item.unit_price !== item.original_price && (
+                              <span className="ml-1 text-[9px] text-gray-500 line-through">{fmt(item.original_price)}</span>
+                            )}
+                          </button>
+                        )}
+                      </div>
+                      <span className="text-xs text-gold-400 font-bold">{fmt(item.quantity * item.unit_price)}</span>
                     </div>
                   </div>
                 ))}
               </div>
             )}
 
+            {/* Extra Charges */}
+            {extraCharges.length > 0 && (
+              <div className="space-y-2">
+                <p className="text-[10px] text-gray-500 font-semibold uppercase tracking-wider">Extra Charges</p>
+                {extraCharges.map(charge => (
+                  <div key={charge.id} className="flex items-center gap-2">
+                    <input
+                      className="input-premium text-xs flex-1 h-8"
+                      placeholder="Charge name"
+                      value={charge.name}
+                      onChange={e => updateCharge(charge.id, 'name', e.target.value)}
+                    />
+                    <input
+                      type="number"
+                      min="0"
+                      className="input-premium text-xs w-20 h-8 text-right"
+                      placeholder="0"
+                      value={charge.amount || ''}
+                      onChange={e => updateCharge(charge.id, 'amount', e.target.value)}
+                    />
+                    <button onClick={() => removeCharge(charge.id)} className="text-rose-400/50 hover:text-rose-400 shrink-0">
+                      <Trash2 size={13} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Add charge button + quick charge pills */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <p className="text-[10px] text-gray-600">Add extra charges</p>
+                <button
+                  onClick={() => addExtraCharge()}
+                  className="text-[10px] text-gold-400 hover:text-gold-300 flex items-center gap-1"
+                >
+                  <Plus size={10} /> Custom
+                </button>
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {QUICK_CHARGES.map(name => (
+                  <button
+                    key={name}
+                    onClick={() => addExtraCharge(name)}
+                    className="text-[10px] px-2 py-1 rounded-lg bg-white/[0.03] border border-white/[0.06] text-gray-400 hover:text-white hover:border-white/10 transition-all"
+                  >
+                    + {name}
+                  </button>
+                ))}
+              </div>
+            </div>
+
             {/* Discount & Tax */}
-            {cart.length > 0 && (
+            {(cart.length > 0 || extraCharges.length > 0) && (
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <Label className="text-gray-500 text-[10px]">Discount (Rs.)</Label>
@@ -496,11 +598,16 @@ export default function BillingPage() {
             )}
 
             {/* Totals */}
-            {cart.length > 0 && (
+            {(cart.length > 0 || extraCharges.length > 0) && (
               <div className="space-y-1.5 border-t border-white/5 pt-3">
                 <div className="flex justify-between text-xs text-gray-500">
-                  <span>Subtotal</span><span>{fmt(subtotal)}</span>
+                  <span>Products</span><span>{fmt(productsSubtotal)}</span>
                 </div>
+                {chargesTotal > 0 && (
+                  <div className="flex justify-between text-xs text-gray-500">
+                    <span>Extra Charges</span><span>{fmt(chargesTotal)}</span>
+                  </div>
+                )}
                 {taxRate > 0 && (
                   <div className="flex justify-between text-xs text-gray-500">
                     <span>Tax ({taxRate}%)</span><span>{fmt(taxAmount)}</span>
@@ -520,19 +627,8 @@ export default function BillingPage() {
 
             {/* Options */}
             <div className="space-y-3 border-t border-white/5 pt-3">
-              <Toggle
-                value={createInvoice}
-                onChange={() => setCreateInvoice(!createInvoice)}
-                label="Create invoice record"
-                sublabel="Save a formal invoice in Finance"
-              />
-              <Toggle
-                value={sendWhatsApp}
-                onChange={() => setSendWhatsApp(!sendWhatsApp)}
-                label="Send on WhatsApp after billing"
-                sublabel="Opens WhatsApp with invoice link (free)"
-                color="emerald"
-              />
+              <Toggle value={createInvoice} onChange={() => setCreateInvoice(!createInvoice)} label="Create invoice record" sublabel="Save a formal invoice in Finance" />
+              <Toggle value={sendWhatsApp} onChange={() => setSendWhatsApp(!sendWhatsApp)} label="Send on WhatsApp after billing" sublabel="Opens WhatsApp with invoice link (free)" color="emerald" />
               {sendWhatsApp && (
                 <div className="p-3 rounded-xl border flex items-start gap-2" style={{ background: 'rgba(37,211,102,0.05)', borderColor: 'rgba(37,211,102,0.2)' }}>
                   <MessageCircle size={13} className="mt-0.5 shrink-0" style={{ color: '#25d366' }} />
@@ -544,17 +640,12 @@ export default function BillingPage() {
             </div>
 
             {/* Notes */}
-            <Input
-              className="input-premium text-sm"
-              placeholder="Notes (optional)"
-              value={notes}
-              onChange={e => setNotes(e.target.value)}
-            />
+            <Input className="input-premium text-sm" placeholder="Notes (optional)" value={notes} onChange={e => setNotes(e.target.value)} />
 
             {/* Bill button */}
             <button
               onClick={handleBill}
-              disabled={billing || cart.length === 0 || !clientName.trim()}
+              disabled={billing || (cart.length === 0 && extraCharges.length === 0) || !clientName.trim()}
               className="w-full btn-premium btn-primary py-3 text-sm font-bold disabled:opacity-40 disabled:cursor-not-allowed"
             >
               {billing ? (
