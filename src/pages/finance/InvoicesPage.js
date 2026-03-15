@@ -5,12 +5,15 @@ import DashboardLayout from '../../components/layout/DashboardLayout';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../../components/ui/dialog';
 import { Input } from '../../components/ui/input';
 import { Label } from '../../components/ui/label';
-import { Plus, Search, Eye, Send, CheckCircle, Trash2 } from 'lucide-react';
+import { Plus, Search, Eye, Send, CheckCircle, Trash2, MessageCircle, Bell } from 'lucide-react';
 import { toast } from 'sonner';
 
 const fmt = (n) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(n || 0);
 const fmtDate = (d) => d ? new Date(d).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : '-';
-const STATUS_COLORS = { draft: 'badge-neutral', sent: 'badge-info', paid: 'badge-success', overdue: 'badge-danger', cancelled: 'badge-danger', partially_paid: 'badge-warning' };
+const STATUS_COLORS = {
+  draft: 'badge-neutral', sent: 'badge-info', paid: 'badge-success',
+  overdue: 'badge-danger', cancelled: 'badge-danger', partially_paid: 'badge-warning'
+};
 const emptyItem = { description: '', quantity: 1, unit_price: 0, amount: 0 };
 
 export default function InvoicesPage() {
@@ -27,29 +30,20 @@ export default function InvoicesPage() {
   const [showPayment, setShowPayment] = useState(false);
   const [paymentInvoice, setPaymentInvoice] = useState(null);
   const [paying, setPaying] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState(null);
+  const [deleting, setDeleting] = useState(false);
+  const [businessName, setBusinessName] = useState('');
 
   const today = new Date().toISOString().split('T')[0];
 
   const [form, setForm] = useState({
-    client_name: '',
-    client_email: '',
-    client_address: '',
-    client_phone: '',
-    issue_date: today,
-    due_date: '',
-    tax_rate: 18,
-    discount_amount: 0,
-    notes: '',
-    currency: 'INR',
-    items: [{ ...emptyItem }]
+    client_name: '', client_email: '', client_address: '', client_phone: '',
+    issue_date: today, due_date: '', tax_rate: 18, discount_amount: 0,
+    notes: '', currency: 'INR', items: [{ ...emptyItem }]
   });
 
   const [paymentForm, setPaymentForm] = useState({
-    amount: 0,
-    payment_date: today,
-    payment_method: 'cash',
-    reference: '',
-    notes: ''
+    amount: 0, payment_date: today, payment_method: 'cash', reference: '', notes: ''
   });
 
   const fetchInvoices = useCallback(async () => {
@@ -68,6 +62,12 @@ export default function InvoicesPage() {
   }, [api, page, search, filterStatus]);
 
   useEffect(() => { fetchInvoices(); }, [fetchInvoices]);
+
+  useEffect(() => {
+    api.get('/dashboard/settings')
+      .then(r => setBusinessName(r.data?.business?.name || ''))
+      .catch(() => {});
+  }, [api]);
 
   const resetForm = () => setForm({
     client_name: '', client_email: '', client_address: '', client_phone: '',
@@ -93,7 +93,6 @@ export default function InvoicesPage() {
 
   const handleCreate = async (e) => {
     e.preventDefault();
-    if (!form.issue_date) { toast.error('Issue date is required'); return; }
     if (!form.due_date) { toast.error('Due date is required'); return; }
     if (form.items.some(i => !i.description)) { toast.error('All items need a description'); return; }
     setCreating(true);
@@ -106,13 +105,11 @@ export default function InvoicesPage() {
           unit_price: Number(i.unit_price)
         }))
       });
-      toast.success('Invoice created successfully');
+      toast.success('Invoice created');
       setShowCreate(false);
       resetForm();
       fetchInvoices();
-      if (res.data.id) {
-        navigate(`/finance/invoices/${res.data.id}`);
-      }
+      if (res.data.id) navigate(`/finance/invoices/${res.data.id}`);
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Failed to create invoice');
     }
@@ -129,15 +126,18 @@ export default function InvoicesPage() {
     }
   };
 
-  const deleteInvoice = async (id) => {
-    if (!window.confirm('Delete this draft invoice?')) return;
+  const handleDeleteConfirmed = async () => {
+    if (!deleteConfirm) return;
+    setDeleting(true);
     try {
-      await api.delete(`/finance/invoices/${id}`);
+      await api.delete(`/finance/invoices/${deleteConfirm.id}`);
       toast.success('Invoice deleted');
+      setDeleteConfirm(null);
       fetchInvoices();
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Failed to delete invoice');
     }
+    setDeleting(false);
   };
 
   const openPayment = (inv) => {
@@ -165,6 +165,42 @@ export default function InvoicesPage() {
     }
     setPaying(false);
   };
+
+  const sendReminder = (inv) => {
+    const phone = (inv.client_phone || '').replace(/[^0-9]/g, '');
+    const invoiceUrl = `${window.location.origin}/finance/invoices/${inv.id}`;
+    const storeName = businessName || 'Our Store';
+    const dueDate = fmtDate(inv.due_date);
+    const balance = fmt(inv.balance_due || inv.total_amount);
+
+    const message = [
+      `Hello ${inv.client_name}!`,
+      '',
+      `This is a gentle reminder from *${storeName}* regarding your pending payment.`,
+      '',
+      `Invoice No: ${inv.invoice_number}`,
+      `Amount Due: ${balance}`,
+      `Due Date: ${dueDate}`,
+      '',
+      `View your invoice here:`,
+      invoiceUrl,
+      '',
+      `Kindly arrange the payment at your earliest convenience.`,
+      `Thank you for your business!`
+    ].join('\n');
+
+    const waUrl = phone
+      ? `https://wa.me/${phone}?text=${encodeURIComponent(message)}`
+      : `https://wa.me/?text=${encodeURIComponent(message)}`;
+
+    window.open(waUrl, '_blank');
+    toast.success('WhatsApp reminder opened!');
+  };
+
+  const needsReminder = (inv) =>
+    ['sent', 'partially_paid', 'overdue'].includes(inv.status);
+
+  const isPaid = (inv) => inv.status === 'paid';
 
   return (
     <DashboardLayout>
@@ -227,10 +263,20 @@ export default function InvoicesPage() {
                   <td>
                     <div>
                       <p className="text-sm text-white">{inv.client_name}</p>
-                      <p className="text-xs text-gray-500">{inv.client_email}</p>
+                      {inv.client_phone && (
+                        <p className="text-xs text-gray-500">{inv.client_phone}</p>
+                      )}
+                      {!inv.client_phone && inv.client_email && (
+                        <p className="text-xs text-gray-500">{inv.client_email}</p>
+                      )}
                     </div>
                   </td>
-                  <td className="text-sm text-gold-400 font-semibold">{fmt(inv.total_amount)}</td>
+                  <td>
+                    <p className="text-sm text-gold-400 font-semibold">{fmt(inv.total_amount)}</p>
+                    {inv.balance_due > 0 && inv.balance_due < inv.total_amount && (
+                      <p className="text-[10px] text-amber-400">Due: {fmt(inv.balance_due)}</p>
+                    )}
+                  </td>
                   <td className="text-sm text-gray-400">{fmtDate(inv.due_date)}</td>
                   <td>
                     <span className={`badge-premium ${STATUS_COLORS[inv.status] || 'badge-neutral'}`}>
@@ -239,40 +285,57 @@ export default function InvoicesPage() {
                   </td>
                   <td className="text-right">
                     <div className="flex items-center justify-end gap-1">
+                      {/* View */}
                       <button
                         onClick={() => navigate(`/finance/invoices/${inv.id}`)}
-                        className="p-1.5 text-gray-400 hover:text-white"
+                        className="p-1.5 text-gray-400 hover:text-white transition-colors"
                         title="View Invoice"
                       >
                         <Eye size={15} />
                       </button>
+
+                      {/* Send email — draft only */}
                       {inv.status === 'draft' && (
-                        <>
-                          <button
-                            onClick={() => sendInvoice(inv.id)}
-                            className="p-1.5 text-blue-400 hover:text-blue-300"
-                            title="Send via Email"
-                          >
-                            <Send size={15} />
-                          </button>
-                          <button
-                            onClick={() => deleteInvoice(inv.id)}
-                            className="p-1.5 text-rose-400 hover:text-rose-300"
-                            title="Delete"
-                          >
-                            <Trash2 size={15} />
-                          </button>
-                        </>
+                        <button
+                          onClick={() => sendInvoice(inv.id)}
+                          className="p-1.5 text-blue-400 hover:text-blue-300 transition-colors"
+                          title="Send via Email"
+                        >
+                          <Send size={15} />
+                        </button>
                       )}
+
+                      {/* WhatsApp reminder — sent/overdue/partially paid only */}
+                      {needsReminder(inv) && !isPaid(inv) && (
+                        <button
+                          onClick={() => sendReminder(inv)}
+                          className="p-1.5 transition-colors rounded-lg hover:bg-emerald-500/10"
+                          style={{ color: '#25d366' }}
+                          title="Send WhatsApp Reminder"
+                        >
+                          <Bell size={15} />
+                        </button>
+                      )}
+
+                      {/* Record payment — unpaid invoices */}
                       {['sent', 'partially_paid', 'overdue'].includes(inv.status) && (
                         <button
                           onClick={() => openPayment(inv)}
-                          className="p-1.5 text-emerald-400 hover:text-emerald-300"
+                          className="p-1.5 text-emerald-400 hover:text-emerald-300 transition-colors"
                           title="Record Payment"
                         >
                           <CheckCircle size={15} />
                         </button>
                       )}
+
+                      {/* Delete — ALL invoices */}
+                      <button
+                        onClick={() => setDeleteConfirm(inv)}
+                        className="p-1.5 text-rose-400/50 hover:text-rose-400 transition-colors"
+                        title="Delete Invoice"
+                      >
+                        <Trash2 size={15} />
+                      </button>
                     </div>
                   </td>
                 </tr>
@@ -281,7 +344,7 @@ export default function InvoicesPage() {
           </table>
           {total > 15 && (
             <div className="flex items-center justify-between px-5 py-3 border-t border-white/5">
-              <span className="text-xs text-gray-500">Page {page}</span>
+              <span className="text-xs text-gray-500">Page {page} of {Math.ceil(total / 15)}</span>
               <div className="flex gap-2">
                 <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1} className="btn-premium btn-secondary text-xs py-1.5 px-3 disabled:opacity-30">Prev</button>
                 <button onClick={() => setPage(p => p + 1)} disabled={page >= Math.ceil(total / 15)} className="btn-premium btn-secondary text-xs py-1.5 px-3 disabled:opacity-30">Next</button>
@@ -290,6 +353,46 @@ export default function InvoicesPage() {
           )}
         </div>
       </div>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={!!deleteConfirm} onOpenChange={() => setDeleteConfirm(null)}>
+        <DialogContent className="bg-void border-white/10 max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="font-display text-white text-lg">Delete Invoice?</DialogTitle>
+          </DialogHeader>
+          {deleteConfirm && (
+            <div className="space-y-4">
+              <div className="p-4 rounded-xl bg-rose-500/5 border border-rose-500/20">
+                <p className="text-sm text-white font-medium">{deleteConfirm.invoice_number}</p>
+                <p className="text-xs text-gray-400 mt-1">{deleteConfirm.client_name} · {fmt(deleteConfirm.total_amount)}</p>
+                <div className="mt-2">
+                  <span className={`badge-premium text-[10px] ${STATUS_COLORS[deleteConfirm.status] || 'badge-neutral'}`}>
+                    {deleteConfirm.status?.replace('_', ' ')}
+                  </span>
+                </div>
+              </div>
+              <p className="text-sm text-gray-400">
+                This will permanently delete the invoice. This action <span className="text-rose-400 font-semibold">cannot be undone</span>.
+              </p>
+              {deleteConfirm.status === 'paid' && (
+                <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20">
+                  <p className="text-xs text-amber-400 font-medium">Warning: This invoice is marked as paid. Deleting it will affect your financial records.</p>
+                </div>
+              )}
+              <DialogFooter>
+                <button onClick={() => setDeleteConfirm(null)} className="btn-premium btn-secondary">Cancel</button>
+                <button
+                  onClick={handleDeleteConfirmed}
+                  disabled={deleting}
+                  className="btn-premium px-4 py-2 rounded-xl text-sm font-medium bg-rose-500/20 border border-rose-500/30 text-rose-400 hover:bg-rose-500/30 transition-all disabled:opacity-50"
+                >
+                  {deleting ? 'Deleting...' : 'Yes, Delete'}
+                </button>
+              </DialogFooter>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* Create Invoice Dialog */}
       <Dialog open={showCreate} onOpenChange={setShowCreate}>
@@ -428,7 +531,7 @@ export default function InvoicesPage() {
               </div>
               <div>
                 <Label className="text-gray-400 text-xs">Reference</Label>
-                <Input className="input-premium mt-1" value={paymentForm.reference} onChange={e => setPaymentForm({...paymentForm, reference: e.target.value})} placeholder="Transaction ID etc." />
+                <Input className="input-premium mt-1" value={paymentForm.reference} onChange={e => setPaymentForm({...paymentForm, reference: e.target.value})} placeholder="Transaction ID, UPI ref etc." />
               </div>
               <DialogFooter>
                 <button type="button" onClick={() => setShowPayment(false)} className="btn-premium btn-secondary">Cancel</button>
