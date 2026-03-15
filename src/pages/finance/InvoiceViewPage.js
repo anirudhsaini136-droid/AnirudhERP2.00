@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
-import { ArrowLeft, Printer, Send, MessageCircle, Download } from 'lucide-react';
+import { ArrowLeft, Printer, Send, MessageCircle } from 'lucide-react';
 import { toast } from 'sonner';
 
 const fmt = (n) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 2 }).format(n || 0);
@@ -17,9 +17,6 @@ export default function InvoiceViewPage() {
   const [business, setBusiness] = useState(null);
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
-  const [sendingWA, setSendingWA] = useState(false);
-  const [clientPhone, setClientPhone] = useState('');
-  const [showWAPrompt, setShowWAPrompt] = useState(false);
 
   useEffect(() => {
     const load = async () => {
@@ -31,7 +28,6 @@ export default function InvoiceViewPage() {
         setInvoice(invRes.data.invoice);
         setItems(invRes.data.items || []);
         setBusiness(settingsRes.data.business);
-        setClientPhone(invRes.data.invoice?.client_phone || '');
       } catch (e) {
         toast.error('Failed to load invoice');
         navigate('/finance/invoices');
@@ -41,9 +37,7 @@ export default function InvoiceViewPage() {
     load();
   }, [id, api, navigate]);
 
-  const handlePrint = () => {
-    window.print();
-  };
+  const handlePrint = () => window.print();
 
   const handleSendEmail = async () => {
     setSending(true);
@@ -58,29 +52,39 @@ export default function InvoiceViewPage() {
     setSending(false);
   };
 
-  const handleSendWhatsApp = async () => {
-    if (!clientPhone) {
-      setShowWAPrompt(true);
-      return;
-    }
-    await sendWhatsApp(clientPhone);
-  };
+  const handleSendWhatsApp = () => {
+    if (!invoice) return;
 
-  const sendWhatsApp = async (phone) => {
-    setSendingWA(true);
-    try {
-      await api.post(`/finance/invoices/${id}/send-whatsapp`, { phone });
-      toast.success('Invoice sent via WhatsApp');
-      setShowWAPrompt(false);
-    } catch (e) {
-      const msg = e.response?.data?.detail || 'Failed to send WhatsApp';
-      if (msg.includes('not configured')) {
-        toast.error('WhatsApp not configured. Go to Settings → WhatsApp Integration to set up WATI.');
-      } else {
-        toast.error(msg);
-      }
-    }
-    setSendingWA(false);
+    const phone = invoice.client_phone?.replace(/[^0-9]/g, '') || '';
+    const invoiceUrl = `${window.location.origin}/finance/invoices/${id}`;
+    const businessName = business?.name || 'Us';
+    const amount = fmt(invoice.total_amount);
+    const invoiceNum = invoice.invoice_number;
+    const dueDate = fmtDate(invoice.due_date);
+
+    const message = `Hello ${invoice.client_name}! 👋
+
+Thank you for your recent purchase. 🙏
+
+Here are your invoice details:
+
+🧾 *Invoice:* ${invoiceNum}
+💰 *Amount:* ${amount}
+📅 *Due Date:* ${dueDate}
+🏪 *From:* ${businessName}
+
+📲 *View your invoice here:*
+${invoiceUrl}
+
+For any queries, feel free to reach out. We appreciate your business! ✨`;
+
+    const encodedMessage = encodeURIComponent(message);
+    const waUrl = phone
+      ? `https://wa.me/${phone}?text=${encodedMessage}`
+      : `https://wa.me/?text=${encodedMessage}`;
+
+    window.open(waUrl, '_blank');
+    toast.success('WhatsApp opened with invoice details!');
   };
 
   if (loading) return (
@@ -98,22 +102,26 @@ export default function InvoiceViewPage() {
 
   return (
     <div className="min-h-screen bg-obsidian">
-      {/* Toolbar - hidden on print */}
+      {/* Toolbar */}
       <div className="print:hidden sticky top-0 z-50 bg-void/90 backdrop-blur-sm border-b border-white/5 px-6 py-3 flex items-center justify-between">
         <button onClick={() => navigate('/finance/invoices')} className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors">
           <ArrowLeft size={18} />
           <span className="text-sm">Back to Invoices</span>
         </button>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           {invoice.status === 'draft' && (
             <button onClick={handleSendEmail} disabled={sending} className="btn-premium btn-secondary text-sm flex items-center gap-2">
               <Send size={15} />
               {sending ? 'Sending...' : 'Send Email'}
             </button>
           )}
-          <button onClick={handleSendWhatsApp} disabled={sendingWA} className="btn-premium text-sm flex items-center gap-2 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20">
+          <button
+            onClick={handleSendWhatsApp}
+            className="btn-premium text-sm flex items-center gap-2 px-4 py-2 rounded-xl border transition-all"
+            style={{ background: 'rgba(37,211,102,0.1)', borderColor: 'rgba(37,211,102,0.3)', color: '#25d366' }}
+          >
             <MessageCircle size={15} />
-            {sendingWA ? 'Sending...' : 'Send WhatsApp'}
+            Send on WhatsApp
           </button>
           <button onClick={handlePrint} className="btn-premium btn-primary text-sm flex items-center gap-2">
             <Printer size={15} />
@@ -121,29 +129,6 @@ export default function InvoiceViewPage() {
           </button>
         </div>
       </div>
-
-      {/* WhatsApp phone prompt */}
-      {showWAPrompt && (
-        <div className="print:hidden fixed inset-0 bg-black/60 z-50 flex items-center justify-center">
-          <div className="bg-void border border-white/10 rounded-2xl p-6 w-full max-w-sm space-y-4">
-            <h3 className="font-display text-white text-lg">Send via WhatsApp</h3>
-            <p className="text-sm text-gray-500">Enter customer's WhatsApp number</p>
-            <input
-              type="tel"
-              className="input-premium w-full"
-              placeholder="+919876543210"
-              value={clientPhone}
-              onChange={e => setClientPhone(e.target.value)}
-            />
-            <div className="flex gap-2">
-              <button onClick={() => setShowWAPrompt(false)} className="btn-premium btn-secondary flex-1">Cancel</button>
-              <button onClick={() => sendWhatsApp(clientPhone)} disabled={sendingWA} className="btn-premium btn-primary flex-1">
-                {sendingWA ? 'Sending...' : 'Send'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Invoice Document */}
       <div className="p-6 print:p-0 flex justify-center">
@@ -168,9 +153,7 @@ export default function InvoiceViewPage() {
                       {business?.name || 'Your Business'}
                     </div>
                     {business?.invoice_gst && (
-                      <div style={{ color: '#9ca3af', fontSize: '11px', marginTop: '2px' }}>
-                        GST: {business.invoice_gst}
-                      </div>
+                      <div style={{ color: '#9ca3af', fontSize: '11px', marginTop: '2px' }}>GST: {business.invoice_gst}</div>
                     )}
                   </div>
                 </div>
@@ -181,12 +164,8 @@ export default function InvoiceViewPage() {
                 </div>
               </div>
               <div style={{ textAlign: 'right' }}>
-                <div style={{ color: '#D4AF37', fontSize: '32px', fontWeight: 'bold', letterSpacing: '-1px' }}>
-                  INVOICE
-                </div>
-                <div style={{ color: '#fff', fontSize: '16px', fontWeight: '600', marginTop: '4px' }}>
-                  {invoice.invoice_number}
-                </div>
+                <div style={{ color: '#D4AF37', fontSize: '32px', fontWeight: 'bold', letterSpacing: '-1px' }}>INVOICE</div>
+                <div style={{ color: '#fff', fontSize: '16px', fontWeight: '600', marginTop: '4px' }}>{invoice.invoice_number}</div>
                 <div style={{ marginTop: '12px', display: 'inline-block', padding: '4px 12px', borderRadius: '20px', border: `1px solid ${statusColor}`, backgroundColor: `${statusColor}20` }}>
                   <span style={{ color: statusColor, fontSize: '11px', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                     {invoice.status?.replace('_', ' ')}
@@ -200,9 +179,7 @@ export default function InvoiceViewPage() {
           <div style={{ background: '#f8f9fa', padding: '24px 48px', borderBottom: '1px solid #e5e7eb' }}>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '32px' }}>
               <div>
-                <div style={{ fontSize: '10px', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '1px', color: '#6b7280', marginBottom: '8px' }}>
-                  Bill To
-                </div>
+                <div style={{ fontSize: '10px', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '1px', color: '#6b7280', marginBottom: '8px' }}>Bill To</div>
                 <div style={{ fontSize: '16px', fontWeight: '700', color: '#111827' }}>{invoice.client_name}</div>
                 {invoice.client_email && <div style={{ fontSize: '13px', color: '#6b7280', marginTop: '2px' }}>{invoice.client_email}</div>}
                 {invoice.client_phone && <div style={{ fontSize: '13px', color: '#6b7280' }}>{invoice.client_phone}</div>}
@@ -254,19 +231,16 @@ export default function InvoiceViewPage() {
           <div style={{ padding: '24px 48px', display: 'flex', justifyContent: 'flex-end' }}>
             <div style={{ width: '280px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', fontSize: '13px', color: '#6b7280' }}>
-                <span>Subtotal</span>
-                <span>{fmt(invoice.subtotal)}</span>
+                <span>Subtotal</span><span>{fmt(invoice.subtotal)}</span>
               </div>
               {invoice.tax_rate > 0 && (
                 <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', fontSize: '13px', color: '#6b7280' }}>
-                  <span>GST ({invoice.tax_rate}%)</span>
-                  <span>{fmt(invoice.tax_amount)}</span>
+                  <span>GST ({invoice.tax_rate}%)</span><span>{fmt(invoice.tax_amount)}</span>
                 </div>
               )}
               {invoice.discount_amount > 0 && (
                 <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', fontSize: '13px', color: '#ef4444' }}>
-                  <span>Discount</span>
-                  <span>-{fmt(invoice.discount_amount)}</span>
+                  <span>Discount</span><span>-{fmt(invoice.discount_amount)}</span>
                 </div>
               )}
               <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 0', borderTop: '2px solid #111827', marginTop: '6px' }}>
@@ -276,8 +250,7 @@ export default function InvoiceViewPage() {
               {invoice.amount_paid > 0 && (
                 <>
                   <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', fontSize: '13px', color: '#10b981' }}>
-                    <span>Amount Paid</span>
-                    <span>-{fmt(invoice.amount_paid)}</span>
+                    <span>Amount Paid</span><span>-{fmt(invoice.amount_paid)}</span>
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderTop: '1px solid #e5e7eb', marginTop: '4px' }}>
                     <span style={{ fontSize: '14px', fontWeight: '700', color: '#111827' }}>Balance Due</span>
@@ -291,9 +264,7 @@ export default function InvoiceViewPage() {
           {/* Bank Details */}
           {(business?.invoice_bank_name || business?.invoice_bank_account) && (
             <div style={{ padding: '24px 48px', background: '#f8f9fa', borderTop: '1px solid #e5e7eb' }}>
-              <div style={{ fontSize: '11px', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '1px', color: '#6b7280', marginBottom: '10px' }}>
-                Bank Details
-              </div>
+              <div style={{ fontSize: '11px', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '1px', color: '#6b7280', marginBottom: '10px' }}>Bank Details</div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px' }}>
                 {business.invoice_bank_name && (
                   <div>
@@ -337,7 +308,6 @@ export default function InvoiceViewPage() {
         </div>
       </div>
 
-      {/* Print styles */}
       <style>{`
         @media print {
           body { background: white !important; }
