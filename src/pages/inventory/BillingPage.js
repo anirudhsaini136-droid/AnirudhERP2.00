@@ -20,15 +20,15 @@ function Toggle({ value, onChange, label, sublabel, color = 'gold' }) {
     ? color === 'emerald' ? 'bg-emerald-500' : 'bg-gold-500'
     : 'bg-white/10';
   return (
-    <label className="flex items-center gap-3 cursor-pointer" onClick={onChange}>
-      <div className={`w-10 h-5 rounded-full transition-colors relative ${bg}`}>
+    <div className="flex items-center gap-3 cursor-pointer" onClick={onChange}>
+      <div className={`w-10 h-5 rounded-full transition-colors relative shrink-0 ${bg}`}>
         <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${value ? 'translate-x-5' : 'translate-x-0.5'}`} />
       </div>
       <div>
-        <span className="text-xs text-gray-400">{label}</span>
-        {sublabel && <p className="text-[10px] text-gray-600">{sublabel}</p>}
+        <p className="text-xs text-gray-400">{label}</p>
+        {sublabel && <p className="text-[10px] text-gray-600 mt-0.5">{sublabel}</p>}
       </div>
-    </label>
+    </div>
   );
 }
 
@@ -106,10 +106,27 @@ export default function BillingPage() {
   const taxAmount = subtotal * (taxRate / 100);
   const total = subtotal + taxAmount - discount;
 
+  const openWhatsApp = (invoiceId, invoiceNumber, totalAmount, phone) => {
+    const invoiceUrl = `${window.location.origin}/finance/invoices/${invoiceId}`;
+    const cleanPhone = phone?.replace(/[^0-9]/g, '') || '';
+    const message =
+      `Hello ${clientName}! 👋\n\n` +
+      `Thank you for your recent purchase. Here are your invoice details:\n\n` +
+      `🧾 *Invoice:* ${invoiceNumber || ''}\n` +
+      `💰 *Amount:* ₹${totalAmount}\n` +
+      `🏪 *From:* Your Store\n\n` +
+      `📲 *View your invoice here:*\n${invoiceUrl}\n\n` +
+      `Feel free to reach out for any queries. We appreciate your business! 🙏`;
+    const waUrl = cleanPhone
+      ? `https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`
+      : `https://wa.me/?text=${encodeURIComponent(message)}`;
+    window.open(waUrl, '_blank');
+  };
+
   const handleBill = async () => {
     if (!clientName.trim()) { toast.error('Customer name is required'); return; }
     if (cart.length === 0) { toast.error('Add at least one product'); return; }
-    if (sendWhatsApp && !clientPhone.trim()) { toast.error('Phone number is required for WhatsApp'); return; }
+    if (sendWhatsApp && !clientPhone.trim()) { toast.error('Phone number is required to send on WhatsApp'); return; }
 
     setBilling(true);
     try {
@@ -124,19 +141,7 @@ export default function BillingPage() {
         tax_rate: taxRate
       });
 
-      if (sendWhatsApp && clientPhone && res.data.invoice_id) {
-        try {
-          await api.post(`/finance/invoices/${res.data.invoice_id}/send-whatsapp`, { phone: clientPhone });
-          toast.success('Bill created and sent via WhatsApp!');
-        } catch (e) {
-          toast.success('Bill created!');
-          toast.error('WhatsApp failed — check WATI settings in Business Settings');
-        }
-      } else {
-        toast.success('Bill created successfully!');
-      }
-
-      setSuccess(res.data);
+      setSuccess({ ...res.data, savedPhone: clientPhone, savedName: clientName });
       setCart([]);
       setClientName('');
       setClientPhone('');
@@ -144,6 +149,14 @@ export default function BillingPage() {
       setDiscount(0);
       setNotes('');
       fetchProducts();
+
+      if (sendWhatsApp && res.data.invoice_id) {
+        setTimeout(() => {
+          openWhatsApp(res.data.invoice_id, res.data.invoice_number, res.data.total_amount, clientPhone);
+        }, 500);
+      } else {
+        toast.success('Bill created successfully!');
+      }
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Billing failed');
     }
@@ -154,7 +167,7 @@ export default function BillingPage() {
     return (
       <DashboardLayout>
         <div className="flex items-center justify-center min-h-[60vh]">
-          <div className="text-center space-y-6 max-w-sm">
+          <div className="text-center space-y-6 max-w-sm w-full px-4">
             <div
               className="w-24 h-24 bg-emerald-500/20 rounded-full flex items-center justify-center mx-auto border-2 border-emerald-500/40"
               style={{ animation: 'scale-in 0.5s ease-out' }}
@@ -166,6 +179,10 @@ export default function BillingPage() {
               <p className="text-gray-500 mt-2">Stock updated successfully</p>
             </div>
             <div className="glass-card rounded-2xl p-5 space-y-3 text-left">
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-500">Customer</span>
+                <span className="text-white font-medium">{success.savedName}</span>
+              </div>
               <div className="flex justify-between text-sm">
                 <span className="text-gray-500">Total Billed</span>
                 <span className="text-gold-400 font-bold text-lg">{fmt(success.total_amount)}</span>
@@ -181,6 +198,7 @@ export default function BillingPage() {
                 </div>
               )}
             </div>
+
             <div className="flex gap-3">
               <button onClick={() => setSuccess(null)} className="flex-1 btn-premium btn-primary">
                 New Bill
@@ -194,6 +212,18 @@ export default function BillingPage() {
                 </button>
               )}
             </div>
+
+            {success.invoice_id && (
+              <button
+                onClick={() => openWhatsApp(success.invoice_id, success.invoice_number, success.total_amount, success.savedPhone)}
+                className="w-full py-3 rounded-xl text-sm font-semibold border transition-all flex items-center justify-center gap-2"
+                style={{ background: 'rgba(37,211,102,0.1)', borderColor: 'rgba(37,211,102,0.3)', color: '#25d366' }}
+              >
+                <MessageCircle size={16} />
+                Send Invoice on WhatsApp
+              </button>
+            )}
+
             <button onClick={() => navigate('/inventory')} className="text-sm text-gray-500 hover:text-gray-400">
               ← Back to Inventory
             </button>
@@ -277,7 +307,7 @@ export default function BillingPage() {
           </div>
         </div>
 
-        {/* Right — Bill */}
+        {/* Right — Bill panel */}
         <div className="w-full lg:w-96 space-y-4">
           <div className="glass-card rounded-2xl p-5 space-y-4 sticky top-4">
             <div className="flex items-center gap-2 border-b border-white/5 pb-3">
@@ -298,7 +328,7 @@ export default function BillingPage() {
               />
               <Input
                 className="input-premium text-sm"
-                placeholder="Phone (required for WhatsApp)"
+                placeholder="Phone (for WhatsApp)"
                 value={clientPhone}
                 onChange={e => setClientPhone(e.target.value)}
               />
@@ -381,29 +411,28 @@ export default function BillingPage() {
               </div>
             )}
 
-            {/* Toggles */}
+            {/* Options */}
             <div className="space-y-3 border-t border-white/5 pt-3">
               <Toggle
                 value={createInvoice}
                 onChange={() => setCreateInvoice(!createInvoice)}
-                label="Create invoice"
-                sublabel="Generate a formal invoice record"
+                label="Create invoice record"
+                sublabel="Save a formal invoice in Finance"
               />
               <Toggle
                 value={sendWhatsApp}
                 onChange={() => setSendWhatsApp(!sendWhatsApp)}
-                label="Send via WhatsApp"
-                sublabel={sendWhatsApp && !clientPhone ? '⚠ Enter phone number above' : 'Send invoice to customer on WhatsApp'}
+                label="Send on WhatsApp after billing"
+                sublabel="Opens WhatsApp with invoice link"
                 color="emerald"
               />
               {sendWhatsApp && (
-                <div className="p-3 rounded-xl bg-emerald-500/5 border border-emerald-500/20">
-                  <div className="flex items-start gap-2">
-                    <MessageCircle size={14} className="text-emerald-400 mt-0.5 shrink-0" />
-                    <p className="text-[11px] text-emerald-300 leading-relaxed">
-                      Invoice will be sent to <span className="font-bold">{clientPhone || 'the phone number above'}</span> via WhatsApp. Make sure WATI is configured in Business Settings.
-                    </p>
-                  </div>
+                <div className="p-3 rounded-xl border flex items-start gap-2"
+                  style={{ background: 'rgba(37,211,102,0.05)', borderColor: 'rgba(37,211,102,0.2)' }}>
+                  <MessageCircle size={13} className="mt-0.5 shrink-0" style={{ color: '#25d366' }} />
+                  <p className="text-[11px] leading-relaxed" style={{ color: '#86efac' }}>
+                    After bill is created, WhatsApp will open with a message containing the invoice link for <span className="font-bold">{clientPhone || 'the customer'}</span>. Free, no API needed.
+                  </p>
                 </div>
               )}
             </div>
@@ -425,12 +454,12 @@ export default function BillingPage() {
               {billing ? (
                 <span className="flex items-center justify-center gap-2">
                   <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                  {sendWhatsApp ? 'Creating & Sending...' : 'Processing...'}
+                  {sendWhatsApp ? 'Creating Bill...' : 'Processing...'}
                 </span>
               ) : (
                 <span className="flex items-center justify-center gap-2">
                   {sendWhatsApp ? <MessageCircle size={16} /> : <CheckCircle size={16} />}
-                  {sendWhatsApp ? `Bill & Send WhatsApp · ${fmt(total)}` : `Create Bill · ${fmt(total)}`}
+                  {sendWhatsApp ? `Bill + Open WhatsApp · ${fmt(total)}` : `Create Bill · ${fmt(total)}`}
                 </span>
               )}
             </button>
