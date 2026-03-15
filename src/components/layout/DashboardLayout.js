@@ -19,15 +19,24 @@ const NAV_CONFIG = {
       { path: '/super-admin/settings', label: 'Platform Settings', icon: Settings },
     ]
   },
-  business_owner: {
+ business_owner: {
     title: 'Business',
     icon: Briefcase,
     items: [
       { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
       { path: '/dashboard/users', label: 'Manage Users', icon: Users },
+      { path: '/hr', label: 'HR', icon: UserCheck },
+      { path: '/hr/employees', label: 'Employees', icon: Users },
+      { path: '/hr/attendance', label: 'Attendance', icon: Calendar },
+      { path: '/hr/leave', label: 'Leave', icon: FileText },
+      { path: '/hr/payroll', label: 'Payroll', icon: CreditCard },
+      { path: '/finance', label: 'Finance', icon: BarChart3 },
+      { path: '/finance/invoices', label: 'Invoices', icon: FileSpreadsheet },
+      { path: '/finance/expenses', label: 'Expenses', icon: Receipt },
+      { path: '/finance/reports', label: 'Reports', icon: BarChart3 },
       { path: '/dashboard/settings', label: 'Settings', icon: Settings },
     ]
-  },
+  },,
   hr_admin: {
     title: 'HR Management',
     icon: UserCheck,
