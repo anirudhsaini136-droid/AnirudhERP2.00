@@ -4,7 +4,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import DashboardLayout from '../../components/layout/DashboardLayout';
 import { Input } from '../../components/ui/input';
 import { Label } from '../../components/ui/label';
-import { ArrowLeft, Search, Plus, Minus, Trash2, ShoppingCart, CheckCircle, FileText, MessageCircle } from 'lucide-react';
+import { ArrowLeft, Search, Plus, Minus, Trash2, ShoppingCart, CheckCircle, FileText, MessageCircle, User } from 'lucide-react';
 import { toast } from 'sonner';
 
 const fmt = (n) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(n || 0);
@@ -41,6 +41,7 @@ export default function BillingPage() {
   const [clientName, setClientName] = useState('');
   const [clientPhone, setClientPhone] = useState('');
   const [clientEmail, setClientEmail] = useState('');
+  const [clientGstin, setClientGstin] = useState('');
   const [discount, setDiscount] = useState(0);
   const [taxRate, setTaxRate] = useState(0);
   const [createInvoice, setCreateInvoice] = useState(false);
@@ -49,7 +50,12 @@ export default function BillingPage() {
   const [billing, setBilling] = useState(false);
   const [success, setSuccess] = useState(null);
   const [businessName, setBusinessName] = useState('');
+  const [customerSuggestions, setCustomerSuggestions] = useState([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [searchingCustomers, setSearchingCustomers] = useState(false);
   const searchRef = useRef(null);
+  const suggestionsRef = useRef(null);
+  const searchTimerRef = useRef(null);
 
   const fetchProducts = useCallback(async () => {
     try {
@@ -67,6 +73,47 @@ export default function BillingPage() {
       .then(r => setBusinessName(r.data?.business?.name || ''))
       .catch(() => {});
   }, [api]);
+
+  // Search customers as user types name
+  useEffect(() => {
+    if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+    if (clientName.length < 2) {
+      setCustomerSuggestions([]);
+      setShowSuggestions(false);
+      return;
+    }
+    searchTimerRef.current = setTimeout(async () => {
+      setSearchingCustomers(true);
+      try {
+        const res = await api.get(`/customers/search?q=${encodeURIComponent(clientName)}`);
+        setCustomerSuggestions(res.data.customers || []);
+        setShowSuggestions((res.data.customers || []).length > 0);
+      } catch (e) {
+        setCustomerSuggestions([]);
+      }
+      setSearchingCustomers(false);
+    }, 300);
+  }, [clientName, api]);
+
+  // Close suggestions on outside click
+  useEffect(() => {
+    const handler = (e) => {
+      if (suggestionsRef.current && !suggestionsRef.current.contains(e.target)) {
+        setShowSuggestions(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  const selectCustomer = (customer) => {
+    setClientName(customer.name || '');
+    setClientPhone(customer.phone || '');
+    setClientEmail(customer.email || '');
+    setClientGstin(customer.gstin || '');
+    setShowSuggestions(false);
+    toast.success(`${customer.name} loaded`, { duration: 1000 });
+  };
 
   const addToCart = (product) => {
     if (product.current_stock === 0) {
@@ -117,7 +164,6 @@ export default function BillingPage() {
     const invoiceUrl = `${window.location.origin}/finance/invoices/${invoiceId}`;
     const cleanPhone = (phone || '').replace(/[^0-9]/g, '');
     const storeName = bizName || businessName || 'Our Store';
-
     const message = [
       `Hello ${custName || 'there'}!`,
       '',
@@ -135,11 +181,9 @@ export default function BillingPage() {
       `For any queries, feel free to reach out.`,
       `We appreciate your business!`
     ].join('\n');
-
     const waUrl = cleanPhone
       ? `https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`
       : `https://wa.me/?text=${encodeURIComponent(message)}`;
-
     window.open(waUrl, '_blank');
   };
 
@@ -164,25 +208,29 @@ export default function BillingPage() {
         tax_rate: taxRate
       });
 
+      // Auto-save customer in background
+      if (clientName.trim()) {
+        api.post('/customers', {
+          name: clientName,
+          phone: clientPhone || null,
+          email: clientEmail || null,
+          gstin: clientGstin || null
+        }).catch(() => {});
+      }
+
       setSuccess({ ...res.data, savedPhone, savedName });
       setCart([]);
       setClientName('');
       setClientPhone('');
       setClientEmail('');
+      setClientGstin('');
       setDiscount(0);
       setNotes('');
       fetchProducts();
 
       if (sendWhatsApp && res.data.invoice_id) {
         setTimeout(() => {
-          openWhatsApp(
-            res.data.invoice_id,
-            res.data.invoice_number,
-            res.data.total_amount,
-            savedPhone,
-            savedName,
-            businessName
-          );
+          openWhatsApp(res.data.invoice_id, res.data.invoice_number, res.data.total_amount, savedPhone, savedName, businessName);
         }, 600);
       } else {
         toast.success('Bill created successfully!');
@@ -198,15 +246,12 @@ export default function BillingPage() {
       <DashboardLayout>
         <div className="flex items-center justify-center min-h-[60vh]">
           <div className="text-center space-y-6 max-w-sm w-full px-4">
-            <div
-              className="w-24 h-24 bg-emerald-500/20 rounded-full flex items-center justify-center mx-auto border-2 border-emerald-500/40"
-              style={{ animation: 'scale-in 0.5s ease-out' }}
-            >
+            <div className="w-24 h-24 bg-emerald-500/20 rounded-full flex items-center justify-center mx-auto border-2 border-emerald-500/40" style={{ animation: 'scale-in 0.5s ease-out' }}>
               <CheckCircle size={48} className="text-emerald-400" />
             </div>
             <div>
               <h2 className="font-display text-3xl text-white">Bill Created!</h2>
-              <p className="text-gray-500 mt-2">Stock updated successfully</p>
+              <p className="text-gray-500 mt-2">Customer saved automatically</p>
             </div>
             <div className="glass-card rounded-2xl p-5 space-y-3 text-left">
               <div className="flex justify-between text-sm">
@@ -228,42 +273,24 @@ export default function BillingPage() {
                 </div>
               )}
             </div>
-
             <div className="flex gap-3">
-              <button onClick={() => setSuccess(null)} className="flex-1 btn-premium btn-primary">
-                New Bill
-              </button>
+              <button onClick={() => setSuccess(null)} className="flex-1 btn-premium btn-primary">New Bill</button>
               {success.invoice_id && (
-                <button
-                  onClick={() => navigate(`/finance/invoices/${success.invoice_id}`)}
-                  className="flex-1 btn-premium btn-secondary flex items-center justify-center gap-2"
-                >
+                <button onClick={() => navigate(`/finance/invoices/${success.invoice_id}`)} className="flex-1 btn-premium btn-secondary flex items-center justify-center gap-2">
                   <FileText size={15} /> View Invoice
                 </button>
               )}
             </div>
-
             {success.invoice_id && (
               <button
-                onClick={() => openWhatsApp(
-                  success.invoice_id,
-                  success.invoice_number,
-                  success.total_amount,
-                  success.savedPhone,
-                  success.savedName,
-                  businessName
-                )}
+                onClick={() => openWhatsApp(success.invoice_id, success.invoice_number, success.total_amount, success.savedPhone, success.savedName, businessName)}
                 className="w-full py-3 rounded-xl text-sm font-semibold border transition-all flex items-center justify-center gap-2"
                 style={{ background: 'rgba(37,211,102,0.1)', borderColor: 'rgba(37,211,102,0.3)', color: '#25d366' }}
               >
-                <MessageCircle size={16} />
-                Send Invoice on WhatsApp
+                <MessageCircle size={16} /> Send Invoice on WhatsApp
               </button>
             )}
-
-            <button onClick={() => navigate('/inventory')} className="text-sm text-gray-500 hover:text-gray-400">
-              Back to Inventory
-            </button>
+            <button onClick={() => navigate('/inventory')} className="text-sm text-gray-500 hover:text-gray-400">Back to Inventory</button>
           </div>
         </div>
         <style>{`@keyframes scale-in { from { transform: scale(0); opacity: 0; } to { transform: scale(1); opacity: 1; } }`}</style>
@@ -304,7 +331,6 @@ export default function BillingPage() {
             {products.map(product => {
               const inCart = cart.find(i => i.product_id === product.id);
               const isOut = product.current_stock === 0;
-            
               return (
                 <button
                   key={product.id}
@@ -355,14 +381,51 @@ export default function BillingPage() {
               )}
             </div>
 
-            {/* Customer info */}
+            {/* Customer info with autocomplete */}
             <div className="space-y-2">
-              <Input
-                className="input-premium text-sm"
-                placeholder="Customer Name *"
-                value={clientName}
-                onChange={e => setClientName(e.target.value)}
-              />
+              {/* Name with autocomplete */}
+              <div className="relative" ref={suggestionsRef}>
+                <div className="relative">
+                  <User size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
+                  <input
+                    className="input-premium text-sm pl-8 w-full"
+                    placeholder="Customer Name *"
+                    value={clientName}
+                    onChange={e => { setClientName(e.target.value); setShowSuggestions(true); }}
+                    onFocus={() => clientName.length >= 2 && setShowSuggestions(true)}
+                    autoComplete="off"
+                  />
+                  {searchingCustomers && (
+                    <div className="absolute right-3 top-1/2 -translate-y-1/2 w-3 h-3 border border-gray-500 border-t-white rounded-full animate-spin" />
+                  )}
+                </div>
+
+                {/* Suggestions dropdown */}
+                {showSuggestions && customerSuggestions.length > 0 && (
+                  <div className="absolute top-full left-0 right-0 mt-1 bg-void border border-white/10 rounded-xl shadow-2xl z-50 overflow-hidden">
+                    {customerSuggestions.map(c => (
+                      <button
+                        key={c.id}
+                        type="button"
+                        onMouseDown={() => selectCustomer(c)}
+                        className="w-full px-3 py-2.5 text-left hover:bg-white/[0.05] transition-colors border-b border-white/[0.03] last:border-0"
+                      >
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="text-sm text-white font-medium">{c.name}</p>
+                            <p className="text-xs text-gray-500 mt-0.5">
+                              {[c.phone, c.email].filter(Boolean).join(' · ')}
+                              {c.gstin && <span className="ml-1 text-gold-400">GST: {c.gstin}</span>}
+                            </p>
+                          </div>
+                          <span className="text-[10px] text-gray-600 shrink-0 ml-2">{c.total_bills} bills</span>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
               <Input
                 className="input-premium text-sm"
                 placeholder="Phone (for WhatsApp)"
@@ -374,6 +437,13 @@ export default function BillingPage() {
                 placeholder="Email (optional)"
                 value={clientEmail}
                 onChange={e => setClientEmail(e.target.value)}
+              />
+              <Input
+                className="input-premium text-sm"
+                placeholder="GSTIN (optional)"
+                value={clientGstin}
+                onChange={e => setClientGstin(e.target.value.toUpperCase())}
+                maxLength={15}
               />
             </div>
 
@@ -464,15 +534,10 @@ export default function BillingPage() {
                 color="emerald"
               />
               {sendWhatsApp && (
-                <div
-                  className="p-3 rounded-xl border flex items-start gap-2"
-                  style={{ background: 'rgba(37,211,102,0.05)', borderColor: 'rgba(37,211,102,0.2)' }}
-                >
+                <div className="p-3 rounded-xl border flex items-start gap-2" style={{ background: 'rgba(37,211,102,0.05)', borderColor: 'rgba(37,211,102,0.2)' }}>
                   <MessageCircle size={13} className="mt-0.5 shrink-0" style={{ color: '#25d366' }} />
                   <p className="text-[11px] leading-relaxed" style={{ color: '#86efac' }}>
-                    WhatsApp will open with invoice link for{' '}
-                    <span className="font-bold">{clientPhone || 'customer'}</span>.
-                    Message sent from your phone — completely free.
+                    WhatsApp will open with invoice link for <span className="font-bold">{clientPhone || 'customer'}</span>. Free, no API needed.
                   </p>
                 </div>
               )}
