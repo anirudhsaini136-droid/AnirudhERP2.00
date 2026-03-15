@@ -1,7 +1,7 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import axios from 'axios';
 
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || process.env.REACT_APP_API_URL || window.location.origin;
+const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || process.env.REACT_APP_API_URL || '';
 const API = `${BACKEND_URL}/api`;
 
 const AuthContext = createContext(null);
@@ -19,6 +19,7 @@ export const AuthProvider = ({ children }) => {
   const [business, setBusiness] = useState(null);
   const [loading, setLoading] = useState(true);
   const [impersonating, setImpersonating] = useState(false);
+  const apiRef = useRef(null);
 
   const getToken = () => localStorage.getItem('access_token');
   const getRefreshToken = () => localStorage.getItem('refresh_token');
@@ -34,53 +35,50 @@ export const AuthProvider = ({ children }) => {
     localStorage.removeItem('original_admin_token');
   };
 
-  const api = axios.create({
-    baseURL: API,
-    headers: {
-      'Content-Type': 'application/json',
-    },
-  });
+  if (!apiRef.current) {
+    apiRef.current = axios.create({
+      baseURL: API,
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
 
-  api.interceptors.request.use((config) => {
-    const token = getToken();
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
-    return config;
-  });
+    apiRef.current.interceptors.request.use((config) => {
+      const token = getToken();
+      if (token) {
+        config.headers.Authorization = `Bearer ${token}`;
+      }
+      return config;
+    });
 
-  api.interceptors.response.use(
-    (response) => response,
-    async (error) => {
-      const originalRequest = error.config;
-      
-      if (error.response?.status === 401 && !originalRequest._retry) {
-        originalRequest._retry = true;
-        
-        const refreshToken = getRefreshToken();
-        if (refreshToken) {
-          try {
-            const response = await axios.post(`${API}/auth/refresh`, {
-              refresh_token: refreshToken,
-            });
-            
-            const { access_token, refresh_token } = response.data;
-            setTokens(access_token, refresh_token);
-            
-            originalRequest.headers.Authorization = `Bearer ${access_token}`;
-            return api(originalRequest);
-          } catch (refreshError) {
-            clearTokens();
-            setUser(null);
-            setBusiness(null);
-            window.location.href = '/login';
+    apiRef.current.interceptors.response.use(
+      (response) => response,
+      async (error) => {
+        const originalRequest = error.config;
+        if (error.response?.status === 401 && !originalRequest._retry) {
+          originalRequest._retry = true;
+          const refreshToken = getRefreshToken();
+          if (refreshToken) {
+            try {
+              const response = await axios.post(`${API}/auth/refresh`, {
+                refresh_token: refreshToken,
+              });
+              const { access_token, refresh_token } = response.data;
+              setTokens(access_token, refresh_token);
+              originalRequest.headers.Authorization = `Bearer ${access_token}`;
+              return apiRef.current(originalRequest);
+            } catch (refreshError) {
+              clearTokens();
+              window.location.href = '/login';
+            }
           }
         }
+        return Promise.reject(error);
       }
-      
-      return Promise.reject(error);
-    }
-  );
+    );
+  }
+
+  const api = apiRef.current;
 
   const fetchUser = useCallback(async () => {
     const token = getToken();
@@ -88,7 +86,6 @@ export const AuthProvider = ({ children }) => {
       setLoading(false);
       return;
     }
-
     try {
       const response = await api.get('/auth/me');
       setUser(response.data.user);
@@ -110,12 +107,9 @@ export const AuthProvider = ({ children }) => {
   const login = async (email, password) => {
     const response = await api.post('/auth/login', { email, password });
     const { access_token, refresh_token, user: userData } = response.data;
-    
     setTokens(access_token, refresh_token);
     setUser(userData);
-    
     await fetchUser();
-    
     return userData;
   };
 
@@ -140,10 +134,8 @@ export const AuthProvider = ({ children }) => {
     try {
       const response = await api.post(`/super-admin/businesses/${businessId}/impersonate`);
       const { access_token, original_admin_token } = response.data;
-      
       localStorage.setItem('original_admin_token', original_admin_token);
       localStorage.setItem('access_token', access_token);
-      
       await fetchUser();
       return true;
     } catch (error) {
@@ -156,10 +148,8 @@ export const AuthProvider = ({ children }) => {
     try {
       const response = await api.post('/super-admin/end-impersonation');
       const { access_token } = response.data;
-      
       localStorage.setItem('access_token', access_token);
       localStorage.removeItem('original_admin_token');
-      
       await fetchUser();
       return true;
     } catch (error) {
@@ -186,13 +176,3 @@ export const AuthProvider = ({ children }) => {
 };
 
 export default AuthProvider;
-```
-
----
-
-Then commit with message `Fix API URL and useCallback dependency` and Railway will auto-redeploy.
-
-Also make sure Railway → AnirudhERP2.00 → Variables has:
-```
-REACT_APP_BACKEND_URL=https://anirudherp-backend-production.up.railway.app
-CI=false
