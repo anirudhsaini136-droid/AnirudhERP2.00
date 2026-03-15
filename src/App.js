@@ -3,34 +3,23 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from './components/ui/sonner';
 import AuthProvider, { useAuth } from './contexts/AuthContext';
 
-// Login
 import LoginPage from './pages/LoginPage';
-
-// Super Admin
 import SuperAdminDashboard from './pages/super-admin/SuperAdminDashboard';
 import BusinessesPage from './pages/super-admin/BusinessesPage';
 import BusinessDetailPage from './pages/super-admin/BusinessDetailPage';
 import PlatformSettingsPage from './pages/super-admin/PlatformSettingsPage';
-
-// Business Owner
 import BusinessDashboard from './pages/business/BusinessDashboard';
 import UserManagement from './pages/business/UserManagement';
 import BusinessSettings from './pages/business/BusinessSettings';
-
-// HR Admin
 import HRDashboard from './pages/hr/HRDashboard';
 import EmployeesPage from './pages/hr/EmployeesPage';
 import AttendancePage from './pages/hr/AttendancePage';
 import LeavePage from './pages/hr/LeavePage';
 import PayrollPage from './pages/hr/PayrollPage';
-
-// Finance Admin
 import FinanceDashboard from './pages/finance/FinanceDashboard';
 import InvoicesPage from './pages/finance/InvoicesPage';
 import ExpensesPage from './pages/finance/ExpensesPage';
 import ReportsPage from './pages/finance/ReportsPage';
-
-// Staff
 import StaffHome from './pages/staff/StaffHome';
 import StaffAttendance from './pages/staff/StaffAttendance';
 import StaffLeave from './pages/staff/StaffLeave';
@@ -46,17 +35,25 @@ const ROLE_HOMES = {
   staff: '/staff',
 };
 
+const Spinner = () => (
+  <div className="min-h-screen bg-obsidian flex items-center justify-center">
+    <div className="w-8 h-8 border-2 border-gold-500 border-t-transparent rounded-full animate-spin" />
+  </div>
+);
+
 function RequireAuth({ children, allowedRoles }) {
   const { user, loading } = useAuth();
-  if (loading) return <div className="min-h-screen bg-obsidian flex items-center justify-center"><div className="w-8 h-8 border-2 border-gold-500 border-t-transparent rounded-full animate-spin" /></div>;
+  if (loading) return <Spinner />;
   if (!user) return <Navigate to="/login" replace />;
-  if (allowedRoles && !allowedRoles.includes(user.role)) return <Navigate to={ROLE_HOMES[user.role] || '/login'} replace />;
+  if (allowedRoles && !allowedRoles.includes(user.role)) {
+    return <Navigate to={ROLE_HOMES[user.role] || '/login'} replace />;
+  }
   return children;
 }
 
 function RedirectAuth() {
   const { user, loading } = useAuth();
-  if (loading) return <div className="min-h-screen bg-obsidian flex items-center justify-center"><div className="w-8 h-8 border-2 border-gold-500 border-t-transparent rounded-full animate-spin" /></div>;
+  if (loading) return <Spinner />;
   if (user) return <Navigate to={ROLE_HOMES[user.role] || '/dashboard'} replace />;
   return <LoginPage />;
 }
@@ -97,7 +94,6 @@ function AppRoutes() {
       <Route path="/staff/payslips" element={<RequireAuth allowedRoles={['staff']}><StaffPayslips /></RequireAuth>} />
       <Route path="/staff/profile" element={<RequireAuth allowedRoles={['staff']}><StaffProfile /></RequireAuth>} />
 
-      {/* Redirects */}
       <Route path="/" element={<Navigate to="/login" replace />} />
       <Route path="*" element={<Navigate to="/login" replace />} />
     </Routes>
