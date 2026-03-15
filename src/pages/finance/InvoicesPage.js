@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import DashboardLayout from '../../components/layout/DashboardLayout';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../../components/ui/dialog';
@@ -14,6 +15,7 @@ const emptyItem = { description: '', quantity: 1, unit_price: 0, amount: 0 };
 
 export default function InvoicesPage() {
   const { api } = useAuth();
+  const navigate = useNavigate();
   const [invoices, setInvoices] = useState([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -22,13 +24,12 @@ export default function InvoicesPage() {
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
   const [creating, setCreating] = useState(false);
-  const [viewInvoice, setViewInvoice] = useState(null);
   const [showPayment, setShowPayment] = useState(false);
   const [paymentInvoice, setPaymentInvoice] = useState(null);
-  const [paymentForm, setPaymentForm] = useState({ amount: 0, payment_date: new Date().toISOString().split('T')[0], payment_method: 'cash', reference: '', notes: '' });
   const [paying, setPaying] = useState(false);
 
   const today = new Date().toISOString().split('T')[0];
+
   const [form, setForm] = useState({
     client_name: '',
     client_email: '',
@@ -41,6 +42,14 @@ export default function InvoicesPage() {
     notes: '',
     currency: 'INR',
     items: [{ ...emptyItem }]
+  });
+
+  const [paymentForm, setPaymentForm] = useState({
+    amount: 0,
+    payment_date: today,
+    payment_method: 'cash',
+    reference: '',
+    notes: ''
   });
 
   const fetchInvoices = useCallback(async () => {
@@ -59,6 +68,12 @@ export default function InvoicesPage() {
   }, [api, page, search, filterStatus]);
 
   useEffect(() => { fetchInvoices(); }, [fetchInvoices]);
+
+  const resetForm = () => setForm({
+    client_name: '', client_email: '', client_address: '', client_phone: '',
+    issue_date: today, due_date: '', tax_rate: 18, discount_amount: 0,
+    notes: '', currency: 'INR', items: [{ ...emptyItem }]
+  });
 
   const updateItem = (idx, field, value) => {
     const items = [...form.items];
@@ -83,7 +98,7 @@ export default function InvoicesPage() {
     if (form.items.some(i => !i.description)) { toast.error('All items need a description'); return; }
     setCreating(true);
     try {
-      await api.post('/finance/invoices', {
+      const res = await api.post('/finance/invoices', {
         ...form,
         items: form.items.map(i => ({
           description: i.description,
@@ -93,12 +108,11 @@ export default function InvoicesPage() {
       });
       toast.success('Invoice created successfully');
       setShowCreate(false);
-      setForm({
-        client_name: '', client_email: '', client_address: '', client_phone: '',
-        issue_date: today, due_date: '', tax_rate: 18, discount_amount: 0,
-        notes: '', currency: 'INR', items: [{ ...emptyItem }]
-      });
+      resetForm();
       fetchInvoices();
+      if (res.data.id) {
+        navigate(`/finance/invoices/${res.data.id}`);
+      }
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Failed to create invoice');
     }
@@ -112,6 +126,17 @@ export default function InvoicesPage() {
       fetchInvoices();
     } catch (e) {
       toast.error('Failed to send invoice');
+    }
+  };
+
+  const deleteInvoice = async (id) => {
+    if (!window.confirm('Delete this draft invoice?')) return;
+    try {
+      await api.delete(`/finance/invoices/${id}`);
+      toast.success('Invoice deleted');
+      fetchInvoices();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to delete invoice');
     }
   };
 
@@ -214,16 +239,37 @@ export default function InvoicesPage() {
                   </td>
                   <td className="text-right">
                     <div className="flex items-center justify-end gap-1">
-                      <button onClick={() => setViewInvoice(inv)} className="p-1.5 text-gray-400 hover:text-white">
+                      <button
+                        onClick={() => navigate(`/finance/invoices/${inv.id}`)}
+                        className="p-1.5 text-gray-400 hover:text-white"
+                        title="View Invoice"
+                      >
                         <Eye size={15} />
                       </button>
                       {inv.status === 'draft' && (
-                        <button onClick={() => sendInvoice(inv.id)} className="p-1.5 text-blue-400 hover:text-blue-300">
-                          <Send size={15} />
-                        </button>
+                        <>
+                          <button
+                            onClick={() => sendInvoice(inv.id)}
+                            className="p-1.5 text-blue-400 hover:text-blue-300"
+                            title="Send via Email"
+                          >
+                            <Send size={15} />
+                          </button>
+                          <button
+                            onClick={() => deleteInvoice(inv.id)}
+                            className="p-1.5 text-rose-400 hover:text-rose-300"
+                            title="Delete"
+                          >
+                            <Trash2 size={15} />
+                          </button>
+                        </>
                       )}
                       {['sent', 'partially_paid', 'overdue'].includes(inv.status) && (
-                        <button onClick={() => openPayment(inv)} className="p-1.5 text-emerald-400 hover:text-emerald-300">
+                        <button
+                          onClick={() => openPayment(inv)}
+                          className="p-1.5 text-emerald-400 hover:text-emerald-300"
+                          title="Record Payment"
+                        >
                           <CheckCircle size={15} />
                         </button>
                       )}
@@ -264,8 +310,8 @@ export default function InvoicesPage() {
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <Label className="text-gray-400 text-xs">Client Phone</Label>
-                <Input className="input-premium mt-1" value={form.client_phone} onChange={e => setForm({...form, client_phone: e.target.value})} />
+                <Label className="text-gray-400 text-xs">Client Phone (for WhatsApp)</Label>
+                <Input className="input-premium mt-1" placeholder="+919876543210" value={form.client_phone} onChange={e => setForm({...form, client_phone: e.target.value})} />
               </div>
               <div>
                 <Label className="text-gray-400 text-xs">Client Address</Label>
@@ -291,7 +337,6 @@ export default function InvoicesPage() {
               </div>
             </div>
 
-            {/* Line Items */}
             <div>
               <div className="flex items-center justify-between mb-2">
                 <Label className="text-gray-400 text-xs">Line Items *</Label>
@@ -299,9 +344,9 @@ export default function InvoicesPage() {
               </div>
               <div className="space-y-2">
                 {form.items.map((item, idx) => (
-                  <div key={idx} className="grid grid-cols-12 gap-2 items-end">
+                  <div key={idx} className="grid grid-cols-12 gap-2 items-center">
                     <div className="col-span-5">
-                      <Input placeholder="Description *" className="input-premium text-sm" value={item.description} onChange={e => updateItem(idx, 'description', e.target.value)} required />
+                      <Input placeholder="Description *" className="input-premium text-sm" value={item.description} onChange={e => updateItem(idx, 'description', e.target.value)} />
                     </div>
                     <div className="col-span-2">
                       <Input type="number" min="1" placeholder="Qty" className="input-premium text-sm" value={item.quantity} onChange={e => updateItem(idx, 'quantity', parseFloat(e.target.value) || 0)} />
@@ -309,7 +354,7 @@ export default function InvoicesPage() {
                     <div className="col-span-3">
                       <Input type="number" min="0" placeholder="Unit Price" className="input-premium text-sm" value={item.unit_price} onChange={e => updateItem(idx, 'unit_price', parseFloat(e.target.value) || 0)} />
                     </div>
-                    <div className="col-span-1 text-sm text-gold-400 font-semibold py-2 text-right">{fmt(item.amount)}</div>
+                    <div className="col-span-1 text-sm text-gold-400 font-semibold text-right">{fmt(item.amount)}</div>
                     <div className="col-span-1 text-center">
                       {form.items.length > 1 && (
                         <button type="button" onClick={() => removeItem(idx)} className="text-rose-400 hover:text-rose-300 p-1">
@@ -322,7 +367,6 @@ export default function InvoicesPage() {
               </div>
             </div>
 
-            {/* Summary */}
             <div className="border-t border-white/5 pt-3 space-y-1 text-sm">
               <div className="flex justify-between text-gray-400"><span>Subtotal</span><span>{fmt(subtotal)}</span></div>
               <div className="flex justify-between text-gray-400"><span>Tax ({form.tax_rate}%)</span><span>{fmt(taxAmount)}</span></div>
@@ -330,8 +374,7 @@ export default function InvoicesPage() {
                 <div className="flex justify-between text-gray-400"><span>Discount</span><span className="text-rose-400">-{fmt(form.discount_amount)}</span></div>
               )}
               <div className="flex justify-between text-white font-semibold text-base pt-2 border-t border-white/5">
-                <span>Total</span>
-                <span className="text-gold-400">{fmt(totalAmount)}</span>
+                <span>Total</span><span className="text-gold-400">{fmt(totalAmount)}</span>
               </div>
             </div>
 
@@ -361,11 +404,13 @@ export default function InvoicesPage() {
               <div className="p-3 rounded-xl bg-white/[0.03] border border-white/5">
                 <p className="text-sm text-white font-medium">{paymentInvoice.client_name}</p>
                 <p className="text-xs text-gray-500">{paymentInvoice.invoice_number}</p>
-                <p className="text-xs text-gray-500 mt-1">Balance Due: <span className="text-gold-400 font-semibold">{fmt(paymentInvoice.balance_due)}</span></p>
+                <p className="text-xs text-gray-500 mt-1">
+                  Balance Due: <span className="text-gold-400 font-semibold">{fmt(paymentInvoice.balance_due)}</span>
+                </p>
               </div>
               <div>
                 <Label className="text-gray-400 text-xs">Amount *</Label>
-                <Input type="number" min="1" max={paymentInvoice.balance_due} step="0.01" className="input-premium mt-1" value={paymentForm.amount} onChange={e => setPaymentForm({...paymentForm, amount: parseFloat(e.target.value) || 0})} required />
+                <Input type="number" min="1" step="0.01" className="input-premium mt-1" value={paymentForm.amount} onChange={e => setPaymentForm({...paymentForm, amount: parseFloat(e.target.value) || 0})} required />
               </div>
               <div>
                 <Label className="text-gray-400 text-xs">Payment Date *</Label>
@@ -392,34 +437,6 @@ export default function InvoicesPage() {
                 </button>
               </DialogFooter>
             </form>
-          )}
-        </DialogContent>
-      </Dialog>
-
-      {/* View Invoice Dialog */}
-      <Dialog open={!!viewInvoice} onOpenChange={() => setViewInvoice(null)}>
-        <DialogContent className="bg-void border-white/10 max-w-lg">
-          <DialogHeader>
-            <DialogTitle className="font-display text-white">Invoice {viewInvoice?.invoice_number}</DialogTitle>
-          </DialogHeader>
-          {viewInvoice && (
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-3">
-                {[
-                  ['Client', viewInvoice.client_name],
-                  ['Email', viewInvoice.client_email || '-'],
-                  ['Status', viewInvoice.status?.replace('_', ' ')],
-                  ['Due', fmtDate(viewInvoice.due_date)],
-                  ['Total', fmt(viewInvoice.total_amount)],
-                  ['Balance Due', fmt(viewInvoice.balance_due)]
-                ].map(([k, v]) => (
-                  <div key={k}>
-                    <p className="text-xs text-gray-500">{k}</p>
-                    <p className="text-sm text-white mt-0.5 capitalize">{v}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
           )}
         </DialogContent>
       </Dialog>
