@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
+const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || process.env.REACT_APP_API_URL || window.location.origin;
 const API = `${BACKEND_URL}/api`;
 
 const AuthContext = createContext(null);
@@ -101,7 +101,7 @@ export const AuthProvider = ({ children }) => {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [api]);
 
   useEffect(() => {
     fetchUser();
@@ -114,7 +114,6 @@ export const AuthProvider = ({ children }) => {
     setTokens(access_token, refresh_token);
     setUser(userData);
     
-    // Fetch full user info including business
     await fetchUser();
     
     return userData;
@@ -187,3 +186,13 @@ export const AuthProvider = ({ children }) => {
 };
 
 export default AuthProvider;
+```
+
+---
+
+Then commit with message `Fix API URL and useCallback dependency` and Railway will auto-redeploy.
+
+Also make sure Railway → AnirudhERP2.00 → Variables has:
+```
+REACT_APP_BACKEND_URL=https://anirudherp-backend-production.up.railway.app
+CI=false
