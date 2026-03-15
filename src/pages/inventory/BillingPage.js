@@ -10,9 +10,9 @@ import { toast } from 'sonner';
 const fmt = (n) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(n || 0);
 
 const PRODUCT_EMOJIS = {
-  Electronics: 'E', Clothing: 'C', Food: 'F', Auto: 'A', Tools: 'T',
-  Medicine: 'M', Books: 'B', Furniture: 'Fr', Jewelry: 'J', Sports: 'S',
-  default: '#'
+  Electronics: '⚡', Clothing: '👗', Food: '🍎', Auto: '🚗', Tools: '🔧',
+  Medicine: '💊', Books: '📚', Furniture: '🪑', Jewelry: '💎', Sports: '⚽',
+  default: '📦'
 };
 
 function Toggle({ value, onChange, label, sublabel, color = 'gold' }) {
@@ -304,7 +304,7 @@ export default function BillingPage() {
             {products.map(product => {
               const inCart = cart.find(i => i.product_id === product.id);
               const isOut = product.current_stock === 0;
-              const letter = (product.name || 'P')[0].toUpperCase();
+            
               return (
                 <button
                   key={product.id}
@@ -318,8 +318,8 @@ export default function BillingPage() {
                     {product.image_url ? (
                       <img src={product.image_url} alt={product.name} className="w-10 h-10 rounded-xl object-cover" />
                     ) : (
-                      <div className="w-10 h-10 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center text-sm font-bold text-gray-400">
-                        {letter}
+                      <div className="w-10 h-10 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center text-xl">
+                        {PRODUCT_EMOJIS[product.category] || PRODUCT_EMOJIS.default}
                       </div>
                     )}
                     {inCart && (
