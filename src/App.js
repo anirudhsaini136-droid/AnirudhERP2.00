@@ -18,8 +18,11 @@ import LeavePage from './pages/hr/LeavePage';
 import PayrollPage from './pages/hr/PayrollPage';
 import FinanceDashboard from './pages/finance/FinanceDashboard';
 import InvoicesPage from './pages/finance/InvoicesPage';
+import InvoiceViewPage from './pages/finance/InvoiceViewPage';
 import ExpensesPage from './pages/finance/ExpensesPage';
 import ReportsPage from './pages/finance/ReportsPage';
+import InventoryPage from './pages/inventory/InventoryPage';
+import BillingPage from './pages/inventory/BillingPage';
 import StaffHome from './pages/staff/StaffHome';
 import StaffAttendance from './pages/staff/StaffAttendance';
 import StaffLeave from './pages/staff/StaffLeave';
@@ -74,18 +77,23 @@ function AppRoutes() {
       <Route path="/dashboard/users" element={<RequireAuth allowedRoles={['business_owner']}><UserManagement /></RequireAuth>} />
       <Route path="/dashboard/settings" element={<RequireAuth allowedRoles={['business_owner']}><BusinessSettings /></RequireAuth>} />
 
-      {/* HR Admin */}
+      {/* HR */}
       <Route path="/hr" element={<RequireAuth allowedRoles={['hr_admin', 'business_owner']}><HRDashboard /></RequireAuth>} />
       <Route path="/hr/employees" element={<RequireAuth allowedRoles={['hr_admin', 'business_owner']}><EmployeesPage /></RequireAuth>} />
       <Route path="/hr/attendance" element={<RequireAuth allowedRoles={['hr_admin', 'business_owner']}><AttendancePage /></RequireAuth>} />
       <Route path="/hr/leave" element={<RequireAuth allowedRoles={['hr_admin', 'business_owner']}><LeavePage /></RequireAuth>} />
       <Route path="/hr/payroll" element={<RequireAuth allowedRoles={['hr_admin', 'business_owner']}><PayrollPage /></RequireAuth>} />
 
-      {/* Finance Admin */}
+      {/* Finance */}
       <Route path="/finance" element={<RequireAuth allowedRoles={['finance_admin', 'business_owner']}><FinanceDashboard /></RequireAuth>} />
       <Route path="/finance/invoices" element={<RequireAuth allowedRoles={['finance_admin', 'business_owner']}><InvoicesPage /></RequireAuth>} />
+      <Route path="/finance/invoices/:id" element={<RequireAuth allowedRoles={['finance_admin', 'business_owner']}><InvoiceViewPage /></RequireAuth>} />
       <Route path="/finance/expenses" element={<RequireAuth allowedRoles={['finance_admin', 'business_owner']}><ExpensesPage /></RequireAuth>} />
       <Route path="/finance/reports" element={<RequireAuth allowedRoles={['finance_admin', 'business_owner']}><ReportsPage /></RequireAuth>} />
+
+      {/* Inventory */}
+      <Route path="/inventory" element={<RequireAuth allowedRoles={['inventory_admin', 'business_owner']}><InventoryPage /></RequireAuth>} />
+      <Route path="/inventory/billing" element={<RequireAuth allowedRoles={['inventory_admin', 'business_owner']}><BillingPage /></RequireAuth>} />
 
       {/* Staff */}
       <Route path="/staff" element={<RequireAuth allowedRoles={['staff']}><StaffHome /></RequireAuth>} />
