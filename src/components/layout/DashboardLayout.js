@@ -57,16 +57,14 @@ const NAV_CONFIG = {
       { path: '/finance/reports', label: 'Reports', icon: BarChart3 },
     ]
   },
-  inventory_admin: {
-    title: 'Inventory',
-    icon: Package,
-    items: [
-      { path: '/inventory', label: 'Dashboard', icon: LayoutDashboard },
-      { path: '/inventory/products', label: 'Products', icon: Package },
-      { path: '/inventory/orders', label: 'Purchase Orders', icon: ShoppingCart },
-      { path: '/inventory/suppliers', label: 'Suppliers', icon: Truck },
-    ]
-  },
+ inventory_admin: {
+  title: 'Inventory',
+  icon: Package,
+  items: [
+    { path: '/inventory', label: 'Products', icon: Package },
+    { path: '/inventory/billing', label: 'Quick Bill', icon: ShoppingCart },
+  ]
+},,
   staff: {
     title: 'Staff Portal',
     icon: Home,
