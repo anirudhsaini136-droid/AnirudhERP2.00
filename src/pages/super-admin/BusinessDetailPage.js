@@ -6,7 +6,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Input } from '../../components/ui/input';
 import { Label } from '../../components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../components/ui/tabs';
-import { ArrowLeft, Building2, CreditCard, Calendar, Shield, UserCheck, AlertTriangle, Ban, ChevronUp, ChevronDown, IndianRupee, LogIn, Eye, EyeOff, KeyRound } from 'lucide-react';
+import { ArrowLeft, CreditCard, Ban, ChevronUp, LogIn, Eye, EyeOff } from 'lucide-react';
 import { toast } from 'sonner';
 
 const fmt = (n) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(n || 0);
@@ -20,7 +20,7 @@ function PasswordCell({ password }) {
   return (
     <div className="flex items-center gap-1.5">
       <span className="text-xs font-mono text-gray-400">{show ? password : '********'}</span>
-      <button onClick={() => setShow(!show)} className="text-gray-500 hover:text-white" data-testid="toggle-password">
+      <button onClick={() => setShow(!show)} className="text-gray-500 hover:text-white">
         {show ? <EyeOff size={13} /> : <Eye size={13} />}
       </button>
     </div>
@@ -36,7 +36,15 @@ export default function BusinessDetailPage() {
   const [showExtend, setShowExtend] = useState(false);
   const [showPlan, setShowPlan] = useState(false);
   const [extending, setExtending] = useState(false);
-  const [extendForm, setExtendForm] = useState({ duration_days: 30, payment_method: 'cash', amount: 0, currency: 'INR', payment_date: new Date().toISOString().split('T')[0], reference_number: '', notes: '' });
+  const [extendForm, setExtendForm] = useState({
+    duration_days: 30,
+    payment_method: 'cash',
+    amount: 0,
+    currency: 'INR',
+    payment_date: new Date().toISOString().split('T')[0],
+    reference_number: '',
+    notes: ''
+  });
   const [newPlan, setNewPlan] = useState('');
   const [showResetPwd, setShowResetPwd] = useState(false);
   const [resetPwdUser, setResetPwdUser] = useState(null);
@@ -48,11 +56,16 @@ export default function BusinessDetailPage() {
       const res = await api.get(`/super-admin/businesses/${id}`);
       setData(res.data);
       setNewPlan(res.data.business?.plan || 'starter');
-    } catch (e) { toast.error('Business not found'); navigate('/super-admin/businesses'); }
+    } catch (e) {
+      toast.error('Business not found');
+      navigate('/super-admin/businesses');
+    }
     setLoading(false);
   };
 
-  useEffect(() => { fetchData(); }, [id]);
+  useEffect(() => {
+    fetchData();
+  }, [id]);
 
   const handleExtend = async (e) => {
     e.preventDefault();
@@ -62,7 +75,9 @@ export default function BusinessDetailPage() {
       toast.success(res.data.message);
       setShowExtend(false);
       fetchData();
-    } catch (e) { toast.error(e.response?.data?.detail || 'Failed to extend'); }
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to extend');
+    }
     setExtending(false);
   };
 
@@ -72,7 +87,9 @@ export default function BusinessDetailPage() {
       await api.post(`/super-admin/businesses/${id}/suspend`);
       toast.success('Business suspended');
       fetchData();
-    } catch (e) { toast.error('Failed to suspend'); }
+    } catch (e) {
+      toast.error('Failed to suspend');
+    }
   };
 
   const handleChangePlan = async () => {
@@ -81,14 +98,19 @@ export default function BusinessDetailPage() {
       toast.success(`Plan changed to ${newPlan}`);
       setShowPlan(false);
       fetchData();
-    } catch (e) { toast.error('Failed to change plan'); }
+    } catch (e) {
+      toast.error('Failed to change plan');
+    }
   };
 
   const handleImpersonate = async () => {
     if (!window.confirm('Login as the business owner?')) return;
     const success = await startImpersonation(id);
-    if (success) { navigate('/dashboard'); toast.success('Impersonating business owner'); }
-    else toast.error('Failed to impersonate');
+    if (success) {
+      window.location.href = '/dashboard';
+    } else {
+      toast.error('Failed to impersonate');
+    }
   };
 
   const openResetPassword = (u) => {
@@ -99,18 +121,29 @@ export default function BusinessDetailPage() {
 
   const handleResetPassword = async (e) => {
     e.preventDefault();
-    if (!resetPwdValue || resetPwdValue.length < 6) { toast.error('Password must be at least 6 characters'); return; }
+    if (!resetPwdValue || resetPwdValue.length < 6) {
+      toast.error('Password must be at least 6 characters');
+      return;
+    }
     setResetting(true);
     try {
       await api.post('/super-admin/reset-password', { user_id: resetPwdUser.id, new_password: resetPwdValue });
       toast.success('Password reset successfully');
       setShowResetPwd(false);
       fetchData();
-    } catch (e) { toast.error(e.response?.data?.detail || 'Failed to reset password'); }
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to reset password');
+    }
     setResetting(false);
   };
 
-  if (loading) return <DashboardLayout><div className="flex items-center justify-center h-64"><div className="w-8 h-8 border-2 border-gold-500 border-t-transparent rounded-full animate-spin" /></div></DashboardLayout>;
+  if (loading) return (
+    <DashboardLayout>
+      <div className="flex items-center justify-center h-64">
+        <div className="w-8 h-8 border-2 border-gold-500 border-t-transparent rounded-full animate-spin" />
+      </div>
+    </DashboardLayout>
+  );
 
   const b = data?.business || {};
   const users = data?.users || [];
@@ -119,11 +152,13 @@ export default function BusinessDetailPage() {
 
   return (
     <DashboardLayout>
-      <div className="space-y-6" data-testid="business-detail-page">
+      <div className="space-y-6">
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
           <div className="flex items-start gap-4">
-            <button onClick={() => navigate('/super-admin/businesses')} className="mt-1 text-gray-400 hover:text-white transition-colors"><ArrowLeft size={20} /></button>
+            <button onClick={() => navigate('/super-admin/businesses')} className="mt-1 text-gray-400 hover:text-white transition-colors">
+              <ArrowLeft size={20} />
+            </button>
             <div>
               <h1 className="font-display text-2xl text-white">{b.name}</h1>
               <p className="text-sm text-gray-500 font-sans">{b.email}</p>
@@ -134,17 +169,17 @@ export default function BusinessDetailPage() {
             </div>
           </div>
           <div className="flex flex-wrap gap-2">
-            <button onClick={() => setShowExtend(true)} className="btn-premium btn-primary text-sm" data-testid="extend-subscription-btn">
+            <button onClick={() => setShowExtend(true)} className="btn-premium btn-primary text-sm">
               <CreditCard size={15} /> Extend Subscription
             </button>
-            <button onClick={handleImpersonate} className="btn-premium btn-secondary text-sm" data-testid="impersonate-btn">
+            <button onClick={handleImpersonate} className="btn-premium btn-secondary text-sm">
               <LogIn size={15} /> Login As
             </button>
-            <button onClick={() => setShowPlan(true)} className="btn-premium btn-secondary text-sm" data-testid="change-plan-btn">
+            <button onClick={() => setShowPlan(true)} className="btn-premium btn-secondary text-sm">
               <ChevronUp size={15} /> Change Plan
             </button>
             {b.status !== 'suspended' && (
-              <button onClick={handleSuspend} className="btn-premium text-sm bg-rose-500/10 border border-rose-500/20 text-rose-400 hover:bg-rose-500/20" data-testid="suspend-btn">
+              <button onClick={handleSuspend} className="btn-premium text-sm bg-rose-500/10 border border-rose-500/20 text-rose-400 hover:bg-rose-500/20">
                 <Ban size={15} /> Suspend
               </button>
             )}
@@ -185,11 +220,19 @@ export default function BusinessDetailPage() {
           <TabsContent value="details">
             <div className="glass-card rounded-2xl p-5 grid grid-cols-2 gap-4">
               {[
-                ['Owner', b.owner_name], ['Email', b.email], ['Phone', b.phone || '-'], ['City', b.city || '-'],
-                ['Country', b.country || '-'], ['Payment Type', b.payment_type || '-'],
-                ['Created', fmtDate(b.created_at)], ['Address', b.address || '-']
+                ['Owner', b.owner_name],
+                ['Email', b.email],
+                ['Phone', b.phone || '-'],
+                ['City', b.city || '-'],
+                ['Country', b.country || '-'],
+                ['Payment Type', b.payment_type || '-'],
+                ['Created', fmtDate(b.created_at)],
+                ['Address', b.address || '-']
               ].map(([label, value]) => (
-                <div key={label}><p className="text-xs text-gray-500">{label}</p><p className="text-sm text-white mt-0.5">{value}</p></div>
+                <div key={label}>
+                  <p className="text-xs text-gray-500">{label}</p>
+                  <p className="text-sm text-white mt-0.5">{value}</p>
+                </div>
               ))}
             </div>
           </TabsContent>
@@ -197,9 +240,20 @@ export default function BusinessDetailPage() {
           <TabsContent value="users">
             <div className="glass-card rounded-2xl overflow-hidden">
               <table className="table-premium w-full">
-                <thead><tr><th>Name</th><th>Email</th><th>Password</th><th>Role</th><th>Status</th><th className="text-right">Actions</th></tr></thead>
+                <thead>
+                  <tr>
+                    <th>Name</th>
+                    <th>Email</th>
+                    <th>Password</th>
+                    <th>Role</th>
+                    <th>Status</th>
+                    <th className="text-right">Actions</th>
+                  </tr>
+                </thead>
                 <tbody>
-                  {users.map(u => (
+                  {users.length === 0 ? (
+                    <tr><td colSpan={6} className="text-center text-gray-500 py-8">No users found</td></tr>
+                  ) : users.map(u => (
                     <tr key={u.id}>
                       <td className="text-white text-sm">{u.first_name} {u.last_name}</td>
                       <td className="text-sm">{u.email}</td>
@@ -207,7 +261,9 @@ export default function BusinessDetailPage() {
                       <td><span className="badge-premium badge-info">{u.role?.replace('_', ' ')}</span></td>
                       <td><span className={`badge-premium ${u.is_active ? 'badge-success' : 'badge-danger'}`}>{u.is_active ? 'Active' : 'Inactive'}</span></td>
                       <td className="text-right">
-                        <button onClick={() => openResetPassword(u)} className="text-xs text-gold-400 hover:text-gold-300 font-medium" data-testid={`reset-pwd-${u.id}`}>Reset Password</button>
+                        <button onClick={() => openResetPassword(u)} className="text-xs text-gold-400 hover:text-gold-300 font-medium">
+                          Reset Password
+                        </button>
                       </td>
                     </tr>
                   ))}
@@ -219,7 +275,11 @@ export default function BusinessDetailPage() {
           <TabsContent value="payments">
             <div className="glass-card rounded-2xl overflow-hidden">
               <table className="table-premium w-full">
-                <thead><tr><th>Date</th><th>Amount</th><th>Method</th><th>Duration</th><th>Reference</th><th>New Expiry</th></tr></thead>
+                <thead>
+                  <tr>
+                    <th>Date</th><th>Amount</th><th>Method</th><th>Duration</th><th>Reference</th><th>New Expiry</th>
+                  </tr>
+                </thead>
                 <tbody>
                   {payments.length === 0 ? (
                     <tr><td colSpan={6} className="text-center text-gray-500 py-8">No payments recorded</td></tr>
@@ -263,21 +323,42 @@ export default function BusinessDetailPage() {
           <DialogHeader><DialogTitle className="font-display text-white">Extend Subscription</DialogTitle></DialogHeader>
           <form onSubmit={handleExtend} className="space-y-4">
             <div className="grid grid-cols-2 gap-3">
-              <div><Label className="text-gray-400 text-xs">Duration (days) *</Label><Input type="number" min="1" className="input-premium mt-1" value={extendForm.duration_days} onChange={e => setExtendForm({...extendForm, duration_days: parseInt(e.target.value) || 30})} required data-testid="extend-days" /></div>
-              <div><Label className="text-gray-400 text-xs">Amount (INR) *</Label><Input type="number" min="0" step="0.01" className="input-premium mt-1" value={extendForm.amount} onChange={e => setExtendForm({...extendForm, amount: parseFloat(e.target.value) || 0})} required data-testid="extend-amount" /></div>
+              <div>
+                <Label className="text-gray-400 text-xs">Duration (days) *</Label>
+                <Input type="number" min="1" className="input-premium mt-1" value={extendForm.duration_days} onChange={e => setExtendForm({...extendForm, duration_days: parseInt(e.target.value) || 30})} required />
+              </div>
+              <div>
+                <Label className="text-gray-400 text-xs">Amount (INR) *</Label>
+                <Input type="number" min="0" step="0.01" className="input-premium mt-1" value={extendForm.amount} onChange={e => setExtendForm({...extendForm, amount: parseFloat(e.target.value) || 0})} required />
+              </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
-              <div><Label className="text-gray-400 text-xs">Payment Method *</Label>
-                <select className="input-premium mt-1 w-full" value={extendForm.payment_method} onChange={e => setExtendForm({...extendForm, payment_method: e.target.value})} data-testid="extend-method">
-                  <option value="cash">Cash</option><option value="bank_transfer">Bank Transfer</option><option value="cheque">Cheque</option><option value="mobile_money">UPI/Mobile</option><option value="other">Other</option>
-                </select></div>
-              <div><Label className="text-gray-400 text-xs">Payment Date *</Label><Input type="date" className="input-premium mt-1" value={extendForm.payment_date} onChange={e => setExtendForm({...extendForm, payment_date: e.target.value})} required data-testid="extend-date" /></div>
+              <div>
+                <Label className="text-gray-400 text-xs">Payment Method *</Label>
+                <select className="input-premium mt-1 w-full" value={extendForm.payment_method} onChange={e => setExtendForm({...extendForm, payment_method: e.target.value})}>
+                  <option value="cash">Cash</option>
+                  <option value="bank_transfer">Bank Transfer</option>
+                  <option value="cheque">Cheque</option>
+                  <option value="mobile_money">UPI/Mobile</option>
+                  <option value="other">Other</option>
+                </select>
+              </div>
+              <div>
+                <Label className="text-gray-400 text-xs">Payment Date *</Label>
+                <Input type="date" className="input-premium mt-1" value={extendForm.payment_date} onChange={e => setExtendForm({...extendForm, payment_date: e.target.value})} required />
+              </div>
             </div>
-            <div><Label className="text-gray-400 text-xs">Reference Number</Label><Input className="input-premium mt-1" value={extendForm.reference_number} onChange={e => setExtendForm({...extendForm, reference_number: e.target.value})} placeholder="e.g., TXN123456" data-testid="extend-ref" /></div>
-            <div><Label className="text-gray-400 text-xs">Notes</Label><textarea className="input-premium mt-1 h-16 resize-none" value={extendForm.notes} onChange={e => setExtendForm({...extendForm, notes: e.target.value})} /></div>
+            <div>
+              <Label className="text-gray-400 text-xs">Reference Number</Label>
+              <Input className="input-premium mt-1" value={extendForm.reference_number} onChange={e => setExtendForm({...extendForm, reference_number: e.target.value})} placeholder="e.g., TXN123456" />
+            </div>
+            <div>
+              <Label className="text-gray-400 text-xs">Notes</Label>
+              <textarea className="input-premium mt-1 h-16 resize-none w-full" value={extendForm.notes} onChange={e => setExtendForm({...extendForm, notes: e.target.value})} />
+            </div>
             <DialogFooter>
               <button type="button" onClick={() => setShowExtend(false)} className="btn-premium btn-secondary">Cancel</button>
-              <button type="submit" disabled={extending} className="btn-premium btn-primary" data-testid="submit-extend">{extending ? 'Extending...' : 'Extend Now'}</button>
+              <button type="submit" disabled={extending} className="btn-premium btn-primary">{extending ? 'Extending...' : 'Extend Now'}</button>
             </DialogFooter>
           </form>
         </DialogContent>
@@ -289,7 +370,7 @@ export default function BusinessDetailPage() {
           <DialogHeader><DialogTitle className="font-display text-white">Change Plan</DialogTitle></DialogHeader>
           <div className="space-y-3">
             {['starter', 'growth', 'enterprise'].map(p => (
-              <button key={p} onClick={() => setNewPlan(p)} className={`w-full p-4 rounded-xl border text-left transition-all ${newPlan === p ? 'border-gold-500/50 bg-gold-500/5' : 'border-white/5 hover:border-white/10'}`} data-testid={`plan-option-${p}`}>
+              <button key={p} onClick={() => setNewPlan(p)} className={`w-full p-4 rounded-xl border text-left transition-all ${newPlan === p ? 'border-gold-500/50 bg-gold-500/5' : 'border-white/5 hover:border-white/10'}`}>
                 <p className="text-sm text-white font-semibold capitalize">{p}</p>
                 <p className="text-xs text-gray-500 mt-0.5">{p === 'starter' ? 'Up to 5 users' : p === 'growth' ? 'Up to 25 users' : 'Unlimited users'}</p>
               </button>
@@ -297,7 +378,7 @@ export default function BusinessDetailPage() {
           </div>
           <DialogFooter>
             <button onClick={() => setShowPlan(false)} className="btn-premium btn-secondary">Cancel</button>
-            <button onClick={handleChangePlan} disabled={newPlan === b.plan} className="btn-premium btn-primary" data-testid="submit-plan-change">{newPlan === b.plan ? 'Current Plan' : `Switch to ${newPlan}`}</button>
+            <button onClick={handleChangePlan} disabled={newPlan === b.plan} className="btn-premium btn-primary">{newPlan === b.plan ? 'Current Plan' : `Switch to ${newPlan}`}</button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -317,11 +398,11 @@ export default function BusinessDetailPage() {
               </div>
               <div>
                 <Label className="text-gray-400 text-xs">New Password *</Label>
-                <Input className="input-premium mt-1" value={resetPwdValue} onChange={e => setResetPwdValue(e.target.value)} placeholder="Min 6 characters" required minLength={6} data-testid="new-password-input" />
+                <Input className="input-premium mt-1" value={resetPwdValue} onChange={e => setResetPwdValue(e.target.value)} placeholder="Min 6 characters" required minLength={6} />
               </div>
               <DialogFooter>
                 <button type="button" onClick={() => setShowResetPwd(false)} className="btn-premium btn-secondary">Cancel</button>
-                <button type="submit" disabled={resetting} className="btn-premium btn-primary" data-testid="submit-reset-password">{resetting ? 'Resetting...' : 'Reset Password'}</button>
+                <button type="submit" disabled={resetting} className="btn-premium btn-primary">{resetting ? 'Resetting...' : 'Reset Password'}</button>
               </DialogFooter>
             </form>
           )}
