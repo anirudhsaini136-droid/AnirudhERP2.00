@@ -5,7 +5,7 @@ import {
   LayoutDashboard, Building2, Users, UserCheck, Calendar, FileText,
   Receipt, BarChart3, Package, ShoppingCart, Settings, Bell,
   LogOut, ChevronDown, Menu, X, Clock, Briefcase, CreditCard,
-  Shield, Home, FileSpreadsheet, UserCircle, ArrowLeftRight
+  Shield, Home, FileSpreadsheet, UserCircle, ArrowLeftRight, BookUser
 } from 'lucide-react';
 
 const NAV_CONFIG = {
@@ -31,6 +31,7 @@ const NAV_CONFIG = {
       { path: '/hr/payroll', label: 'Payroll', icon: CreditCard },
       { path: '/finance', label: 'Finance Dashboard', icon: BarChart3 },
       { path: '/finance/invoices', label: 'Invoices', icon: FileSpreadsheet },
+      { path: '/finance/customers', label: 'Customer Ledger', icon: BookUser },
       { path: '/finance/expenses', label: 'Expenses', icon: Receipt },
       { path: '/finance/reports', label: 'Reports', icon: BarChart3 },
       { path: '/inventory', label: 'Inventory', icon: Package },
@@ -55,6 +56,7 @@ const NAV_CONFIG = {
     items: [
       { path: '/finance', label: 'Dashboard', icon: LayoutDashboard },
       { path: '/finance/invoices', label: 'Invoices', icon: FileSpreadsheet },
+      { path: '/finance/customers', label: 'Customer Ledger', icon: BookUser },
       { path: '/finance/expenses', label: 'Expenses', icon: Receipt },
       { path: '/finance/reports', label: 'Reports', icon: BarChart3 },
     ]
@@ -204,10 +206,7 @@ export default function DashboardLayout({ children }) {
                 Impersonating: {user?.first_name} {user?.last_name} ({user?.email})
               </span>
             </div>
-            <button
-              onClick={handleEndImpersonation}
-              className="text-xs text-amber-400 hover:text-amber-300 font-medium"
-            >
+            <button onClick={handleEndImpersonation} className="text-xs text-amber-400 hover:text-amber-300 font-medium">
               End Session
             </button>
           </div>
