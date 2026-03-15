@@ -7,7 +7,6 @@ import {
   LogOut, ChevronDown, Menu, X, Clock, Briefcase, CreditCard,
   Shield, Home, FileSpreadsheet, UserCircle, ArrowLeftRight
 } from 'lucide-react';
-import { Badge } from '../ui/badge';
 
 const NAV_CONFIG = {
   super_admin: {
@@ -19,24 +18,24 @@ const NAV_CONFIG = {
       { path: '/super-admin/settings', label: 'Platform Settings', icon: Settings },
     ]
   },
- business_owner: {
+  business_owner: {
     title: 'Business',
     icon: Briefcase,
     items: [
       { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
       { path: '/dashboard/users', label: 'Manage Users', icon: Users },
-      { path: '/hr', label: 'HR', icon: UserCheck },
+      { path: '/hr', label: 'HR Dashboard', icon: UserCheck },
       { path: '/hr/employees', label: 'Employees', icon: Users },
       { path: '/hr/attendance', label: 'Attendance', icon: Calendar },
       { path: '/hr/leave', label: 'Leave', icon: FileText },
       { path: '/hr/payroll', label: 'Payroll', icon: CreditCard },
-      { path: '/finance', label: 'Finance', icon: BarChart3 },
+      { path: '/finance', label: 'Finance Dashboard', icon: BarChart3 },
       { path: '/finance/invoices', label: 'Invoices', icon: FileSpreadsheet },
       { path: '/finance/expenses', label: 'Expenses', icon: Receipt },
       { path: '/finance/reports', label: 'Reports', icon: BarChart3 },
       { path: '/dashboard/settings', label: 'Settings', icon: Settings },
     ]
-  },,
+  },
   hr_admin: {
     title: 'HR Management',
     icon: UserCheck,
@@ -100,7 +99,7 @@ export default function DashboardLayout({ children }) {
         const res = await api.get('/notifications?limit=10');
         setNotifications(res.data.notifications || []);
         setUnreadCount(res.data.unread_count || 0);
-      } catch (e) { /* ignore */ }
+      } catch (e) {}
     };
     fetchNotifications();
     const interval = setInterval(fetchNotifications, 30000);
@@ -117,14 +116,13 @@ export default function DashboardLayout({ children }) {
       await api.put('/notifications/read-all');
       setUnreadCount(0);
       setNotifications(n => n.map(x => ({ ...x, is_read: true })));
-    } catch (e) { /* ignore */ }
+    } catch (e) {}
   };
 
   const NavIcon = navConfig.icon;
 
   return (
-    <div className="min-h-screen bg-obsidian flex" data-testid="dashboard-layout">
-      {/* Mobile overlay */}
+    <div className="min-h-screen bg-obsidian flex">
       {sidebarOpen && (
         <div className="fixed inset-0 bg-black/60 z-40 lg:hidden" onClick={() => setSidebarOpen(false)} />
       )}
@@ -161,7 +159,6 @@ export default function DashboardLayout({ children }) {
               <Link
                 key={item.path}
                 to={item.path}
-                data-testid={`nav-${item.label.toLowerCase().replace(/\s+/g, '-')}`}
                 onClick={() => setSidebarOpen(false)}
                 className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 ${
                   isActive
@@ -176,7 +173,7 @@ export default function DashboardLayout({ children }) {
           })}
         </nav>
 
-        {/* Business info (for non-super-admin) */}
+        {/* Business info */}
         {business && (
           <div className="px-4 py-3 border-t border-white/5 shrink-0">
             <div className="px-2">
@@ -203,9 +200,14 @@ export default function DashboardLayout({ children }) {
           <div className="bg-amber-500/10 border-b border-amber-500/20 px-4 py-2 flex items-center justify-between">
             <div className="flex items-center gap-2">
               <ArrowLeftRight size={14} className="text-amber-400" />
-              <span className="text-xs text-amber-300">Impersonating: {user?.first_name} {user?.last_name} ({user?.email})</span>
+              <span className="text-xs text-amber-300">
+                Impersonating: {user?.first_name} {user?.last_name} ({user?.email})
+              </span>
             </div>
-            <button onClick={handleEndImpersonation} className="text-xs text-amber-400 hover:text-amber-300 font-medium" data-testid="end-impersonation-btn">
+            <button
+              onClick={handleEndImpersonation}
+              className="text-xs text-amber-400 hover:text-amber-300 font-medium"
+            >
               End Session
             </button>
           </div>
@@ -213,7 +215,7 @@ export default function DashboardLayout({ children }) {
 
         {/* Header */}
         <header className="h-16 border-b border-white/5 flex items-center justify-between px-4 lg:px-6 shrink-0 bg-void/50 backdrop-blur-sm sticky top-0 z-30">
-          <button className="lg:hidden text-gray-400 hover:text-white" onClick={() => setSidebarOpen(true)} data-testid="mobile-menu-btn">
+          <button className="lg:hidden text-gray-400 hover:text-white" onClick={() => setSidebarOpen(true)}>
             <Menu size={22} />
           </button>
 
@@ -225,18 +227,23 @@ export default function DashboardLayout({ children }) {
               <button
                 onClick={() => { setShowNotifs(!showNotifs); setShowUserMenu(false); }}
                 className="relative p-2 rounded-lg text-gray-400 hover:text-white hover:bg-white/5 transition-colors"
-                data-testid="notifications-btn"
               >
                 <Bell size={18} />
                 {unreadCount > 0 && (
-                  <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-rose-500 rounded-full text-[9px] text-white flex items-center justify-center font-bold">{unreadCount > 9 ? '9+' : unreadCount}</span>
+                  <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-rose-500 rounded-full text-[9px] text-white flex items-center justify-center font-bold">
+                    {unreadCount > 9 ? '9+' : unreadCount}
+                  </span>
                 )}
               </button>
               {showNotifs && (
                 <div className="absolute right-0 top-12 w-80 glass-card rounded-xl shadow-elevated z-50 overflow-hidden">
                   <div className="flex items-center justify-between px-4 py-3 border-b border-white/5">
                     <span className="text-sm font-semibold text-white">Notifications</span>
-                    {unreadCount > 0 && <button onClick={markAllRead} className="text-xs text-gold-400 hover:text-gold-300">Mark all read</button>}
+                    {unreadCount > 0 && (
+                      <button onClick={markAllRead} className="text-xs text-gold-400 hover:text-gold-300">
+                        Mark all read
+                      </button>
+                    )}
                   </div>
                   <div className="max-h-64 overflow-y-auto">
                     {notifications.length === 0 ? (
@@ -257,7 +264,6 @@ export default function DashboardLayout({ children }) {
               <button
                 onClick={() => { setShowUserMenu(!showUserMenu); setShowNotifs(false); }}
                 className="flex items-center gap-2 pl-3 pr-2 py-1.5 rounded-lg hover:bg-white/5 transition-colors"
-                data-testid="user-menu-btn"
               >
                 <div className="w-7 h-7 bg-gradient-gold rounded-full flex items-center justify-center text-black text-xs font-bold">
                   {user?.first_name?.[0]}{user?.last_name?.[0]}
@@ -270,9 +276,14 @@ export default function DashboardLayout({ children }) {
                   <div className="px-4 py-3 border-b border-white/5">
                     <p className="text-sm text-white font-medium">{user?.first_name} {user?.last_name}</p>
                     <p className="text-xs text-gray-500">{user?.email}</p>
-                    <span className="badge-premium badge-gold text-[10px] mt-1 inline-block">{role.replace('_', ' ')}</span>
+                    <span className="badge-premium badge-gold text-[10px] mt-1 inline-block">
+                      {role.replace('_', ' ')}
+                    </span>
                   </div>
-                  <button onClick={() => { logout(); }} className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-gray-400 hover:text-rose-400 hover:bg-white/[0.03] transition-colors" data-testid="logout-btn">
+                  <button
+                    onClick={logout}
+                    className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-gray-400 hover:text-rose-400 hover:bg-white/[0.03] transition-colors"
+                  >
                     <LogOut size={15} />
                     <span>Logout</span>
                   </button>
@@ -283,7 +294,10 @@ export default function DashboardLayout({ children }) {
         </header>
 
         {/* Page content */}
-        <main className="flex-1 p-4 lg:p-6 overflow-auto" onClick={() => { setShowNotifs(false); setShowUserMenu(false); }}>
+        <main
+          className="flex-1 p-4 lg:p-6 overflow-auto"
+          onClick={() => { setShowNotifs(false); setShowUserMenu(false); }}
+        >
           {children}
         </main>
       </div>
