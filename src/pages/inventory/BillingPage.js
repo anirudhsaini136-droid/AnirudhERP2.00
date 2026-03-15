@@ -10,9 +10,9 @@ import { toast } from 'sonner';
 const fmt = (n) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(n || 0);
 
 const PRODUCT_EMOJIS = {
-  Electronics: '⚡', Clothing: '👗', Food: '🍎', Auto: '🚗', Tools: '🔧',
-  Medicine: '💊', Books: '📚', Furniture: '🪑', Jewelry: '💎', Sports: '⚽',
-  default: '📦'
+  Electronics: 'E', Clothing: 'C', Food: 'F', Auto: 'A', Tools: 'T',
+  Medicine: 'M', Books: 'B', Furniture: 'Fr', Jewelry: 'J', Sports: 'S',
+  default: '#'
 };
 
 function Toggle({ value, onChange, label, sublabel, color = 'gold' }) {
@@ -48,6 +48,7 @@ export default function BillingPage() {
   const [notes, setNotes] = useState('');
   const [billing, setBilling] = useState(false);
   const [success, setSuccess] = useState(null);
+  const [businessName, setBusinessName] = useState('');
   const searchRef = useRef(null);
 
   const fetchProducts = useCallback(async () => {
@@ -60,6 +61,12 @@ export default function BillingPage() {
   }, [api, search]);
 
   useEffect(() => { fetchProducts(); }, [fetchProducts]);
+
+  useEffect(() => {
+    api.get('/dashboard/settings')
+      .then(r => setBusinessName(r.data?.business?.name || ''))
+      .catch(() => {});
+  }, [api]);
 
   const addToCart = (product) => {
     if (product.current_stock === 0) {
@@ -106,20 +113,33 @@ export default function BillingPage() {
   const taxAmount = subtotal * (taxRate / 100);
   const total = subtotal + taxAmount - discount;
 
-  const openWhatsApp = (invoiceId, invoiceNumber, totalAmount, phone) => {
+  const openWhatsApp = (invoiceId, invoiceNumber, totalAmount, phone, custName, bizName) => {
     const invoiceUrl = `${window.location.origin}/finance/invoices/${invoiceId}`;
-    const cleanPhone = phone?.replace(/[^0-9]/g, '') || '';
-    const message =
-      `Hello ${clientName}! 👋\n\n` +
-      `Thank you for your recent purchase. Here are your invoice details:\n\n` +
-      `🧾 *Invoice:* ${invoiceNumber || ''}\n` +
-      `💰 *Amount:* ₹${totalAmount}\n` +
-      `🏪 *From:* Your Store\n\n` +
-      `📲 *View your invoice here:*\n${invoiceUrl}\n\n` +
-      `Feel free to reach out for any queries. We appreciate your business! 🙏`;
+    const cleanPhone = (phone || '').replace(/[^0-9]/g, '');
+    const storeName = bizName || businessName || 'Our Store';
+
+    const message = [
+      `Hello ${custName || 'there'}!`,
+      '',
+      `Thank you for your recent purchase from *${storeName}*.`,
+      '',
+      `Here are your invoice details:`,
+      '',
+      `Invoice No: ${invoiceNumber || ''}`,
+      `Amount: Rs. ${totalAmount}`,
+      `Store: ${storeName}`,
+      '',
+      `View your invoice here:`,
+      invoiceUrl,
+      '',
+      `For any queries, feel free to reach out.`,
+      `We appreciate your business!`
+    ].join('\n');
+
     const waUrl = cleanPhone
       ? `https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`
       : `https://wa.me/?text=${encodeURIComponent(message)}`;
+
     window.open(waUrl, '_blank');
   };
 
@@ -129,6 +149,9 @@ export default function BillingPage() {
     if (sendWhatsApp && !clientPhone.trim()) { toast.error('Phone number is required to send on WhatsApp'); return; }
 
     setBilling(true);
+    const savedName = clientName;
+    const savedPhone = clientPhone;
+
     try {
       const res = await api.post('/inventory/bill', {
         client_name: clientName,
@@ -141,7 +164,7 @@ export default function BillingPage() {
         tax_rate: taxRate
       });
 
-      setSuccess({ ...res.data, savedPhone: clientPhone, savedName: clientName });
+      setSuccess({ ...res.data, savedPhone, savedName });
       setCart([]);
       setClientName('');
       setClientPhone('');
@@ -152,8 +175,15 @@ export default function BillingPage() {
 
       if (sendWhatsApp && res.data.invoice_id) {
         setTimeout(() => {
-          openWhatsApp(res.data.invoice_id, res.data.invoice_number, res.data.total_amount, clientPhone);
-        }, 500);
+          openWhatsApp(
+            res.data.invoice_id,
+            res.data.invoice_number,
+            res.data.total_amount,
+            savedPhone,
+            savedName,
+            businessName
+          );
+        }, 600);
       } else {
         toast.success('Bill created successfully!');
       }
@@ -215,7 +245,14 @@ export default function BillingPage() {
 
             {success.invoice_id && (
               <button
-                onClick={() => openWhatsApp(success.invoice_id, success.invoice_number, success.total_amount, success.savedPhone)}
+                onClick={() => openWhatsApp(
+                  success.invoice_id,
+                  success.invoice_number,
+                  success.total_amount,
+                  success.savedPhone,
+                  success.savedName,
+                  businessName
+                )}
                 className="w-full py-3 rounded-xl text-sm font-semibold border transition-all flex items-center justify-center gap-2"
                 style={{ background: 'rgba(37,211,102,0.1)', borderColor: 'rgba(37,211,102,0.3)', color: '#25d366' }}
               >
@@ -225,7 +262,7 @@ export default function BillingPage() {
             )}
 
             <button onClick={() => navigate('/inventory')} className="text-sm text-gray-500 hover:text-gray-400">
-              ← Back to Inventory
+              Back to Inventory
             </button>
           </div>
         </div>
@@ -267,7 +304,7 @@ export default function BillingPage() {
             {products.map(product => {
               const inCart = cart.find(i => i.product_id === product.id);
               const isOut = product.current_stock === 0;
-              const emoji = PRODUCT_EMOJIS[product.category] || PRODUCT_EMOJIS.default;
+              const letter = (product.name || 'P')[0].toUpperCase();
               return (
                 <button
                   key={product.id}
@@ -281,8 +318,8 @@ export default function BillingPage() {
                     {product.image_url ? (
                       <img src={product.image_url} alt={product.name} className="w-10 h-10 rounded-xl object-cover" />
                     ) : (
-                      <div className="w-10 h-10 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center text-xl">
-                        {emoji}
+                      <div className="w-10 h-10 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center text-sm font-bold text-gray-400">
+                        {letter}
                       </div>
                     )}
                     {inCart && (
@@ -378,7 +415,7 @@ export default function BillingPage() {
             {cart.length > 0 && (
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <Label className="text-gray-500 text-[10px]">Discount (₹)</Label>
+                  <Label className="text-gray-500 text-[10px]">Discount (Rs.)</Label>
                   <Input type="number" min="0" className="input-premium mt-0.5 text-sm h-8" value={discount} onChange={e => setDiscount(parseFloat(e.target.value) || 0)} />
                 </div>
                 <div>
@@ -423,15 +460,19 @@ export default function BillingPage() {
                 value={sendWhatsApp}
                 onChange={() => setSendWhatsApp(!sendWhatsApp)}
                 label="Send on WhatsApp after billing"
-                sublabel="Opens WhatsApp with invoice link"
+                sublabel="Opens WhatsApp with invoice link (free)"
                 color="emerald"
               />
               {sendWhatsApp && (
-                <div className="p-3 rounded-xl border flex items-start gap-2"
-                  style={{ background: 'rgba(37,211,102,0.05)', borderColor: 'rgba(37,211,102,0.2)' }}>
+                <div
+                  className="p-3 rounded-xl border flex items-start gap-2"
+                  style={{ background: 'rgba(37,211,102,0.05)', borderColor: 'rgba(37,211,102,0.2)' }}
+                >
                   <MessageCircle size={13} className="mt-0.5 shrink-0" style={{ color: '#25d366' }} />
                   <p className="text-[11px] leading-relaxed" style={{ color: '#86efac' }}>
-                    After bill is created, WhatsApp will open with a message containing the invoice link for <span className="font-bold">{clientPhone || 'the customer'}</span>. Free, no API needed.
+                    WhatsApp will open with invoice link for{' '}
+                    <span className="font-bold">{clientPhone || 'customer'}</span>.
+                    Message sent from your phone — completely free.
                   </p>
                 </div>
               )}
@@ -459,7 +500,7 @@ export default function BillingPage() {
               ) : (
                 <span className="flex items-center justify-center gap-2">
                   {sendWhatsApp ? <MessageCircle size={16} /> : <CheckCircle size={16} />}
-                  {sendWhatsApp ? `Bill + Open WhatsApp · ${fmt(total)}` : `Create Bill · ${fmt(total)}`}
+                  {sendWhatsApp ? `Bill + WhatsApp · ${fmt(total)}` : `Create Bill · ${fmt(total)}`}
                 </span>
               )}
             </button>
