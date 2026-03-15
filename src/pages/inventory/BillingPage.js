@@ -4,7 +4,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import DashboardLayout from '../../components/layout/DashboardLayout';
 import { Input } from '../../components/ui/input';
 import { Label } from '../../components/ui/label';
-import { ArrowLeft, Search, Plus, Minus, Trash2, ShoppingCart, CheckCircle, FileText } from 'lucide-react';
+import { ArrowLeft, Search, Plus, Minus, Trash2, ShoppingCart, CheckCircle, FileText, MessageCircle } from 'lucide-react';
 import { toast } from 'sonner';
 
 const fmt = (n) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(n || 0);
@@ -14,6 +14,23 @@ const PRODUCT_EMOJIS = {
   Medicine: '💊', Books: '📚', Furniture: '🪑', Jewelry: '💎', Sports: '⚽',
   default: '📦'
 };
+
+function Toggle({ value, onChange, label, sublabel, color = 'gold' }) {
+  const bg = value
+    ? color === 'emerald' ? 'bg-emerald-500' : 'bg-gold-500'
+    : 'bg-white/10';
+  return (
+    <label className="flex items-center gap-3 cursor-pointer" onClick={onChange}>
+      <div className={`w-10 h-5 rounded-full transition-colors relative ${bg}`}>
+        <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${value ? 'translate-x-5' : 'translate-x-0.5'}`} />
+      </div>
+      <div>
+        <span className="text-xs text-gray-400">{label}</span>
+        {sublabel && <p className="text-[10px] text-gray-600">{sublabel}</p>}
+      </div>
+    </label>
+  );
+}
 
 export default function BillingPage() {
   const { api } = useAuth();
@@ -27,6 +44,7 @@ export default function BillingPage() {
   const [discount, setDiscount] = useState(0);
   const [taxRate, setTaxRate] = useState(0);
   const [createInvoice, setCreateInvoice] = useState(false);
+  const [sendWhatsApp, setSendWhatsApp] = useState(false);
   const [notes, setNotes] = useState('');
   const [billing, setBilling] = useState(false);
   const [success, setSuccess] = useState(null);
@@ -55,10 +73,7 @@ export default function BillingPage() {
           toast.error(`Only ${product.current_stock} units available`);
           return prev;
         }
-        return prev.map(i => i.product_id === product.id
-          ? { ...i, quantity: i.quantity + 1 }
-          : i
-        );
+        return prev.map(i => i.product_id === product.id ? { ...i, quantity: i.quantity + 1 } : i);
       }
       return [...prev, {
         product_id: product.id,
@@ -70,7 +85,7 @@ export default function BillingPage() {
         max_stock: product.current_stock
       }];
     });
-    toast.success(`${product.name} added`, { duration: 1000 });
+    toast.success(`${product.name} added`, { duration: 800 });
   };
 
   const updateQty = (product_id, delta) => {
@@ -94,6 +109,8 @@ export default function BillingPage() {
   const handleBill = async () => {
     if (!clientName.trim()) { toast.error('Customer name is required'); return; }
     if (cart.length === 0) { toast.error('Add at least one product'); return; }
+    if (sendWhatsApp && !clientPhone.trim()) { toast.error('Phone number is required for WhatsApp'); return; }
+
     setBilling(true);
     try {
       const res = await api.post('/inventory/bill', {
@@ -101,11 +118,24 @@ export default function BillingPage() {
         client_phone: clientPhone,
         client_email: clientEmail,
         items: cart.map(i => ({ product_id: i.product_id, quantity: i.quantity, unit_price: i.unit_price })),
-        create_invoice: createInvoice,
+        create_invoice: createInvoice || sendWhatsApp,
         notes,
         discount_amount: discount,
         tax_rate: taxRate
       });
+
+      if (sendWhatsApp && clientPhone && res.data.invoice_id) {
+        try {
+          await api.post(`/finance/invoices/${res.data.invoice_id}/send-whatsapp`, { phone: clientPhone });
+          toast.success('Bill created and sent via WhatsApp!');
+        } catch (e) {
+          toast.success('Bill created!');
+          toast.error('WhatsApp failed — check WATI settings in Business Settings');
+        }
+      } else {
+        toast.success('Bill created successfully!');
+      }
+
       setSuccess(res.data);
       setCart([]);
       setClientName('');
@@ -125,8 +155,10 @@ export default function BillingPage() {
       <DashboardLayout>
         <div className="flex items-center justify-center min-h-[60vh]">
           <div className="text-center space-y-6 max-w-sm">
-            <div className="w-24 h-24 bg-emerald-500/20 rounded-full flex items-center justify-center mx-auto border-2 border-emerald-500/40"
-              style={{ animation: 'scale-in 0.5s ease-out' }}>
+            <div
+              className="w-24 h-24 bg-emerald-500/20 rounded-full flex items-center justify-center mx-auto border-2 border-emerald-500/40"
+              style={{ animation: 'scale-in 0.5s ease-out' }}
+            >
               <CheckCircle size={48} className="text-emerald-400" />
             </div>
             <div>
@@ -154,7 +186,10 @@ export default function BillingPage() {
                 New Bill
               </button>
               {success.invoice_id && (
-                <button onClick={() => navigate(`/finance/invoices/${success.invoice_id}`)} className="flex-1 btn-premium btn-secondary flex items-center justify-center gap-2">
+                <button
+                  onClick={() => navigate(`/finance/invoices/${success.invoice_id}`)}
+                  className="flex-1 btn-premium btn-secondary flex items-center justify-center gap-2"
+                >
                   <FileText size={15} /> View Invoice
                 </button>
               )}
@@ -172,6 +207,7 @@ export default function BillingPage() {
   return (
     <DashboardLayout>
       <div className="flex flex-col lg:flex-row gap-6 h-full">
+
         {/* Left — Product picker */}
         <div className="flex-1 space-y-4">
           <div className="flex items-center gap-3">
@@ -184,7 +220,6 @@ export default function BillingPage() {
             </div>
           </div>
 
-          {/* Search */}
           <div className="relative">
             <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
             <input
@@ -198,13 +233,11 @@ export default function BillingPage() {
             />
           </div>
 
-          {/* Products grid */}
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 max-h-[60vh] overflow-y-auto pr-1">
             {products.map(product => {
               const inCart = cart.find(i => i.product_id === product.id);
               const isOut = product.current_stock === 0;
               const emoji = PRODUCT_EMOJIS[product.category] || PRODUCT_EMOJIS.default;
-
               return (
                 <button
                   key={product.id}
@@ -257,18 +290,24 @@ export default function BillingPage() {
 
             {/* Customer info */}
             <div className="space-y-2">
-              <div>
-                <Input
-                  className="input-premium text-sm"
-                  placeholder="Customer Name *"
-                  value={clientName}
-                  onChange={e => setClientName(e.target.value)}
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <Input className="input-premium text-sm" placeholder="Phone" value={clientPhone} onChange={e => setClientPhone(e.target.value)} />
-                <Input className="input-premium text-sm" placeholder="Email" value={clientEmail} onChange={e => setClientEmail(e.target.value)} />
-              </div>
+              <Input
+                className="input-premium text-sm"
+                placeholder="Customer Name *"
+                value={clientName}
+                onChange={e => setClientName(e.target.value)}
+              />
+              <Input
+                className="input-premium text-sm"
+                placeholder="Phone (required for WhatsApp)"
+                value={clientPhone}
+                onChange={e => setClientPhone(e.target.value)}
+              />
+              <Input
+                className="input-premium text-sm"
+                placeholder="Email (optional)"
+                value={clientEmail}
+                onChange={e => setClientEmail(e.target.value)}
+              />
             </div>
 
             {/* Cart items */}
@@ -325,8 +364,16 @@ export default function BillingPage() {
                 <div className="flex justify-between text-xs text-gray-500">
                   <span>Subtotal</span><span>{fmt(subtotal)}</span>
                 </div>
-                {taxRate > 0 && <div className="flex justify-between text-xs text-gray-500"><span>Tax ({taxRate}%)</span><span>{fmt(taxAmount)}</span></div>}
-                {discount > 0 && <div className="flex justify-between text-xs text-rose-400"><span>Discount</span><span>-{fmt(discount)}</span></div>}
+                {taxRate > 0 && (
+                  <div className="flex justify-between text-xs text-gray-500">
+                    <span>Tax ({taxRate}%)</span><span>{fmt(taxAmount)}</span>
+                  </div>
+                )}
+                {discount > 0 && (
+                  <div className="flex justify-between text-xs text-rose-400">
+                    <span>Discount</span><span>-{fmt(discount)}</span>
+                  </div>
+                )}
                 <div className="flex justify-between text-base font-bold pt-1 border-t border-white/5">
                   <span className="text-white">Total</span>
                   <span className="text-gold-400 text-xl">{fmt(total)}</span>
@@ -334,19 +381,40 @@ export default function BillingPage() {
               </div>
             )}
 
-            {/* Invoice toggle */}
-            <label className="flex items-center gap-3 cursor-pointer">
-              <div
-                onClick={() => setCreateInvoice(!createInvoice)}
-                className={`w-10 h-5 rounded-full transition-colors relative ${createInvoice ? 'bg-gold-500' : 'bg-white/10'}`}
-              >
-                <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${createInvoice ? 'translate-x-5' : 'translate-x-0.5'}`} />
-              </div>
-              <span className="text-xs text-gray-400">Also create invoice</span>
-            </label>
+            {/* Toggles */}
+            <div className="space-y-3 border-t border-white/5 pt-3">
+              <Toggle
+                value={createInvoice}
+                onChange={() => setCreateInvoice(!createInvoice)}
+                label="Create invoice"
+                sublabel="Generate a formal invoice record"
+              />
+              <Toggle
+                value={sendWhatsApp}
+                onChange={() => setSendWhatsApp(!sendWhatsApp)}
+                label="Send via WhatsApp"
+                sublabel={sendWhatsApp && !clientPhone ? '⚠ Enter phone number above' : 'Send invoice to customer on WhatsApp'}
+                color="emerald"
+              />
+              {sendWhatsApp && (
+                <div className="p-3 rounded-xl bg-emerald-500/5 border border-emerald-500/20">
+                  <div className="flex items-start gap-2">
+                    <MessageCircle size={14} className="text-emerald-400 mt-0.5 shrink-0" />
+                    <p className="text-[11px] text-emerald-300 leading-relaxed">
+                      Invoice will be sent to <span className="font-bold">{clientPhone || 'the phone number above'}</span> via WhatsApp. Make sure WATI is configured in Business Settings.
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
 
             {/* Notes */}
-            <Input className="input-premium text-sm" placeholder="Notes (optional)" value={notes} onChange={e => setNotes(e.target.value)} />
+            <Input
+              className="input-premium text-sm"
+              placeholder="Notes (optional)"
+              value={notes}
+              onChange={e => setNotes(e.target.value)}
+            />
 
             {/* Bill button */}
             <button
@@ -357,12 +425,12 @@ export default function BillingPage() {
               {billing ? (
                 <span className="flex items-center justify-center gap-2">
                   <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                  Processing...
+                  {sendWhatsApp ? 'Creating & Sending...' : 'Processing...'}
                 </span>
               ) : (
                 <span className="flex items-center justify-center gap-2">
-                  <CheckCircle size={16} />
-                  Create Bill · {fmt(total)}
+                  {sendWhatsApp ? <MessageCircle size={16} /> : <CheckCircle size={16} />}
+                  {sendWhatsApp ? `Bill & Send WhatsApp · ${fmt(total)}` : `Create Bill · ${fmt(total)}`}
                 </span>
               )}
             </button>
