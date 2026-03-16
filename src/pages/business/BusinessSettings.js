@@ -3,7 +3,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import DashboardLayout from '../../components/layout/DashboardLayout';
 import { Input } from '../../components/ui/input';
 import { Label } from '../../components/ui/label';
-import { Save, Building2, CreditCard, MessageCircle, FileText } from 'lucide-react';
+import { Save, Building2, CreditCard, FileText, Landmark } from 'lucide-react';
 import { toast } from 'sonner';
 
 const fmt = (n) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(n || 0);
@@ -15,7 +15,7 @@ export default function BusinessSettings() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [savingInvoice, setSavingInvoice] = useState(false);
-  const [savingWati, setSavingWati] = useState(false);
+  const [savingBank, setSavingBank] = useState(false);
 
   const [form, setForm] = useState({
     name: '', phone: '', address: '', city: '', country: ''
@@ -24,17 +24,14 @@ export default function BusinessSettings() {
   const [invoiceForm, setInvoiceForm] = useState({
     invoice_gst: '',
     invoice_pan: '',
-    invoice_bank_name: '',
-    invoice_bank_account: '',
-    invoice_bank_ifsc: '',
     invoice_footer_note: '',
     invoice_logo_url: ''
   });
 
-  const [watiForm, setWatiForm] = useState({
-    wati_api_endpoint: '',
-    wati_api_token: '',
-    whatsapp_number: ''
+  const [bankForm, setBankForm] = useState({
+    invoice_bank_name: '',
+    invoice_bank_account: '',
+    invoice_bank_ifsc: ''
   });
 
   useEffect(() => {
@@ -51,21 +48,17 @@ export default function BusinessSettings() {
       setInvoiceForm({
         invoice_gst: b.invoice_gst || '',
         invoice_pan: b.invoice_pan || '',
-        invoice_bank_name: b.invoice_bank_name || '',
-        invoice_bank_account: b.invoice_bank_account || '',
-        invoice_bank_ifsc: b.invoice_bank_ifsc || '',
         invoice_footer_note: b.invoice_footer_note || '',
         invoice_logo_url: b.invoice_logo_url || ''
       });
-      setWatiForm({
-        wati_api_endpoint: b.wati_api_endpoint || '',
-        wati_api_token: b.wati_api_token || '',
-        whatsapp_number: b.whatsapp_number || ''
+      setBankForm({
+        invoice_bank_name: b.invoice_bank_name || '',
+        invoice_bank_account: b.invoice_bank_account || '',
+        invoice_bank_ifsc: b.invoice_bank_ifsc || ''
       });
     }).catch(() => {}).finally(() => setLoading(false));
   }, [api]);
 
-  // ✅ Profile save — PUT /dashboard/settings (name, phone, address, city, country)
   const handleSave = async (e) => {
     e.preventDefault();
     setSaving(true);
@@ -73,36 +66,34 @@ export default function BusinessSettings() {
       await api.put('/dashboard/settings', form);
       toast.success('Business profile saved');
       refreshUser();
-    } catch (e) {
+    } catch {
       toast.error('Failed to save profile');
     }
     setSaving(false);
   };
 
-  // ✅ FIXED: Invoice settings — PUT /dashboard/settings/invoice
   const handleSaveInvoice = async (e) => {
     e.preventDefault();
     setSavingInvoice(true);
     try {
       await api.put('/dashboard/settings/invoice', invoiceForm);
       toast.success('Invoice settings saved');
-    } catch (e) {
+    } catch {
       toast.error('Failed to save invoice settings');
     }
     setSavingInvoice(false);
   };
 
-  // ✅ FIXED: WATI settings — PUT /dashboard/settings/invoice (same endpoint, different fields)
-  const handleSaveWati = async (e) => {
+  const handleSaveBank = async (e) => {
     e.preventDefault();
-    setSavingWati(true);
+    setSavingBank(true);
     try {
-      await api.put('/dashboard/settings/invoice', watiForm);
-      toast.success('WhatsApp settings saved');
-    } catch (e) {
-      toast.error('Failed to save WhatsApp settings');
+      await api.put('/dashboard/settings/invoice', bankForm);
+      toast.success('Bank details saved');
+    } catch {
+      toast.error('Failed to save bank details');
     }
-    setSavingWati(false);
+    setSavingBank(false);
   };
 
   if (loading) return (
@@ -120,10 +111,10 @@ export default function BusinessSettings() {
       <div className="space-y-6 max-w-2xl">
         <div>
           <h1 className="font-display text-2xl text-white">Business Settings</h1>
-          <p className="text-sm text-gray-500 font-sans mt-1">Manage your business profile, invoice settings and integrations</p>
+          <p className="text-sm text-gray-500 font-sans mt-1">Manage your business profile, invoice settings and bank details</p>
         </div>
 
-        {/* Subscription info */}
+        {/* Subscription */}
         <div className="glass-card rounded-2xl p-5">
           <div className="flex items-center gap-2 mb-4">
             <CreditCard size={18} className="text-gold-400" />
@@ -184,13 +175,13 @@ export default function BusinessSettings() {
           </form>
         </div>
 
-        {/* Invoice Settings */}
+        {/* Invoice Settings — GST, PAN, footer */}
         <div className="glass-card rounded-2xl p-5">
-          <div className="flex items-center gap-2 mb-4">
+          <div className="flex items-center gap-2 mb-1">
             <FileText size={18} className="text-gold-400" />
             <h2 className="font-display text-lg text-white">Invoice Settings</h2>
           </div>
-          <p className="text-xs text-gray-500 mb-4">These details appear on every invoice you generate.</p>
+          <p className="text-xs text-gray-500 mb-4">GST, PAN and footer note printed on every invoice.</p>
           <form onSubmit={handleSaveInvoice} className="space-y-4">
             <div className="grid grid-cols-2 gap-3">
               <div>
@@ -215,36 +206,6 @@ export default function BusinessSettings() {
               </div>
             </div>
             <div>
-              <Label className="text-gray-400 text-xs">Bank Name</Label>
-              <Input
-                className="input-premium mt-1"
-                placeholder="HDFC Bank"
-                value={invoiceForm.invoice_bank_name}
-                onChange={e => setInvoiceForm({...invoiceForm, invoice_bank_name: e.target.value})}
-              />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label className="text-gray-400 text-xs">Account Number</Label>
-                <Input
-                  className="input-premium mt-1"
-                  placeholder="1234567890"
-                  value={invoiceForm.invoice_bank_account}
-                  onChange={e => setInvoiceForm({...invoiceForm, invoice_bank_account: e.target.value})}
-                />
-              </div>
-              <div>
-                <Label className="text-gray-400 text-xs">IFSC Code</Label>
-                <Input
-                  className="input-premium mt-1"
-                  placeholder="HDFC0001234"
-                  value={invoiceForm.invoice_bank_ifsc}
-                  onChange={e => setInvoiceForm({...invoiceForm, invoice_bank_ifsc: e.target.value.toUpperCase()})}
-                  maxLength={11}
-                />
-              </div>
-            </div>
-            <div>
               <Label className="text-gray-400 text-xs">Invoice Footer Note</Label>
               <textarea
                 className="input-premium mt-1 h-16 resize-none w-full"
@@ -259,58 +220,79 @@ export default function BusinessSettings() {
           </form>
         </div>
 
-        {/* WhatsApp / WATI Settings */}
+        {/* Bank Details */}
         <div className="glass-card rounded-2xl p-5">
-          <div className="flex items-center gap-2 mb-4">
-            <MessageCircle size={18} className="text-gold-400" />
-            <h2 className="font-display text-lg text-white">WhatsApp Integration</h2>
+          <div className="flex items-center gap-2 mb-1">
+            <Landmark size={18} className="text-gold-400" />
+            <h2 className="font-display text-lg text-white">Bank Details</h2>
           </div>
-          <p className="text-xs text-gray-500 mb-4">
-            Connect WATI to send invoices directly to customers on WhatsApp. Get your credentials from{' '}
-            <span className="text-gold-400">wati.io</span>
-          </p>
-          <form onSubmit={handleSaveWati} className="space-y-4">
+          <p className="text-xs text-gray-500 mb-4">Displayed on invoices so customers can make bank transfers.</p>
+          <form onSubmit={handleSaveBank} className="space-y-4">
             <div>
-              <Label className="text-gray-400 text-xs">Your WhatsApp Business Number</Label>
+              <Label className="text-gray-400 text-xs">Bank Name</Label>
               <Input
                 className="input-premium mt-1"
-                placeholder="+919876543210"
-                value={watiForm.whatsapp_number}
-                onChange={e => setWatiForm({...watiForm, whatsapp_number: e.target.value})}
+                placeholder="e.g. HDFC Bank"
+                value={bankForm.invoice_bank_name}
+                onChange={e => setBankForm({...bankForm, invoice_bank_name: e.target.value})}
               />
             </div>
-            <div>
-              <Label className="text-gray-400 text-xs">WATI API Endpoint</Label>
-              <Input
-                className="input-premium mt-1"
-                placeholder="https://live-mt-server.wati.io/YOUR_ID"
-                value={watiForm.wati_api_endpoint}
-                onChange={e => setWatiForm({...watiForm, wati_api_endpoint: e.target.value})}
-              />
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-gray-400 text-xs">Account Number</Label>
+                <Input
+                  className="input-premium mt-1"
+                  placeholder="1234567890"
+                  value={bankForm.invoice_bank_account}
+                  onChange={e => setBankForm({...bankForm, invoice_bank_account: e.target.value})}
+                />
+              </div>
+              <div>
+                <Label className="text-gray-400 text-xs">IFSC Code</Label>
+                <Input
+                  className="input-premium mt-1"
+                  placeholder="HDFC0001234"
+                  value={bankForm.invoice_bank_ifsc}
+                  onChange={e => setBankForm({...bankForm, invoice_bank_ifsc: e.target.value.toUpperCase()})}
+                  maxLength={11}
+                />
+              </div>
             </div>
-            <div>
-              <Label className="text-gray-400 text-xs">WATI API Token</Label>
-              <Input
-                type="password"
-                className="input-premium mt-1"
-                placeholder="Bearer token from WATI dashboard"
-                value={watiForm.wati_api_token}
-                onChange={e => setWatiForm({...watiForm, wati_api_token: e.target.value})}
-              />
-            </div>
-            <div className="p-3 rounded-xl bg-amber-500/5 border border-amber-500/20">
-              <p className="text-xs text-amber-400">
-                To use WhatsApp sending you need a WATI account and an approved message template named{' '}
-                <span className="font-mono font-bold">invoice_notification</span>
-              </p>
-            </div>
-            <button type="submit" disabled={savingWati} className="btn-premium btn-primary flex items-center gap-2">
-              <Save size={15} /> {savingWati ? 'Saving...' : 'Save WhatsApp Settings'}
+
+            {/* Preview if filled */}
+            {(bankForm.invoice_bank_name || bankForm.invoice_bank_account) && (
+              <div className="p-3 rounded-xl bg-white/[0.03] border border-white/[0.06]">
+                <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-2">Preview on Invoice</p>
+                <div className="flex gap-8 flex-wrap">
+                  {bankForm.invoice_bank_name && (
+                    <div>
+                      <p className="text-[10px] text-gray-600">Bank</p>
+                      <p className="text-sm text-white font-medium">{bankForm.invoice_bank_name}</p>
+                    </div>
+                  )}
+                  {bankForm.invoice_bank_account && (
+                    <div>
+                      <p className="text-[10px] text-gray-600">Account No.</p>
+                      <p className="text-sm text-white font-medium">{bankForm.invoice_bank_account}</p>
+                    </div>
+                  )}
+                  {bankForm.invoice_bank_ifsc && (
+                    <div>
+                      <p className="text-[10px] text-gray-600">IFSC</p>
+                      <p className="text-sm text-white font-medium">{bankForm.invoice_bank_ifsc}</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            <button type="submit" disabled={savingBank} className="btn-premium btn-primary flex items-center gap-2">
+              <Save size={15} /> {savingBank ? 'Saving...' : 'Save Bank Details'}
             </button>
           </form>
         </div>
 
-        {/* Payment history */}
+        {/* Payment History */}
         {data?.payment_history?.length > 0 && (
           <div className="glass-card rounded-2xl p-5">
             <h2 className="font-display text-lg text-white mb-4">Payment History</h2>
