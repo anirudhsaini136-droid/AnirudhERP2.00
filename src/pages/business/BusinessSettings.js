@@ -25,7 +25,8 @@ export default function BusinessSettings() {
     invoice_gst: '',
     invoice_pan: '',
     invoice_footer_note: '',
-    invoice_logo_url: ''
+    invoice_logo_url: '',
+    terms_of_sale: ''
   });
 
   const [bankForm, setBankForm] = useState({
@@ -49,7 +50,8 @@ export default function BusinessSettings() {
         invoice_gst: b.invoice_gst || '',
         invoice_pan: b.invoice_pan || '',
         invoice_footer_note: b.invoice_footer_note || '',
-        invoice_logo_url: b.invoice_logo_url || ''
+        invoice_logo_url: b.invoice_logo_url || '',
+        terms_of_sale: b.terms_of_sale || ''
       });
       setBankForm({
         invoice_bank_name: b.invoice_bank_name || '',
@@ -213,6 +215,16 @@ export default function BusinessSettings() {
                 value={invoiceForm.invoice_footer_note}
                 onChange={e => setInvoiceForm({...invoiceForm, invoice_footer_note: e.target.value})}
               />
+            </div>
+            <div>
+              <Label className="text-gray-400 text-xs">Terms of Sale</Label>
+              <textarea
+                className="input-premium mt-1 h-24 resize-none w-full"
+                placeholder={"Disputes subject to local jurisdiction only.\nGoods once sold will not be returned.\nWarranty as per manufacturer terms."}
+                value={invoiceForm.terms_of_sale}
+                onChange={e => setInvoiceForm({...invoiceForm, terms_of_sale: e.target.value})}
+              />
+              <p className="text-[10px] text-gray-600 mt-1">Printed at the bottom of every invoice.</p>
             </div>
             <button type="submit" disabled={savingInvoice} className="btn-premium btn-primary flex items-center gap-2">
               <Save size={15} /> {savingInvoice ? 'Saving...' : 'Save Invoice Settings'}
