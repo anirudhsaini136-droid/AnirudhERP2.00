@@ -1,9 +1,7 @@
 import React, { useState, useEffect } from 'react';
+import InvoiceRenderer from './InvoiceRenderer';
 
 const API_BASE = process.env.REACT_APP_API_URL || 'https://anirudherp-backend-production.up.railway.app';
-
-const fmt = (n) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 2 }).format(n || 0);
-const fmtDate = (d) => d ? new Date(d).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' }) : '-';
 
 export default function PublicInvoicePage() {
   const [invoice, setInvoice] = useState(null);
@@ -51,16 +49,6 @@ export default function PublicInvoicePage() {
     </div>
   );
 
-  const statusColor = {
-    draft: '#6b7280', sent: '#3b82f6', paid: '#10b981',
-    overdue: '#ef4444', partially_paid: '#f59e0b'
-  }[invoice.status] || '#6b7280';
-
-  const getLineTotal = (item) =>
-    Number(item.total || item.amount || ((item.quantity || 0) * (item.unit_price || 0)) || 0);
-
-  const computedSubtotal = items.reduce((s, i) => s + getLineTotal(i), 0);
-
   return (
     <div style={{ minHeight: '100vh', background: '#0a0a0f' }}>
       <style>{`
@@ -70,7 +58,7 @@ export default function PublicInvoicePage() {
 
         .pub-toolbar {
           position: sticky; top: 0; z-index: 50;
-          background: rgba(10,10,15,0.95); backdrop-filter: blur(12px);
+          background: rgba(10,10,15,0.97); backdrop-filter: blur(12px);
           border-bottom: 1px solid rgba(255,255,255,0.05);
           padding: 12px 24px;
           display: flex; align-items: center; justify-content: space-between;
@@ -80,52 +68,23 @@ export default function PublicInvoicePage() {
           background: linear-gradient(135deg, #D4AF37, #F5E17A);
           color: #000; border: none; border-radius: 8px;
           padding: 9px 20px; font-size: 13px; font-weight: 700;
-          cursor: pointer; font-family: 'Segoe UI', Arial, sans-serif;
+          cursor: pointer;
         }
 
         @media print {
-          /* Hide toolbar, remove dark page background */
           .pub-toolbar { display: none !important; }
-          .pub-page-bg { background: white !important; padding: 0 !important; }
           body { background: white !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
-
-          #pub-invoice { box-shadow: none !important; max-width: 100% !important; border-radius: 0 !important; }
-
-          /* Force dark sections to print with color */
-          .inv-dark-header {
-            background-color: #1a1a2e !important;
-            -webkit-print-color-adjust: exact !important;
-            print-color-adjust: exact !important;
-          }
-          .inv-meta-band {
-            background-color: #f8f9fa !important;
-            -webkit-print-color-adjust: exact !important;
-            print-color-adjust: exact !important;
-          }
-          .inv-totals-band {
-            background-color: #f8f9fa !important;
-            -webkit-print-color-adjust: exact !important;
-            print-color-adjust: exact !important;
-          }
-          /* Grand total: dark bg with gold text */
-          .inv-grand-row {
-            background-color: #1a1a2e !important;
-            -webkit-print-color-adjust: exact !important;
-            print-color-adjust: exact !important;
-          }
+          .pub-page-bg { background: white !important; padding: 0 !important; }
+          #invoice-print { box-shadow: none !important; max-width: 100% !important; border-radius: 0 !important; }
+          .inv-dark-header { background-color: #1a1a2e !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+          .inv-meta-band, .inv-bank-band { background-color: #f8f9fa !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+          .inv-grand-row { background-color: #1a1a2e !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
           .inv-grand-row .total-label { color: #ffffff !important; }
           .inv-grand-row .total-value { color: #D4AF37 !important; }
-
-          /* Bank details band */
-          .inv-bank-band {
-            background-color: #f8f9fa !important;
-            -webkit-print-color-adjust: exact !important;
-            print-color-adjust: exact !important;
-          }
         }
       `}</style>
 
-      {/* Toolbar */}
+      {/* Toolbar — Print only */}
       <div className="pub-toolbar">
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#D4AF37', fontWeight: 600, fontSize: 15 }}>
           <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#D4AF37' }} />
@@ -141,162 +100,8 @@ export default function PublicInvoicePage() {
         </button>
       </div>
 
-      {/* Page wrapper — class used to strip dark bg on print */}
       <div className="pub-page-bg" style={{ padding: '24px 16px 64px', display: 'flex', justifyContent: 'center' }}>
-        <div id="pub-invoice" style={{ width: '100%', maxWidth: 760, background: '#ffffff', borderRadius: 20, overflow: 'hidden', boxShadow: '0 25px 80px rgba(0,0,0,0.6)', fontFamily: "'Segoe UI', Arial, sans-serif", color: '#111827' }}>
-
-          {/* ── DARK HEADER ── */}
-          <div className="inv-dark-header" style={{ background: 'linear-gradient(135deg, #0a0a0f 0%, #1a1a2e 50%, #0a0a0f 100%)', padding: '40px 48px', WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-              <div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
-                  {business?.invoice_logo_url ? (
-                    <img src={business.invoice_logo_url} alt="logo" style={{ width: 40, height: 40, objectFit: 'contain', borderRadius: 10, background: 'white', padding: 4 }} onError={e => { e.target.style.display = 'none'; }} />
-                  ) : (
-                    <div style={{ width: 40, height: 40, background: 'linear-gradient(135deg, #D4AF37, #F5E17A)', borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }}>
-                      <span style={{ color: '#000', fontWeight: 'bold', fontSize: 18 }}>{(business?.name || 'N')[0]}</span>
-                    </div>
-                  )}
-                  <div>
-                    <div style={{ color: '#D4AF37', fontSize: 22, fontWeight: 'bold', letterSpacing: '-0.5px' }}>
-                      {business?.name || 'Your Business'}
-                    </div>
-                    {business?.invoice_gst && (
-                      <div style={{ color: '#9ca3af', fontSize: 11, marginTop: 2 }}>GST: {business.invoice_gst}</div>
-                    )}
-                  </div>
-                </div>
-                <div style={{ color: '#9ca3af', fontSize: 12, lineHeight: 1.6 }}>
-                  {business?.address && <div>{business.address}</div>}
-                  {business?.phone && <div>{business.phone}</div>}
-                </div>
-              </div>
-              <div style={{ textAlign: 'right' }}>
-                <div style={{ color: '#D4AF37', fontSize: 32, fontWeight: 'bold', letterSpacing: '-1px' }}>INVOICE</div>
-                <div style={{ color: '#fff', fontSize: 16, fontWeight: 600, marginTop: 4 }}>{invoice.invoice_number}</div>
-                <div style={{ marginTop: 12, display: 'inline-block', padding: '4px 12px', borderRadius: 20, border: `1px solid ${statusColor}`, backgroundColor: `${statusColor}20`, WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }}>
-                  <span style={{ color: statusColor, fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                    {invoice.status?.replace('_', ' ')}
-                  </span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* ── META BAND ── */}
-          <div className="inv-meta-band" style={{ background: '#f8f9fa', padding: '24px 48px', borderBottom: '1px solid #e5e7eb', WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 32 }}>
-              <div>
-                <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, color: '#6b7280', marginBottom: 8 }}>Bill To</div>
-                <div style={{ fontSize: 16, fontWeight: 700, color: '#111827' }}>{invoice.client_name}</div>
-                {invoice.client_email && <div style={{ fontSize: 13, color: '#6b7280', marginTop: 2 }}>{invoice.client_email}</div>}
-                {invoice.client_phone && <div style={{ fontSize: 13, color: '#6b7280' }}>{invoice.client_phone}</div>}
-                {invoice.client_address && <div style={{ fontSize: 13, color: '#6b7280', marginTop: 4 }}>{invoice.client_address}</div>}
-              </div>
-              <div style={{ textAlign: 'right' }}>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 16px', justifyItems: 'end' }}>
-                  {[
-                    ['Issue Date', fmtDate(invoice.issue_date)],
-                    ['Due Date', fmtDate(invoice.due_date)],
-                    ['Currency', invoice.currency || 'INR'],
-                    invoice.payment_terms ? ['Payment Terms', invoice.payment_terms] : null
-                  ].filter(Boolean).map(([label, value]) => (
-                    <React.Fragment key={label}>
-                      <span style={{ fontSize: 11, color: '#6b7280', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>{label}</span>
-                      <span style={{ fontSize: 13, color: '#111827', fontWeight: 500 }}>{value}</span>
-                    </React.Fragment>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* ── ITEMS TABLE ── */}
-          <div style={{ padding: '0 48px', marginTop: 32 }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-              <thead>
-                <tr style={{ borderBottom: '2px solid #111827' }}>
-                  <th style={{ textAlign: 'left', padding: '8px 0', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px', color: '#374151', width: '50%' }}>Description</th>
-                  <th style={{ textAlign: 'center', padding: '8px 0', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px', color: '#374151' }}>Qty</th>
-                  <th style={{ textAlign: 'right', padding: '8px 0', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px', color: '#374151' }}>Unit Price</th>
-                  <th style={{ textAlign: 'right', padding: '8px 0', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px', color: '#374151' }}>Amount</th>
-                </tr>
-              </thead>
-              <tbody>
-                {items.map((item, i) => (
-                  <tr key={i} style={{ borderBottom: '1px solid #f3f4f6' }}>
-                    <td style={{ padding: '14px 0', fontSize: 14, color: '#111827', fontWeight: 500 }}>{item.description}</td>
-                    <td style={{ padding: '14px 0', fontSize: 14, color: '#6b7280', textAlign: 'center' }}>{item.quantity}</td>
-                    <td style={{ padding: '14px 0', fontSize: 14, color: '#6b7280', textAlign: 'right' }}>{fmt(item.unit_price)}</td>
-                    <td style={{ padding: '14px 0', fontSize: 14, color: '#111827', fontWeight: 600, textAlign: 'right' }}>{fmt(getLineTotal(item))}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-
-          {/* ── TOTALS ── */}
-          <div className="inv-totals-band" style={{ padding: '24px 48px', display: 'flex', justifyContent: 'flex-end', WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }}>
-            <div style={{ width: 280 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', fontSize: 13, color: '#6b7280' }}>
-                <span>Subtotal</span><span>{fmt(invoice.subtotal || computedSubtotal)}</span>
-              </div>
-              {Number(invoice.tax_rate) > 0 && (
-                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', fontSize: 13, color: '#6b7280' }}>
-                  <span>GST ({invoice.tax_rate}%)</span><span>{fmt(invoice.tax_amount)}</span>
-                </div>
-              )}
-              {Number(invoice.discount_amount) > 0 && (
-                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', fontSize: 13, color: '#ef4444' }}>
-                  <span>Discount</span><span>-{fmt(invoice.discount_amount)}</span>
-                </div>
-              )}
-              {/* Grand total row */}
-              <div className="inv-grand-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 14px', borderRadius: 8, marginTop: 8, background: '#1a1a2e', WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }}>
-                <span className="total-label" style={{ fontSize: 15, fontWeight: 700, color: '#ffffff' }}>Total</span>
-                <span className="total-value" style={{ fontSize: 20, fontWeight: 800, color: '#D4AF37' }}>{fmt(invoice.total_amount)}</span>
-              </div>
-              {Number(invoice.amount_paid) > 0 && (
-                <>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', fontSize: 13, color: '#10b981', marginTop: 6 }}>
-                    <span>Amount Paid</span><span>-{fmt(invoice.amount_paid)}</span>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderTop: '1px solid #e5e7eb', marginTop: 4 }}>
-                    <span style={{ fontSize: 14, fontWeight: 700, color: '#111827' }}>Balance Due</span>
-                    <span style={{ fontSize: 16, fontWeight: 800, color: '#ef4444' }}>{fmt(invoice.balance_due)}</span>
-                  </div>
-                </>
-              )}
-            </div>
-          </div>
-
-          {/* ── BANK DETAILS ── */}
-          {(business?.invoice_bank_name || business?.invoice_bank_account) && (
-            <div className="inv-bank-band" style={{ padding: '24px 48px', background: '#f8f9fa', borderTop: '1px solid #e5e7eb', WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }}>
-              <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, color: '#6b7280', marginBottom: 10 }}>Bank Details</div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
-                {business.invoice_bank_name && <div><div style={{ fontSize: 10, color: '#9ca3af' }}>Bank</div><div style={{ fontSize: 13, fontWeight: 600, color: '#111827' }}>{business.invoice_bank_name}</div></div>}
-                {business.invoice_bank_account && <div><div style={{ fontSize: 10, color: '#9ca3af' }}>Account No.</div><div style={{ fontSize: 13, fontWeight: 600, color: '#111827' }}>{business.invoice_bank_account}</div></div>}
-                {business.invoice_bank_ifsc && <div><div style={{ fontSize: 10, color: '#9ca3af' }}>IFSC</div><div style={{ fontSize: 13, fontWeight: 600, color: '#111827' }}>{business.invoice_bank_ifsc}</div></div>}
-              </div>
-            </div>
-          )}
-
-          {/* ── NOTES & FOOTER ── */}
-          <div style={{ padding: '24px 48px 40px', borderTop: '1px solid #e5e7eb' }}>
-            {invoice.notes && (
-              <div style={{ marginBottom: 16 }}>
-                <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, color: '#6b7280', marginBottom: 6 }}>Notes</div>
-                <div style={{ fontSize: 13, color: '#374151', lineHeight: 1.6 }}>{invoice.notes}</div>
-              </div>
-            )}
-            <div style={{ borderTop: '1px solid #e5e7eb', paddingTop: 16, textAlign: 'center' }}>
-              <p style={{ fontSize: 12, color: '#9ca3af', margin: 0 }}>{business?.invoice_footer_note || 'Thank you for your business!'}</p>
-              {business?.invoice_pan && <p style={{ fontSize: 11, color: '#d1d5db', marginTop: 4 }}>PAN: {business.invoice_pan}</p>}
-            </div>
-          </div>
-
-        </div>
+        <InvoiceRenderer invoice={invoice} items={items} business={business} />
       </div>
     </div>
   );
