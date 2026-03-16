@@ -56,7 +56,7 @@ export default function BillingPage() {
   const [customerSuggestions, setCustomerSuggestions] = useState([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [searchingCustomers, setSearchingCustomers] = useState(false);
-  const [editingPrice, setEditingPrice] = useState(null); // product_id being edited
+  const [editingPrice, setEditingPrice] = useState(null);
   const searchRef = useRef(null);
   const suggestionsRef = useRef(null);
   const searchTimerRef = useRef(null);
@@ -167,7 +167,6 @@ export default function BillingPage() {
     setCart(prev => prev.filter(i => i.product_id !== product_id));
   };
 
-  // Extra charges
   const addExtraCharge = (name = '') => {
     setExtraCharges(prev => [...prev, { id: Date.now(), name, amount: 0 }]);
   };
@@ -189,7 +188,8 @@ export default function BillingPage() {
   const total = subtotal + taxAmount - discount;
 
   const openWhatsApp = (invoiceId, invoiceNumber, totalAmount, phone, custName, bizName) => {
-    const invoiceUrl = `${window.location.origin}/finance/invoices/${invoiceId}`;
+    // ✅ FIXED: Using public invoice URL /invoice/:id (no login required for customer)
+    const invoiceUrl = `${window.location.origin}/invoice/${invoiceId}`;
     const cleanPhone = (phone || '').replace(/[^0-9]/g, '');
     const storeName = bizName || businessName || 'Our Store';
     const message = [
@@ -222,14 +222,12 @@ export default function BillingPage() {
     const savedName = clientName;
     const savedPhone = clientPhone;
 
-    // Build items — products + extra charges as line items
     const billItems = cart.map(i => ({
       product_id: i.product_id,
       quantity: i.quantity,
       unit_price: i.unit_price
     }));
 
-    // Extra charges go as notes since bill endpoint only takes product items
     const chargeNotes = extraCharges.length > 0
       ? extraCharges.map(c => `${c.name}: Rs.${c.amount}`).join(', ')
       : '';
