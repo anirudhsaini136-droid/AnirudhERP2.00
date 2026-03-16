@@ -56,27 +56,29 @@ export default function InvoiceViewPage() {
     if (!invoice) return;
 
     const phone = invoice.client_phone?.replace(/[^0-9]/g, '') || '';
-    const invoiceUrl = `${window.location.origin}/finance/invoices/${id}`;
+    // ✅ FIXED: Using public invoice URL /invoice/:id (no login required for customer)
+    const invoiceUrl = `${window.location.origin}/invoice/${id}`;
     const businessName = business?.name || 'Us';
     const amount = fmt(invoice.total_amount);
     const invoiceNum = invoice.invoice_number;
     const dueDate = fmtDate(invoice.due_date);
 
-    const message = `Hello ${invoice.client_name}! 👋
-
-Thank you for your recent purchase. 🙏
-
-Here are your invoice details:
-
-🧾 *Invoice:* ${invoiceNum}
-💰 *Amount:* ${amount}
-📅 *Due Date:* ${dueDate}
-🏪 *From:* ${businessName}
-
-📲 *View your invoice here:*
-${invoiceUrl}
-
-For any queries, feel free to reach out. We appreciate your business! ✨`;
+    const message = [
+      `Hello ${invoice.client_name}!`,
+      '',
+      `Thank you for your recent purchase.`,
+      '',
+      `Invoice No: ${invoiceNum}`,
+      `Amount: ${amount}`,
+      `Due Date: ${dueDate}`,
+      `From: *${businessName}*`,
+      '',
+      `View your invoice here:`,
+      invoiceUrl,
+      '',
+      `For any queries, feel free to reach out.`,
+      `We appreciate your business!`
+    ].join('\n');
 
     const encodedMessage = encodeURIComponent(message);
     const waUrl = phone
