@@ -65,6 +65,7 @@ export default function BusinessSettings() {
     }).catch(() => {}).finally(() => setLoading(false));
   }, [api]);
 
+  // ✅ Profile save — PUT /dashboard/settings (name, phone, address, city, country)
   const handleSave = async (e) => {
     e.preventDefault();
     setSaving(true);
@@ -73,16 +74,17 @@ export default function BusinessSettings() {
       toast.success('Business profile saved');
       refreshUser();
     } catch (e) {
-      toast.error('Failed to save');
+      toast.error('Failed to save profile');
     }
     setSaving(false);
   };
 
+  // ✅ FIXED: Invoice settings — PUT /dashboard/settings/invoice
   const handleSaveInvoice = async (e) => {
     e.preventDefault();
     setSavingInvoice(true);
     try {
-      await api.put('/dashboard/settings', invoiceForm);
+      await api.put('/dashboard/settings/invoice', invoiceForm);
       toast.success('Invoice settings saved');
     } catch (e) {
       toast.error('Failed to save invoice settings');
@@ -90,11 +92,12 @@ export default function BusinessSettings() {
     setSavingInvoice(false);
   };
 
+  // ✅ FIXED: WATI settings — PUT /dashboard/settings/invoice (same endpoint, different fields)
   const handleSaveWati = async (e) => {
     e.preventDefault();
     setSavingWati(true);
     try {
-      await api.put('/dashboard/settings', watiForm);
+      await api.put('/dashboard/settings/invoice', watiForm);
       toast.success('WhatsApp settings saved');
     } catch (e) {
       toast.error('Failed to save WhatsApp settings');
@@ -127,10 +130,22 @@ export default function BusinessSettings() {
             <h2 className="font-display text-lg text-white">Subscription</h2>
           </div>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div><p className="text-xs text-gray-500">Plan</p><p className="text-sm text-white font-semibold capitalize mt-0.5">{sub.plan}</p></div>
-            <div><p className="text-xs text-gray-500">Status</p><span className={`badge-premium ${sub.status === 'active' ? 'badge-success' : sub.status === 'trial' ? 'badge-warning' : 'badge-danger'} mt-0.5 inline-block`}>{sub.status}</span></div>
-            <div><p className="text-xs text-gray-500">Expires</p><p className="text-sm text-white mt-0.5">{fmtDate(sub.expires_at)}</p></div>
-            <div><p className="text-xs text-gray-500">Days Left</p><p className={`text-sm font-semibold mt-0.5 ${sub.days_remaining <= 7 ? 'text-rose-400' : 'text-emerald-400'}`}>{sub.days_remaining}</p></div>
+            <div>
+              <p className="text-xs text-gray-500">Plan</p>
+              <p className="text-sm text-white font-semibold capitalize mt-0.5">{sub.plan}</p>
+            </div>
+            <div>
+              <p className="text-xs text-gray-500">Status</p>
+              <span className={`badge-premium ${sub.status === 'active' ? 'badge-success' : sub.status === 'trial' ? 'badge-warning' : 'badge-danger'} mt-0.5 inline-block`}>{sub.status}</span>
+            </div>
+            <div>
+              <p className="text-xs text-gray-500">Expires</p>
+              <p className="text-sm text-white mt-0.5">{fmtDate(sub.expires_at)}</p>
+            </div>
+            <div>
+              <p className="text-xs text-gray-500">Days Left</p>
+              <p className={`text-sm font-semibold mt-0.5 ${sub.days_remaining <= 7 ? 'text-rose-400' : 'text-emerald-400'}`}>{sub.days_remaining}</p>
+            </div>
           </div>
         </div>
 
@@ -163,7 +178,7 @@ export default function BusinessSettings() {
               <Label className="text-gray-400 text-xs">Address</Label>
               <textarea className="input-premium mt-1 h-20 resize-none w-full" value={form.address} onChange={e => setForm({...form, address: e.target.value})} />
             </div>
-            <button type="submit" disabled={saving} className="btn-premium btn-primary">
+            <button type="submit" disabled={saving} className="btn-premium btn-primary flex items-center gap-2">
               <Save size={15} /> {saving ? 'Saving...' : 'Save Profile'}
             </button>
           </form>
@@ -180,25 +195,53 @@ export default function BusinessSettings() {
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label className="text-gray-400 text-xs">GST Number</Label>
-                <Input className="input-premium mt-1" placeholder="22AAAAA0000A1Z5" value={invoiceForm.invoice_gst} onChange={e => setInvoiceForm({...invoiceForm, invoice_gst: e.target.value})} />
+                <Input
+                  className="input-premium mt-1"
+                  placeholder="22AAAAA0000A1Z5"
+                  value={invoiceForm.invoice_gst}
+                  onChange={e => setInvoiceForm({...invoiceForm, invoice_gst: e.target.value.toUpperCase()})}
+                  maxLength={15}
+                />
               </div>
               <div>
                 <Label className="text-gray-400 text-xs">PAN Number</Label>
-                <Input className="input-premium mt-1" placeholder="AAAAA0000A" value={invoiceForm.invoice_pan} onChange={e => setInvoiceForm({...invoiceForm, invoice_pan: e.target.value})} />
+                <Input
+                  className="input-premium mt-1"
+                  placeholder="AAAAA0000A"
+                  value={invoiceForm.invoice_pan}
+                  onChange={e => setInvoiceForm({...invoiceForm, invoice_pan: e.target.value.toUpperCase()})}
+                  maxLength={10}
+                />
               </div>
             </div>
             <div>
               <Label className="text-gray-400 text-xs">Bank Name</Label>
-              <Input className="input-premium mt-1" placeholder="HDFC Bank" value={invoiceForm.invoice_bank_name} onChange={e => setInvoiceForm({...invoiceForm, invoice_bank_name: e.target.value})} />
+              <Input
+                className="input-premium mt-1"
+                placeholder="HDFC Bank"
+                value={invoiceForm.invoice_bank_name}
+                onChange={e => setInvoiceForm({...invoiceForm, invoice_bank_name: e.target.value})}
+              />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label className="text-gray-400 text-xs">Account Number</Label>
-                <Input className="input-premium mt-1" placeholder="1234567890" value={invoiceForm.invoice_bank_account} onChange={e => setInvoiceForm({...invoiceForm, invoice_bank_account: e.target.value})} />
+                <Input
+                  className="input-premium mt-1"
+                  placeholder="1234567890"
+                  value={invoiceForm.invoice_bank_account}
+                  onChange={e => setInvoiceForm({...invoiceForm, invoice_bank_account: e.target.value})}
+                />
               </div>
               <div>
                 <Label className="text-gray-400 text-xs">IFSC Code</Label>
-                <Input className="input-premium mt-1" placeholder="HDFC0001234" value={invoiceForm.invoice_bank_ifsc} onChange={e => setInvoiceForm({...invoiceForm, invoice_bank_ifsc: e.target.value})} />
+                <Input
+                  className="input-premium mt-1"
+                  placeholder="HDFC0001234"
+                  value={invoiceForm.invoice_bank_ifsc}
+                  onChange={e => setInvoiceForm({...invoiceForm, invoice_bank_ifsc: e.target.value.toUpperCase()})}
+                  maxLength={11}
+                />
               </div>
             </div>
             <div>
@@ -210,7 +253,7 @@ export default function BusinessSettings() {
                 onChange={e => setInvoiceForm({...invoiceForm, invoice_footer_note: e.target.value})}
               />
             </div>
-            <button type="submit" disabled={savingInvoice} className="btn-premium btn-primary">
+            <button type="submit" disabled={savingInvoice} className="btn-premium btn-primary flex items-center gap-2">
               <Save size={15} /> {savingInvoice ? 'Saving...' : 'Save Invoice Settings'}
             </button>
           </form>
@@ -222,24 +265,46 @@ export default function BusinessSettings() {
             <MessageCircle size={18} className="text-gold-400" />
             <h2 className="font-display text-lg text-white">WhatsApp Integration</h2>
           </div>
-          <p className="text-xs text-gray-500 mb-4">Connect WATI to send invoices directly to customers on WhatsApp. Get your credentials from <span className="text-gold-400">wati.io</span></p>
+          <p className="text-xs text-gray-500 mb-4">
+            Connect WATI to send invoices directly to customers on WhatsApp. Get your credentials from{' '}
+            <span className="text-gold-400">wati.io</span>
+          </p>
           <form onSubmit={handleSaveWati} className="space-y-4">
             <div>
               <Label className="text-gray-400 text-xs">Your WhatsApp Business Number</Label>
-              <Input className="input-premium mt-1" placeholder="+919876543210" value={watiForm.whatsapp_number} onChange={e => setWatiForm({...watiForm, whatsapp_number: e.target.value})} />
+              <Input
+                className="input-premium mt-1"
+                placeholder="+919876543210"
+                value={watiForm.whatsapp_number}
+                onChange={e => setWatiForm({...watiForm, whatsapp_number: e.target.value})}
+              />
             </div>
             <div>
               <Label className="text-gray-400 text-xs">WATI API Endpoint</Label>
-              <Input className="input-premium mt-1" placeholder="https://live-mt-server.wati.io/YOUR_ID" value={watiForm.wati_api_endpoint} onChange={e => setWatiForm({...watiForm, wati_api_endpoint: e.target.value})} />
+              <Input
+                className="input-premium mt-1"
+                placeholder="https://live-mt-server.wati.io/YOUR_ID"
+                value={watiForm.wati_api_endpoint}
+                onChange={e => setWatiForm({...watiForm, wati_api_endpoint: e.target.value})}
+              />
             </div>
             <div>
               <Label className="text-gray-400 text-xs">WATI API Token</Label>
-              <Input type="password" className="input-premium mt-1" placeholder="Bearer token from WATI dashboard" value={watiForm.wati_api_token} onChange={e => setWatiForm({...watiForm, wati_api_token: e.target.value})} />
+              <Input
+                type="password"
+                className="input-premium mt-1"
+                placeholder="Bearer token from WATI dashboard"
+                value={watiForm.wati_api_token}
+                onChange={e => setWatiForm({...watiForm, wati_api_token: e.target.value})}
+              />
             </div>
             <div className="p-3 rounded-xl bg-amber-500/5 border border-amber-500/20">
-              <p className="text-xs text-amber-400">To use WhatsApp sending you need a WATI account and an approved message template named <span className="font-mono font-bold">invoice_notification</span></p>
+              <p className="text-xs text-amber-400">
+                To use WhatsApp sending you need a WATI account and an approved message template named{' '}
+                <span className="font-mono font-bold">invoice_notification</span>
+              </p>
             </div>
-            <button type="submit" disabled={savingWati} className="btn-premium btn-primary">
+            <button type="submit" disabled={savingWati} className="btn-premium btn-primary flex items-center gap-2">
               <Save size={15} /> {savingWati ? 'Saving...' : 'Save WhatsApp Settings'}
             </button>
           </form>
