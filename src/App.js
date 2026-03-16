@@ -4,6 +4,7 @@ import { Toaster } from './components/ui/sonner';
 import AuthProvider, { useAuth } from './contexts/AuthContext';
 
 import LoginPage from './pages/LoginPage';
+import PublicInvoicePage from './pages/finance/PublicInvoicePage';
 import SuperAdminDashboard from './pages/super-admin/SuperAdminDashboard';
 import BusinessesPage from './pages/super-admin/BusinessesPage';
 import BusinessDetailPage from './pages/super-admin/BusinessDetailPage';
@@ -66,7 +67,9 @@ function RedirectAuth() {
 function AppRoutes() {
   return (
     <Routes>
+      {/* PUBLIC - No auth required */}
       <Route path="/login" element={<RedirectAuth />} />
+      <Route path="/invoice/:id" element={<PublicInvoicePage />} />
 
       {/* Super Admin */}
       <Route path="/super-admin" element={<RequireAuth allowedRoles={['super_admin']}><SuperAdminDashboard /></RequireAuth>} />
