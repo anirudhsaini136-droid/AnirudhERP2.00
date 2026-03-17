@@ -96,6 +96,17 @@ function ClientSearch({ value, onChange, onSelect, api }) {
   );
 }
 
+
+const INDIAN_STATES = [
+  'Andhra Pradesh','Arunachal Pradesh','Assam','Bihar','Chhattisgarh','Goa','Gujarat',
+  'Haryana','Himachal Pradesh','Jharkhand','Karnataka','Kerala','Madhya Pradesh',
+  'Maharashtra','Manipur','Meghalaya','Mizoram','Nagaland','Odisha','Punjab',
+  'Rajasthan','Sikkim','Tamil Nadu','Telangana','Tripura','Uttar Pradesh',
+  'Uttarakhand','West Bengal','Andaman and Nicobar Islands','Chandigarh',
+  'Dadra and Nagar Haveli and Daman and Diu','Delhi','Jammu and Kashmir',
+  'Ladakh','Lakshadweep','Puducherry'
+];
+
 // Product autocomplete component for invoice line items
 function ProductSearch({ value, onChange, onSelect, api }) {
   const [query, setQuery] = useState(value || '');
@@ -228,6 +239,7 @@ export default function InvoicesPage() {
     client_name: '', client_email: '', client_address: '', client_phone: '',
     issue_date: today, due_date: '', tax_rate: 0, discount_amount: 0,
     notes: '', currency: 'INR',
+    buyer_state: '',
     items: [{ ...emptyItem }],
     custom_fields: [] // [{label: '', value: ''}]
   });
@@ -272,8 +284,8 @@ export default function InvoicesPage() {
     setForm({
       client_name: '', client_email: '', client_address: '', client_phone: '',
       issue_date: today, due_date: '', tax_rate: 0, discount_amount: 0,
-      notes: '', currency: 'INR', items: [{ ...emptyItem }],
-      custom_fields: restoredCF
+      notes: '', currency: 'INR', buyer_state: '',
+      items: [{ ...emptyItem }], custom_fields: restoredCF
     });
   };
 
@@ -320,6 +332,8 @@ export default function InvoicesPage() {
     try {
       const res = await api.post('/finance/invoices', {
         ...form,
+        buyer_state: form.buyer_state || null,
+        place_of_supply: form.buyer_state || null,
         custom_fields: form.custom_fields.filter(f => f.label && f.value),
         items: form.items.map(i => ({
           description: i.description,
@@ -583,6 +597,29 @@ export default function InvoicesPage() {
                 <Label className="text-gray-400 text-xs">Overall Discount (₹)</Label>
                 <Input type="number" min="0" className="input-premium mt-1" value={form.discount_amount} onChange={e => setForm({...form, discount_amount: parseFloat(e.target.value) || 0})} />
               </div>
+            </div>
+
+            {/* Buyer State for GST */}
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-gray-400 text-xs">Buyer State <span className="text-gold-400">(for GST auto-calculation)</span></Label>
+                <select className="input-premium mt-1 w-full" value={form.buyer_state} onChange={e => setForm({...form, buyer_state: e.target.value})}>
+                  <option value="">Select buyer state</option>
+                  {INDIAN_STATES.map(s => <option key={s} value={s}>{s}</option>)}
+                </select>
+              </div>
+              {form.tax_rate > 0 && form.buyer_state && (
+                <div className="flex items-center">
+                  <div className={`p-3 rounded-xl w-full text-xs ${form.buyer_state ? 'bg-blue-500/10 border border-blue-500/20' : 'bg-white/5 border border-white/10'}`}>
+                    <p className="text-gray-400 mb-1">GST Type</p>
+                    {/* This will be determined by seller state on backend */}
+                    <p className="font-semibold text-blue-400">
+                      Auto-calculated on save
+                    </p>
+                    <p className="text-gray-600 text-[10px] mt-0.5">CGST+SGST or IGST based on states</p>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Optional columns toggles */}
