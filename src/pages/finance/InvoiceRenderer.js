@@ -137,7 +137,9 @@ export default function InvoiceRenderer({ invoice, items, business, payments }) 
                 ['Invoice Date', fmtDate(invoice.issue_date)],
                 ['Due Date', fmtDate(invoice.due_date)],
                 invoice.payment_terms ? ['Payment Terms', invoice.payment_terms] : null,
-                ...customFields.map(f => [f.label, f.value])
+                    invoice.place_of_supply ? ['Place of Supply', invoice.place_of_supply] : null,
+                    invoice.supply_type === 'interstate' ? ['Supply Type', 'Inter-State (IGST)'] : (invoice.supply_type === 'intrastate' ? ['Supply Type', 'Intra-State (CGST+SGST)'] : null),
+                    ...customFields.map(f => [f.label, f.value])
               ].filter(Boolean).map(([label, value]) => (
                 <React.Fragment key={label}>
                   <span style={{ fontSize: 11, color: '#6b7280', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'left' }}>{label}</span>
@@ -185,8 +187,24 @@ export default function InvoiceRenderer({ invoice, items, business, payments }) 
           <div style={{ display: 'flex', justifyContent: 'space-between', padding: '5px 0', fontSize: 13, color: '#6b7280' }}>
             <span>Subtotal</span><span>{fmt(invoice.subtotal || computedSubtotal)}</span>
           </div>
-          {Number(invoice.tax_rate) > 0 && (
-            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '5px 0', fontSize: 13, color: '#6b7280' }}>
+          {/* GST Breakdown — show CGST+SGST or IGST */}
+          {Number(invoice.cgst_amount) > 0 && (
+            <>
+              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', fontSize: 12, color: '#6b7280' }}>
+                <span>CGST ({invoice.cgst_rate}%)</span><span>{fmt(invoice.cgst_amount)}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', fontSize: 12, color: '#6b7280' }}>
+                <span>SGST ({invoice.sgst_rate}%)</span><span>{fmt(invoice.sgst_amount)}</span>
+              </div>
+            </>
+          )}
+          {Number(invoice.igst_amount) > 0 && (
+            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', fontSize: 12, color: '#6b7280' }}>
+              <span>IGST ({invoice.igst_rate}%)</span><span>{fmt(invoice.igst_amount)}</span>
+            </div>
+          )}
+          {Number(invoice.tax_rate) > 0 && !Number(invoice.cgst_amount) && !Number(invoice.igst_amount) && (
+            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', fontSize: 12, color: '#6b7280' }}>
               <span>GST ({invoice.tax_rate}%)</span><span>{fmt(invoice.tax_amount)}</span>
             </div>
           )}
