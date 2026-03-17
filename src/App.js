@@ -22,6 +22,7 @@ import InvoicesPage from './pages/finance/InvoicesPage';
 import InvoiceViewPage from './pages/finance/InvoiceViewPage';
 import ExpensesPage from './pages/finance/ExpensesPage';
 import ReportsPage from './pages/finance/ReportsPage';
+import GSTReportsPage from './pages/finance/GSTReportsPage';
 import CustomersLedgerPage from './pages/finance/CustomersLedgerPage';
 import CustomerLedgerDetailPage from './pages/finance/CustomerLedgerDetailPage';
 import InventoryPage from './pages/inventory/InventoryPage';
@@ -95,6 +96,7 @@ function AppRoutes() {
       <Route path="/finance/invoices/:id" element={<RequireAuth allowedRoles={['finance_admin', 'business_owner']}><InvoiceViewPage /></RequireAuth>} />
       <Route path="/finance/expenses" element={<RequireAuth allowedRoles={['finance_admin', 'business_owner']}><ExpensesPage /></RequireAuth>} />
       <Route path="/finance/reports" element={<RequireAuth allowedRoles={['finance_admin', 'business_owner']}><ReportsPage /></RequireAuth>} />
+      <Route path="/finance/gst" element={<RequireAuth allowedRoles={['finance_admin', 'business_owner']}><GSTReportsPage /></RequireAuth>} />
       <Route path="/finance/customers" element={<RequireAuth allowedRoles={['finance_admin', 'business_owner']}><CustomersLedgerPage /></RequireAuth>} />
       <Route path="/finance/customers/:clientName" element={<RequireAuth allowedRoles={['finance_admin', 'business_owner']}><CustomerLedgerDetailPage /></RequireAuth>} />
 
