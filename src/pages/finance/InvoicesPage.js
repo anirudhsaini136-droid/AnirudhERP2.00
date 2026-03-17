@@ -17,6 +17,85 @@ const STATUS_COLORS = {
 const emptyItem = { description: '', hsn_code: '', quantity: 1, unit_price: 0, item_discount: 0, amount: 0 };
 
 
+// Customer autocomplete for invoice client name
+function ClientSearch({ value, onChange, onSelect, api }) {
+  const [query, setQuery] = useState(value || '');
+  const [results, setResults] = useState([]);
+  const [show, setShow] = useState(false);
+  const [searching, setSearching] = useState(false);
+  const timerRef = useRef(null);
+  const wrapRef = useRef(null);
+
+  useEffect(() => { setQuery(value || ''); }, [value]);
+
+  useEffect(() => {
+    const handler = (e) => {
+      if (wrapRef.current && !wrapRef.current.contains(e.target)) setShow(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  const handleChange = (val) => {
+    setQuery(val);
+    onChange(val);
+    if (timerRef.current) clearTimeout(timerRef.current);
+    if (val.length < 2) { setResults([]); setShow(false); return; }
+    timerRef.current = setTimeout(async () => {
+      setSearching(true);
+      try {
+        const res = await api.get(`/customers/search?q=${encodeURIComponent(val)}`);
+        const list = res.data.customers || [];
+        setResults(list);
+        setShow(list.length > 0);
+      } catch { setResults([]); }
+      setSearching(false);
+    }, 250);
+  };
+
+  return (
+    <div ref={wrapRef} style={{ position: 'relative' }}>
+      <div style={{ position: 'relative' }}>
+        <input
+          className="input-premium mt-1 w-full"
+          placeholder="Client name *"
+          value={query}
+          onChange={e => handleChange(e.target.value)}
+          onFocus={() => query.length >= 2 && results.length > 0 && setShow(true)}
+          autoComplete="off"
+          required
+        />
+        {searching && (
+          <div style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', width: 12, height: 12, border: '2px solid #555', borderTopColor: '#D4AF37', borderRadius: '50%', animation: 'spin 0.6s linear infinite' }} />
+        )}
+      </div>
+      {show && results.length > 0 && (
+        <div style={{
+          position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 999,
+          background: '#0d0d14', border: '1px solid rgba(255,255,255,0.1)',
+          borderRadius: 10, marginTop: 4, overflow: 'hidden',
+          boxShadow: '0 8px 32px rgba(0,0,0,0.5)'
+        }}>
+          {results.map(c => (
+            <button key={c.id} type="button"
+              onMouseDown={() => { setShow(false); onSelect(c); setQuery(c.name); }}
+              style={{ width: '100%', textAlign: 'left', padding: '8px 12px', background: 'transparent', border: 'none', cursor: 'pointer', borderBottom: '1px solid rgba(255,255,255,0.04)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+              onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.05)'}
+              onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+            >
+              <div>
+                <p style={{ color: '#f9fafb', fontSize: 13, fontWeight: 500, margin: 0 }}>{c.name}</p>
+                <p style={{ color: '#6b7280', fontSize: 11, margin: 0 }}>{[c.phone, c.email].filter(Boolean).join(' · ')}</p>
+              </div>
+              {c.gstin && <p style={{ color: '#D4AF37', fontSize: 10, margin: 0, flexShrink: 0, marginLeft: 8 }}>GST: {c.gstin}</p>}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // Product autocomplete component for invoice line items
 function ProductSearch({ value, onChange, onSelect, api }) {
   const [query, setQuery] = useState(value || '');
@@ -458,7 +537,17 @@ export default function InvoicesPage() {
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label className="text-gray-400 text-xs">Client Name *</Label>
-                <Input className="input-premium mt-1" value={form.client_name} onChange={e => setForm({...form, client_name: e.target.value})} required />
+                <ClientSearch
+                  value={form.client_name}
+                  onChange={(val) => setForm({...form, client_name: val})}
+                  onSelect={(c) => setForm({...form,
+                    client_name: c.name || '',
+                    client_phone: c.phone || form.client_phone,
+                    client_email: c.email || form.client_email,
+                    client_address: c.address || form.client_address
+                  })}
+                  api={api}
+                />
               </div>
               <div>
                 <Label className="text-gray-400 text-xs">Client Phone</Label>
