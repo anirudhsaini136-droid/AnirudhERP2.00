@@ -133,10 +133,15 @@ export default function InvoicesPage() {
   const [deleting, setDeleting] = useState(false);
   const [businessName, setBusinessName] = useState('');
 
-  // UI toggles
-  const [showHSN, setShowHSN] = useState(false);
-  const [showItemDiscount, setShowItemDiscount] = useState(false);
-  const [showCustomFields, setShowCustomFields] = useState(false);
+  // UI toggles — persisted in localStorage
+  const getSavedPref = (key, fallback) => {
+    try { const v = localStorage.getItem('inv_pref_' + key); return v !== null ? JSON.parse(v) : fallback; } catch { return fallback; }
+  };
+  const savePref = (key, val) => { try { localStorage.setItem('inv_pref_' + key, JSON.stringify(val)); } catch {} };
+
+  const [showHSN, setShowHSN] = useState(() => getSavedPref('hsn', false));
+  const [showItemDiscount, setShowItemDiscount] = useState(() => getSavedPref('itemDisc', false));
+  const [showCustomFields, setShowCustomFields] = useState(() => getSavedPref('customFields', false));
 
   const today = new Date().toISOString().split('T')[0];
 
@@ -176,14 +181,21 @@ export default function InvoicesPage() {
   }, [api]);
 
   const resetForm = () => {
+    // Restore saved custom field labels with empty values
+    const savedLabels = getSavedPref('cfLabels', []);
+    const restoredCF = savedLabels.map(label => ({ label, value: '' }));
+    const hsn = getSavedPref('hsn', false);
+    const itemDisc = getSavedPref('itemDisc', false);
+    const hasCF = restoredCF.length > 0;
+    setShowHSN(hsn);
+    setShowItemDiscount(itemDisc);
+    setShowCustomFields(hasCF);
     setForm({
       client_name: '', client_email: '', client_address: '', client_phone: '',
       issue_date: today, due_date: '', tax_rate: 0, discount_amount: 0,
-      notes: '', currency: 'INR', items: [{ ...emptyItem }], custom_fields: []
+      notes: '', currency: 'INR', items: [{ ...emptyItem }],
+      custom_fields: restoredCF
     });
-    setShowHSN(false);
-    setShowItemDiscount(false);
-    setShowCustomFields(false);
   };
 
   const updateItem = (idx, field, value) => {
@@ -204,8 +216,18 @@ export default function InvoicesPage() {
     const cf = [...form.custom_fields];
     cf[idx] = { ...cf[idx], [key]: val };
     setForm({ ...form, custom_fields: cf });
+    // Save label names so they persist next session
+    if (key === 'label') {
+      const labels = cf.map(f => f.label).filter(Boolean);
+      savePref('cfLabels', labels);
+    }
   };
-  const removeCustomField = (idx) => setForm({ ...form, custom_fields: form.custom_fields.filter((_, i) => i !== idx) });
+  const removeCustomField = (idx) => {
+    const cf = form.custom_fields.filter((_, i) => i !== idx);
+    setForm({ ...form, custom_fields: cf });
+    savePref('cfLabels', cf.map(f => f.label).filter(Boolean));
+    if (cf.length === 0) { setShowCustomFields(false); savePref('customFields', false); }
+  };
 
   const subtotal = form.items.reduce((s, i) => s + (Number(i.amount) || 0), 0);
   const taxAmount = subtotal * (form.tax_rate / 100);
@@ -314,7 +336,7 @@ export default function InvoicesPage() {
             <h1 className="font-display text-2xl text-white">Invoices</h1>
             <p className="text-sm text-gray-500 font-sans">{total} invoices</p>
           </div>
-          <button onClick={() => setShowCreate(true)} className="btn-premium btn-primary">
+          <button onClick={() => { resetForm(); setShowCreate(true); }} className="btn-premium btn-primary">
             <Plus size={16} /> Create Invoice
           </button>
         </div>
