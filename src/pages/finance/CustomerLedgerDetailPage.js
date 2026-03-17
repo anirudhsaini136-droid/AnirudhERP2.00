@@ -33,11 +33,7 @@ export default function CustomerLedgerDetailPage() {
 
   const today = new Date().toISOString().split('T')[0];
   const [bulkForm, setBulkForm] = useState({
-    amount: 0,
-    payment_method: 'cash',
-    payment_date: today,
-    reference: '',
-    notes: ''
+    amount: 0, payment_method: 'cash', payment_date: today, reference: '', notes: ''
   });
 
   const load = async () => {
@@ -46,7 +42,7 @@ export default function CustomerLedgerDetailPage() {
       const res = await api.get(`/finance/customers/${encodeURIComponent(clientName)}/ledger`);
       setData(res.data);
       setBulkForm(f => ({ ...f, amount: res.data.customer?.total_outstanding || 0 }));
-    } catch (e) {
+    } catch {
       toast.error('Failed to load customer ledger');
       navigate('/finance/customers');
     }
@@ -67,7 +63,7 @@ export default function CustomerLedgerDetailPage() {
     setPaying(true);
     try {
       const res = await api.post(`/finance/customers/${encodeURIComponent(clientName)}/bulk-payment`, bulkForm);
-      toast.success(res.data.message);
+      toast.success(res.data.message, { duration: 4000 });
       setLastAdjustments(res.data.adjustments);
       setShowBulkPayment(false);
       load();
@@ -81,22 +77,33 @@ export default function CustomerLedgerDetailPage() {
     if (!data?.customer) return;
     const phone = (data.customer.phone || '').replace(/[^0-9]/g, '');
     const storeName = businessName || 'Our Store';
+
+    const pendingInvoices = data.invoices?.filter(i =>
+      ['sent', 'partially_paid', 'overdue'].includes(i.status) && Number(i.balance_due) > 0
+    ) || [];
+
+    const invoiceLines = pendingInvoices.map((inv, i) =>
+      `${i + 1}. ${inv.invoice_number} - Rs. ${Number(inv.balance_due).toLocaleString('en-IN')} (Due: ${fmtDate(inv.due_date)})`
+    ).join('\n');
+
     const message = [
       `Hello ${data.customer.name}!`,
       '',
       `This is a gentle reminder from *${storeName}* regarding your pending payments.`,
       '',
-      `Total Outstanding: Rs. ${data.customer.total_outstanding?.toFixed(2) || '0'}`,
-      `Pending Invoices: ${data.invoices?.filter(i => ['sent', 'partially_paid', 'overdue'].includes(i.status)).length || 0}`,
+      `Total Outstanding: Rs. ${Number(data.customer.total_outstanding || 0).toLocaleString('en-IN')}`,
+      '',
+      invoiceLines ? `Pending Invoices:\n${invoiceLines}` : `Pending Invoices: ${pendingInvoices.length}`,
       '',
       `Kindly arrange the payment at your earliest convenience.`,
       `Thank you for your business!`
     ].join('\n');
+
     const waUrl = phone
       ? `https://wa.me/${phone}?text=${encodeURIComponent(message)}`
       : `https://wa.me/?text=${encodeURIComponent(message)}`;
     window.open(waUrl, '_blank');
-    toast.success('WhatsApp reminder opened!');
+    toast.success('WhatsApp reminder opened!', { duration: 3000 });
   };
 
   if (loading) return (
@@ -110,7 +117,9 @@ export default function CustomerLedgerDetailPage() {
   if (!data) return null;
 
   const { customer, invoices = [], payments = [] } = data;
-  const unpaidInvoices = invoices.filter(i => ['sent', 'partially_paid', 'overdue'].includes(i.status));
+  const unpaidInvoices = invoices.filter(i =>
+    ['sent', 'partially_paid', 'overdue'].includes(i.status) && Number(i.balance_due) > 0
+  );
 
   return (
     <DashboardLayout>
@@ -198,7 +207,7 @@ export default function CustomerLedgerDetailPage() {
               {invoices.length === 0 ? (
                 <p className="text-center text-gray-500 text-sm py-8">No invoices</p>
               ) : (
-                <div className="divide-y divide-white/[0.03]">
+                <div className="divide-y divide-white/[0.03] max-h-96 overflow-y-auto">
                   {invoices.map(inv => (
                     <div key={inv.id} className="flex items-center gap-3 px-4 py-3">
                       <div className="flex-1 min-w-0">
@@ -238,24 +247,20 @@ export default function CustomerLedgerDetailPage() {
               {payments.length === 0 ? (
                 <p className="text-center text-gray-500 text-sm py-8">No payments yet</p>
               ) : (
-                <div className="divide-y divide-white/[0.03]">
+                <div className="divide-y divide-white/[0.03] max-h-96 overflow-y-auto">
                   {payments.map(pay => (
                     <div key={pay.id} className="flex items-center gap-3 px-4 py-3">
                       <div className="w-8 h-8 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center shrink-0">
                         <CheckCircle size={14} className="text-emerald-400" />
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="text-xs text-white font-medium">
-                          {pay.invoice_number || 'Payment'}
-                        </p>
+                        <p className="text-xs text-white font-medium">{pay.invoice_number || 'Payment'}</p>
                         <p className="text-[10px] text-gray-500">
                           {fmtDate(pay.payment_date)} · {pay.payment_method?.replace('_', ' ') || 'cash'}
                           {pay.reference && <span> · {pay.reference}</span>}
                         </p>
                       </div>
-                      <p className="text-sm font-bold text-emerald-400 shrink-0">
-                        +{fmt(pay.amount)}
-                      </p>
+                      <p className="text-sm font-bold text-emerald-400 shrink-0">+{fmt(pay.amount)}</p>
                     </div>
                   ))}
                 </div>
@@ -267,21 +272,28 @@ export default function CustomerLedgerDetailPage() {
 
       {/* Bulk Payment Dialog */}
       <Dialog open={showBulkPayment} onOpenChange={setShowBulkPayment}>
-        <DialogContent className="bg-void border-white/10 max-w-sm">
+        <DialogContent className="bg-void border-white/10 max-w-sm max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="font-display text-white">Record Payment</DialogTitle>
           </DialogHeader>
           <form onSubmit={handleBulkPayment} className="space-y-4">
-            {/* Outstanding breakdown */}
-            <div className="p-4 rounded-xl bg-white/[0.03] border border-white/5 space-y-2">
-              <p className="text-xs text-gray-500 font-semibold uppercase tracking-wider">Pending Invoices (oldest first)</p>
-              {unpaidInvoices.map(inv => (
-                <div key={inv.id} className="flex justify-between text-xs">
-                  <span className="text-gray-400 font-mono">{inv.invoice_number}</span>
-                  <span className="text-rose-400 font-medium">{fmt(inv.balance_due)}</span>
-                </div>
-              ))}
-              <div className="border-t border-white/5 pt-2 flex justify-between text-sm font-bold">
+
+            {/* ✅ Scrollable invoice list — fixed height so button stays visible */}
+            <div className="rounded-xl bg-white/[0.03] border border-white/5">
+              <div className="px-4 pt-3 pb-2">
+                <p className="text-xs text-gray-500 font-semibold uppercase tracking-wider mb-2">
+                  Pending Invoices (oldest first)
+                </p>
+              </div>
+              <div className="max-h-44 overflow-y-auto px-4 pb-2 space-y-1.5">
+                {unpaidInvoices.map(inv => (
+                  <div key={inv.id} className="flex justify-between text-xs">
+                    <span className="text-gray-400 font-mono">{inv.invoice_number}</span>
+                    <span className="text-rose-400 font-medium">{fmt(inv.balance_due)}</span>
+                  </div>
+                ))}
+              </div>
+              <div className="border-t border-white/5 px-4 py-2.5 flex justify-between text-sm font-bold">
                 <span className="text-white">Total Outstanding</span>
                 <span className="text-gold-400">{fmt(customer.total_outstanding)}</span>
               </div>
