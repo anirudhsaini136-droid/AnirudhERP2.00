@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import DashboardLayout from '../../components/layout/DashboardLayout';
@@ -15,6 +15,105 @@ const STATUS_COLORS = {
   overdue: 'badge-danger', cancelled: 'badge-danger', partially_paid: 'badge-warning'
 };
 const emptyItem = { description: '', hsn_code: '', quantity: 1, unit_price: 0, item_discount: 0, amount: 0 };
+
+
+// Product autocomplete component for invoice line items
+function ProductSearch({ value, onChange, onSelect, api }) {
+  const [query, setQuery] = useState(value || '');
+  const [results, setResults] = useState([]);
+  const [show, setShow] = useState(false);
+  const [searching, setSearching] = useState(false);
+  const timerRef = useRef(null);
+  const wrapRef = useRef(null);
+
+  useEffect(() => { setQuery(value || ''); }, [value]);
+
+  useEffect(() => {
+    const handler = (e) => {
+      if (wrapRef.current && !wrapRef.current.contains(e.target)) setShow(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  const handleChange = (val) => {
+    setQuery(val);
+    onChange(val);
+    if (timerRef.current) clearTimeout(timerRef.current);
+    if (val.length < 1) { setResults([]); setShow(false); return; }
+    timerRef.current = setTimeout(async () => {
+      setSearching(true);
+      try {
+        const res = await api.get(`/inventory/products?search=${encodeURIComponent(val)}&limit=8`);
+        const products = res.data.products || [];
+        setResults(products);
+        setShow(products.length > 0);
+      } catch { setResults([]); }
+      setSearching(false);
+    }, 250);
+  };
+
+  const selectProduct = (product) => {
+    setQuery(product.name);
+    setShow(false);
+    onSelect(product);
+  };
+
+  return (
+    <div ref={wrapRef} style={{ position: 'relative' }}>
+      <div style={{ position: 'relative' }}>
+        <input
+          className="input-premium text-sm w-full"
+          placeholder="Description / product name *"
+          value={query}
+          onChange={e => handleChange(e.target.value)}
+          onFocus={() => query.length >= 1 && results.length > 0 && setShow(true)}
+          autoComplete="off"
+        />
+        {searching && (
+          <div style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', width: 12, height: 12, border: '2px solid #555', borderTopColor: '#D4AF37', borderRadius: '50%', animation: 'spin 0.6s linear infinite' }} />
+        )}
+      </div>
+      {show && results.length > 0 && (
+        <div style={{
+          position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 999,
+          background: '#0d0d14', border: '1px solid rgba(255,255,255,0.1)',
+          borderRadius: 10, marginTop: 4, overflow: 'hidden',
+          boxShadow: '0 8px 32px rgba(0,0,0,0.5)'
+        }}>
+          {results.map(p => (
+            <button
+              key={p.id}
+              type="button"
+              onMouseDown={() => selectProduct(p)}
+              style={{
+                width: '100%', textAlign: 'left', padding: '8px 12px',
+                background: 'transparent', border: 'none', cursor: 'pointer',
+                borderBottom: '1px solid rgba(255,255,255,0.04)',
+                display: 'flex', justifyContent: 'space-between', alignItems: 'center'
+              }}
+              onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.05)'}
+              onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+            >
+              <div>
+                <p style={{ color: '#f9fafb', fontSize: 13, fontWeight: 500, margin: 0 }}>{p.name}</p>
+                {p.sku && <p style={{ color: '#6b7280', fontSize: 11, margin: 0 }}>SKU: {p.sku}</p>}
+              </div>
+              <div style={{ textAlign: 'right', flexShrink: 0, marginLeft: 8 }}>
+                <p style={{ color: '#D4AF37', fontSize: 13, fontWeight: 600, margin: 0 }}>
+                  ₹{Number(p.unit_price).toLocaleString('en-IN')}
+                </p>
+                <p style={{ color: p.current_stock <= 0 ? '#ef4444' : p.current_stock <= p.minimum_stock ? '#f59e0b' : '#10b981', fontSize: 10, margin: 0 }}>
+                  {p.current_stock <= 0 ? 'Out of stock' : `${p.current_stock} in stock`}
+                </p>
+              </div>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function InvoicesPage() {
   const { api } = useAuth();
@@ -435,7 +534,23 @@ export default function InvoicesPage() {
                 {form.items.map((item, idx) => (
                   <div key={idx} className="grid gap-2 items-center"
                     style={{ gridTemplateColumns: showHSN ? (showItemDiscount ? '3fr 1fr 1fr 1.2fr 1fr 0.8fr 0.3fr' : '3fr 1fr 1fr 1.2fr 0.8fr 0.3fr') : (showItemDiscount ? '3fr 1fr 1.2fr 1fr 0.8fr 0.3fr' : '3fr 1fr 1.2fr 0.8fr 0.3fr') }}>
-                    <Input placeholder="Description *" className="input-premium text-sm" value={item.description} onChange={e => updateItem(idx, 'description', e.target.value)} />
+                    <ProductSearch
+                      value={item.description}
+                      onChange={(val) => updateItem(idx, 'description', val)}
+                      onSelect={(product) => {
+                        const items = [...form.items];
+                        items[idx] = {
+                          ...items[idx],
+                          description: product.name,
+                          unit_price: product.unit_price,
+                          hsn_code: product.hsn_code || items[idx].hsn_code || '',
+                          amount: (items[idx].quantity * product.unit_price) - (items[idx].item_discount || 0)
+                        };
+                        setForm({ ...form, items });
+                        if (!showHSN && product.hsn_code) setShowHSN(true);
+                      }}
+                      api={api}
+                    />
                     {showHSN && <Input placeholder="HSN" className="input-premium text-sm" value={item.hsn_code} onChange={e => updateItem(idx, 'hsn_code', e.target.value)} />}
                     <Input type="number" min="0" placeholder="Qty" className="input-premium text-sm" value={item.quantity} onChange={e => updateItem(idx, 'quantity', e.target.value)} />
                     <Input type="number" min="0" placeholder="Rate" className="input-premium text-sm" value={item.unit_price} onChange={e => updateItem(idx, 'unit_price', e.target.value)} />
