@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import DashboardLayout from '../../components/layout/DashboardLayout';
-import { Search, MessageCircle, ChevronRight, Users, TrendingDown, TrendingUp, AlertCircle } from 'lucide-react';
+import { Search, MessageCircle, ChevronRight, Users, TrendingDown, TrendingUp } from 'lucide-react';
 import { toast } from 'sonner';
 
 const fmt = (n) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(n || 0);
@@ -17,6 +17,7 @@ export default function CustomersLedgerPage() {
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [businessName, setBusinessName] = useState('');
+  const [sendingReminder, setSendingReminder] = useState(null);
 
   const fetchCustomers = useCallback(async () => {
     setLoading(true);
@@ -26,7 +27,7 @@ export default function CustomersLedgerPage() {
       const res = await api.get(`/finance/customers?${params}`);
       setCustomers(res.data.customers || []);
       setTotal(res.data.total || 0);
-    } catch (e) {
+    } catch {
       toast.error('Failed to load customers');
     }
     setLoading(false);
@@ -43,20 +44,43 @@ export default function CustomersLedgerPage() {
   const totalOutstanding = customers.reduce((s, c) => s + (c.total_outstanding || 0), 0);
   const totalInvoiced = customers.reduce((s, c) => s + (c.total_invoiced || 0), 0);
 
-  const sendReminder = (customer) => {
+  const sendReminder = async (customer) => {
     const phone = (customer.phone || '').replace(/[^0-9]/g, '');
     const storeName = businessName || 'Our Store';
+    setSendingReminder(customer.name);
+
+    // Fetch pending invoices for this customer
+    let invoiceLines = '';
+    try {
+      const res = await api.get(`/finance/customers/${encodeURIComponent(customer.name)}/ledger`);
+      const invoices = (res.data.invoices || []).filter(inv =>
+        ['sent', 'partially_paid', 'overdue', 'draft'].includes(inv.status) &&
+        Number(inv.balance_due) > 0
+      );
+
+      if (invoices.length > 0) {
+        invoiceLines = invoices.map((inv, i) =>
+          `${i + 1}. ${inv.invoice_number} - Rs. ${Number(inv.balance_due).toLocaleString('en-IN')} (Due: ${fmtDate(inv.due_date)})`
+        ).join('\n');
+      }
+    } catch {
+      // fallback — no invoice details
+    }
+    setSendingReminder(null);
+
     const message = [
       `Hello ${customer.name}!`,
       '',
       `This is a gentle reminder from *${storeName}* regarding your pending payments.`,
       '',
-      `Total Outstanding: Rs. ${customer.total_outstanding?.toFixed(2) || '0'}`,
-      `Pending Invoices: ${customer.unpaid_count || 0}`,
+      `Total Outstanding: Rs. ${Number(customer.total_outstanding || 0).toLocaleString('en-IN')}`,
+      '',
+      invoiceLines ? `Pending Invoices:\n${invoiceLines}` : `Pending Invoices: ${customer.unpaid_count || 0}`,
       '',
       `Kindly arrange the payment at your earliest convenience.`,
       `Thank you for your business!`
     ].join('\n');
+
     const waUrl = phone
       ? `https://wa.me/${phone}?text=${encodeURIComponent(message)}`
       : `https://wa.me/?text=${encodeURIComponent(message)}`;
@@ -114,10 +138,7 @@ export default function CustomersLedgerPage() {
           ) : (
             <div className="divide-y divide-white/[0.03]">
               {customers.map((customer, i) => (
-                <div
-                  key={i}
-                  className="flex items-center gap-4 px-5 py-4 hover:bg-white/[0.02] transition-colors group"
-                >
+                <div key={i} className="flex items-center gap-4 px-5 py-4 hover:bg-white/[0.02] transition-colors group">
                   {/* Avatar */}
                   <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-gold-500/20 to-gold-500/10 border border-gold-500/20 flex items-center justify-center text-gold-400 font-bold text-sm shrink-0">
                     {customer.name?.[0]?.toUpperCase() || '?'}
@@ -166,11 +187,16 @@ export default function CustomersLedgerPage() {
                     {customer.total_outstanding > 0 && customer.phone && (
                       <button
                         onClick={(e) => { e.stopPropagation(); sendReminder(customer); }}
-                        className="p-2 rounded-lg transition-colors hover:bg-emerald-500/10"
+                        disabled={sendingReminder === customer.name}
+                        className="p-2 rounded-lg transition-colors hover:bg-emerald-500/10 disabled:opacity-50"
                         style={{ color: '#25d366' }}
-                        title="Send WhatsApp Reminder"
+                        title="Send WhatsApp Reminder with invoice list"
                       >
-                        <MessageCircle size={15} />
+                        {sendingReminder === customer.name ? (
+                          <div className="w-4 h-4 border-2 border-emerald-500/30 border-t-emerald-400 rounded-full animate-spin" />
+                        ) : (
+                          <MessageCircle size={15} />
+                        )}
                       </button>
                     )}
                     <button
