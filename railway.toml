@@ -4,3 +4,6 @@ buildCommand = "yarn install && yarn build"
 
 [deploy]
 startCommand = "npx serve -s build -l 3000"
+
+[build.nixpacksPlan.phases.setup]
+nixPkgs = ["nodejs_20"]
