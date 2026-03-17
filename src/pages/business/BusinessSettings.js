@@ -9,6 +9,17 @@ import { toast } from 'sonner';
 const fmt = (n) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(n || 0);
 const fmtDate = (d) => d ? new Date(d).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : '-';
 
+
+const INDIAN_STATES = [
+  'Andhra Pradesh','Arunachal Pradesh','Assam','Bihar','Chhattisgarh','Goa','Gujarat',
+  'Haryana','Himachal Pradesh','Jharkhand','Karnataka','Kerala','Madhya Pradesh',
+  'Maharashtra','Manipur','Meghalaya','Mizoram','Nagaland','Odisha','Punjab',
+  'Rajasthan','Sikkim','Tamil Nadu','Telangana','Tripura','Uttar Pradesh',
+  'Uttarakhand','West Bengal','Andaman and Nicobar Islands','Chandigarh',
+  'Dadra and Nagar Haveli and Daman and Diu','Delhi','Jammu and Kashmir',
+  'Ladakh','Lakshadweep','Puducherry'
+];
+
 export default function BusinessSettings() {
   const { api, refreshUser } = useAuth();
   const [data, setData] = useState(null);
@@ -18,7 +29,7 @@ export default function BusinessSettings() {
   const [savingBank, setSavingBank] = useState(false);
 
   const [form, setForm] = useState({
-    name: '', phone: '', address: '', city: '', country: ''
+    name: '', phone: '', address: '', city: '', country: '', state: ''
   });
 
   const [invoiceForm, setInvoiceForm] = useState({
@@ -44,7 +55,8 @@ export default function BusinessSettings() {
         phone: b.phone || '',
         address: b.address || '',
         city: b.city || '',
-        country: b.country || ''
+        country: b.country || '',
+        state: b.state || ''
       });
       setInvoiceForm({
         invoice_gst: b.invoice_gst || '',
@@ -163,9 +175,18 @@ export default function BusinessSettings() {
                 <Input className="input-premium mt-1" value={form.city} onChange={e => setForm({...form, city: e.target.value})} />
               </div>
             </div>
-            <div>
-              <Label className="text-gray-400 text-xs">Country</Label>
-              <Input className="input-premium mt-1" value={form.country} onChange={e => setForm({...form, country: e.target.value})} />
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-gray-400 text-xs">Country</Label>
+                <Input className="input-premium mt-1" value={form.country} onChange={e => setForm({...form, country: e.target.value})} />
+              </div>
+              <div>
+                <Label className="text-gray-400 text-xs">State <span className="text-gold-400">(for GST)</span></Label>
+                <select className="input-premium mt-1 w-full" value={form.state} onChange={e => setForm({...form, state: e.target.value})}>
+                  <option value="">Select State</option>
+                  {INDIAN_STATES.map(s => <option key={s} value={s}>{s}</option>)}
+                </select>
+              </div>
             </div>
             <div>
               <Label className="text-gray-400 text-xs">Address</Label>
