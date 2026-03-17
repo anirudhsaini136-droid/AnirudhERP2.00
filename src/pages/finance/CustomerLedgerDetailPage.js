@@ -285,7 +285,7 @@ export default function CustomerLedgerDetailPage() {
                   Pending Invoices (oldest first)
                 </p>
               </div>
-              <div className="max-h-22 overflow-y-auto px-4 pb-2 space-y-1.5">
+              <div className="max-h-66 overflow-y-auto px-4 pb-2 space-y-1.5">
                 {unpaidInvoices.map(inv => (
                   <div key={inv.id} className="flex justify-between text-xs">
                     <span className="text-gray-400 font-mono">{inv.invoice_number}</span>
