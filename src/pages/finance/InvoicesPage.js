@@ -583,11 +583,11 @@ export default function InvoicesPage() {
             <div className="grid grid-cols-4 gap-3">
               <div>
                 <Label className="text-gray-400 text-xs">Issue Date *</Label>
-                <Input type="date" className="input-premium mt-1" value={form.issue_date} onChange={e => setForm({...form, issue_date: e.target.value})} required />
+                <Input type="date" lang="en-GB" className="input-premium mt-1" value={form.issue_date} onChange={e => setForm({...form, issue_date: e.target.value})} required />
               </div>
               <div>
                 <Label className="text-gray-400 text-xs">Due Date *</Label>
-                <Input type="date" className="input-premium mt-1" value={form.due_date} onChange={e => setForm({...form, due_date: e.target.value})} required />
+                <Input type="date" lang="en-GB" className="input-premium mt-1" value={form.due_date} onChange={e => setForm({...form, due_date: e.target.value})} required />
               </div>
               <div>
                 <Label className="text-gray-400 text-xs">Tax Rate (%)</Label>
@@ -754,7 +754,7 @@ export default function InvoicesPage() {
               </div>
               <div>
                 <Label className="text-gray-400 text-xs">Payment Date *</Label>
-                <Input type="date" className="input-premium mt-1" value={paymentForm.payment_date} onChange={e => setPaymentForm({...paymentForm, payment_date: e.target.value})} required />
+                <Input type="date" lang="en-GB" className="input-premium mt-1" value={paymentForm.payment_date} onChange={e => setPaymentForm({...paymentForm, payment_date: e.target.value})} required />
               </div>
               <div>
                 <Label className="text-gray-400 text-xs">Payment Method</Label>
