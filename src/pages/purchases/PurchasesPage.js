@@ -1,399 +1,656 @@
-from fastapi import APIRouter, HTTPException, Depends
-from typing import Optional, List
-from datetime import datetime, timezone, date
-import uuid
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { useAuth } from '../../contexts/AuthContext';
+import DashboardLayout from '../../components/layout/DashboardLayout';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../../components/ui/dialog';
+import { Input } from '../../components/ui/input';
+import { Label } from '../../components/ui/label';
+import { Plus, Search, Eye, Trash2, CheckCircle, TrendingDown, IndianRupee, ShoppingBag } from 'lucide-react';
+import { toast } from 'sonner';
 
-from auth import get_current_user, TokenData
-from database import get_db
-from pydantic import BaseModel
-from sqlalchemy import select, update, insert, delete as sql_delete, func
+const fmt = (n) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(n || 0);
+const fmtDate = (d) => d ? new Date(d).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : '-';
 
-router = APIRouter(prefix="/purchases", tags=["Purchases"])
+const INDIAN_STATES = [
+  'Andhra Pradesh','Arunachal Pradesh','Assam','Bihar','Chhattisgarh','Goa','Gujarat',
+  'Haryana','Himachal Pradesh','Jharkhand','Karnataka','Kerala','Madhya Pradesh',
+  'Maharashtra','Manipur','Meghalaya','Mizoram','Nagaland','Odisha','Punjab',
+  'Rajasthan','Sikkim','Tamil Nadu','Telangana','Tripura','Uttar Pradesh',
+  'Uttarakhand','West Bengal','Andaman and Nicobar Islands','Chandigarh',
+  'Dadra and Nagar Haveli and Daman and Diu','Delhi','Jammu and Kashmir',
+  'Ladakh','Lakshadweep','Puducherry'
+];
 
-def generate_id():
-    return str(uuid.uuid4())
+const STATUS_COLORS = {
+  unpaid: 'text-rose-400 bg-rose-500/10 border-rose-500/20',
+  partial: 'text-amber-400 bg-amber-500/10 border-amber-500/20',
+  paid: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20',
+};
 
-def utc_now():
-    return datetime.now(timezone.utc)
+const emptyItem = { description: '', hsn_code: '', quantity: 1, unit_price: 0, product_id: null, update_stock: true };
 
-def parse_date(d):
-    if isinstance(d, date):
-        return d
-    if isinstance(d, str):
-        return datetime.strptime(d, "%Y-%m-%d").date()
-    return None
+export default function PurchasesPage() {
+  const { api } = useAuth();
+  const [bills, setBills] = useState([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [search, setSearch] = useState('');
+  const [filterStatus, setFilterStatus] = useState('all');
+  const [loading, setLoading] = useState(true);
+  const [stats, setStats] = useState({});
+  const [showCreate, setShowCreate] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [showDetail, setShowDetail] = useState(null);
+  const [detailData, setDetailData] = useState(null);
+  const [showPayment, setShowPayment] = useState(null);
+  const [paying, setPaying] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState(null);
+  const [deleting, setDeleting] = useState(false);
 
-def serialize(obj, exclude=None):
-    if obj is None:
-        return None
-    exclude = exclude or []
-    result = {}
-    for key in obj.__table__.columns.keys():
-        if key in exclude:
-            continue
-        val = getattr(obj, key)
-        if isinstance(val, datetime):
-            result[key] = val.isoformat()
-        elif isinstance(val, date):
-            result[key] = val.isoformat()
-        elif hasattr(val, 'value'):
-            result[key] = val.value
-        else:
-            result[key] = val
-    return result
+  const today = new Date().toISOString().split('T')[0];
 
-def calculate_gst(tax_rate: float, subtotal: float, seller_state: str, buyer_state: str):
-    """For purchases: seller = vendor, buyer = our business"""
-    if not tax_rate or tax_rate == 0:
-        return {"supply_type": "intrastate", "cgst_rate": 0, "cgst_amount": 0,
-                "sgst_rate": 0, "sgst_amount": 0, "igst_rate": 0, "igst_amount": 0}
-    s1 = (seller_state or '').strip().lower()
-    s2 = (buyer_state or '').strip().lower()
-    tax_amount = round(subtotal * tax_rate / 100, 2)
-    if s1 and s2 and s1 == s2:
-        half_rate = round(tax_rate / 2, 2)
-        half_amount = round(tax_amount / 2, 2)
-        return {"supply_type": "intrastate",
-                "cgst_rate": half_rate, "cgst_amount": half_amount,
-                "sgst_rate": half_rate, "sgst_amount": half_amount,
-                "igst_rate": 0, "igst_amount": 0}
-    else:
-        return {"supply_type": "interstate",
-                "cgst_rate": 0, "cgst_amount": 0,
-                "sgst_rate": 0, "sgst_amount": 0,
-                "igst_rate": tax_rate, "igst_amount": tax_amount}
+  const [form, setForm] = useState({
+    vendor_name: '', vendor_phone: '', vendor_email: '',
+    vendor_gstin: '', vendor_state: '',
+    bill_date: today, due_date: '', tax_rate: 18,
+    discount_amount: 0, notes: '',
+    items: [{ ...emptyItem }]
+  });
 
-class PurchaseItemCreate(BaseModel):
-    description: str
-    hsn_code: Optional[str] = None
-    quantity: float = 1
-    unit_price: float
-    product_id: Optional[str] = None  # link to inventory product
-    update_stock: bool = True          # auto-increase stock
+  const [payForm, setPayForm] = useState({
+    amount: 0, payment_date: today, payment_method: 'cash', reference: '', notes: ''
+  });
 
-class PurchaseBillCreate(BaseModel):
-    vendor_name: str
-    vendor_phone: Optional[str] = None
-    vendor_email: Optional[str] = None
-    vendor_gstin: Optional[str] = None
-    vendor_state: Optional[str] = None
-    bill_date: str
-    due_date: Optional[str] = None
-    tax_rate: float = 0
-    discount_amount: float = 0
-    notes: Optional[str] = None
-    items: List[PurchaseItemCreate]
+  const fetchBills = useCallback(async () => {
+    setLoading(true);
+    try {
+      const params = new URLSearchParams({ page, limit: 15 });
+      if (search) params.set('search', search);
+      if (filterStatus !== 'all') params.set('status', filterStatus);
+      const res = await api.get(`/purchases?${params}`);
+      setBills(res.data.bills || []);
+      setTotal(res.data.total || 0);
+      setStats(res.data.stats || {});
+    } catch { toast.error('Failed to load purchases'); }
+    setLoading(false);
+  }, [api, page, search, filterStatus]);
 
-class PurchasePaymentCreate(BaseModel):
-    amount: float
-    payment_date: str
-    payment_method: str = "cash"
-    reference: Optional[str] = None
-    notes: Optional[str] = None
+  useEffect(() => { fetchBills(); }, [fetchBills]);
 
-def require_access():
-    async def checker(current_user: TokenData = Depends(get_current_user)):
-        if current_user.role not in ["finance_admin", "business_owner", "super_admin", "inventory_admin"]:
-            raise HTTPException(status_code=403, detail="Access denied")
-        return current_user
-    return checker
+  const resetForm = () => setForm({
+    vendor_name: '', vendor_phone: '', vendor_email: '',
+    vendor_gstin: '', vendor_state: '',
+    bill_date: today, due_date: '', tax_rate: 18,
+    discount_amount: 0, notes: '', items: [{ ...emptyItem }]
+  });
 
-@router.get("")
-async def list_purchase_bills(
-    search: Optional[str] = None,
-    status: Optional[str] = None,
-    page: int = 1,
-    limit: int = 20,
-    current_user: TokenData = Depends(require_access()),
-    db=Depends(get_db)
-):
-    from models import PurchaseBill
-    business_id = current_user.business_id
+  const updateItem = (idx, field, value) => {
+    const items = [...form.items];
+    items[idx] = { ...items[idx], [field]: value };
+    setForm({ ...form, items });
+  };
 
-    query = select(PurchaseBill).where(PurchaseBill.business_id == business_id)
-    count_query = select(func.count()).where(PurchaseBill.business_id == business_id)
+  const subtotal = form.items.reduce((s, i) => s + (Number(i.quantity) * Number(i.unit_price)), 0);
+  const taxAmount = subtotal * (form.tax_rate / 100);
+  const totalAmount = subtotal + taxAmount - (form.discount_amount || 0);
 
-    if search:
-        from sqlalchemy import or_
-        sf = or_(PurchaseBill.vendor_name.ilike(f"%{search}%"),
-                 PurchaseBill.bill_number.ilike(f"%{search}%"))
-        query = query.where(sf)
-        count_query = count_query.where(sf)
-
-    if status and status != "all":
-        query = query.where(PurchaseBill.status == status)
-        count_query = count_query.where(PurchaseBill.status == status)
-
-    total = (await db.execute(count_query)).scalar() or 0
-    result = await db.execute(query.order_by(PurchaseBill.created_at.desc())
-                              .offset((page - 1) * limit).limit(limit))
-
-    # Summary stats
-    stats_result = await db.execute(
-        select(func.sum(PurchaseBill.total_amount),
-               func.sum(PurchaseBill.amount_paid),
-               func.sum(PurchaseBill.balance_due),
-               func.sum(PurchaseBill.cgst_amount),
-               func.sum(PurchaseBill.sgst_amount),
-               func.sum(PurchaseBill.igst_amount))
-        .where(PurchaseBill.business_id == business_id)
-    )
-    row = stats_result.one()
-
-    return {
-        "bills": [serialize(b) for b in result.scalars()],
-        "total": total,
-        "page": page,
-        "pages": (total + limit - 1) // limit,
-        "stats": {
-            "total_purchases": float(row[0] or 0),
-            "total_paid": float(row[1] or 0),
-            "total_outstanding": float(row[2] or 0),
-            "total_cgst_itc": float(row[3] or 0),
-            "total_sgst_itc": float(row[4] or 0),
-            "total_igst_itc": float(row[5] or 0),
-            "total_itc": float((row[3] or 0) + (row[4] or 0) + (row[5] or 0))
-        }
+  const handleCreate = async (e) => {
+    e.preventDefault();
+    if (!form.vendor_name.trim()) { toast.error('Vendor name required'); return; }
+    if (form.items.some(i => !i.description)) { toast.error('All items need a description'); return; }
+    setCreating(true);
+    try {
+      const res = await api.post('/purchases', {
+        ...form,
+        items: form.items.map(i => ({
+          description: i.description,
+          hsn_code: i.hsn_code || null,
+          quantity: Number(i.quantity),
+          unit_price: Number(i.unit_price),
+          product_id: i.product_id || null,
+          update_stock: i.update_stock
+        }))
+      });
+      toast.success(`Purchase bill ${res.data.bill_number} created`);
+      setShowCreate(false);
+      resetForm();
+      fetchBills();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to create bill');
     }
+    setCreating(false);
+  };
 
-@router.post("")
-async def create_purchase_bill(
-    data: PurchaseBillCreate,
-    current_user: TokenData = Depends(require_access()),
-    db=Depends(get_db)
-):
-    from models import PurchaseBill, PurchaseBillItem, Product, StockMovement, MovementType, Business
+  const openDetail = async (bill) => {
+    setShowDetail(bill);
+    try {
+      const res = await api.get(`/purchases/${bill.id}`);
+      setDetailData(res.data);
+    } catch { toast.error('Failed to load details'); }
+  };
 
-    business_id = current_user.business_id
-    now = utc_now()
-    bill_id = generate_id()
-
-    # Get our business state for GST calculation
-    biz_result = await db.execute(select(Business).where(Business.id == business_id))
-    biz = biz_result.scalar_one_or_none()
-    our_state = getattr(biz, 'state', '') or ''
-
-    # Generate bill number
-    count_result = await db.execute(select(func.count()).where(PurchaseBill.business_id == business_id))
-    bill_count = count_result.scalar() or 0
-    bill_number = f"PUR-{now.strftime('%Y%m')}-{str(bill_count + 1).zfill(4)}"
-
-    # Calculate totals
-    subtotal = sum(item.quantity * item.unit_price for item in data.items)
-    # For purchases: vendor is seller, we are buyer
-    gst = calculate_gst(data.tax_rate, subtotal, data.vendor_state or '', our_state)
-    tax_amount = round(subtotal * data.tax_rate / 100, 2) if data.tax_rate > 0 else 0
-    total_amount = subtotal + tax_amount - data.discount_amount
-
-    await db.execute(insert(PurchaseBill).values(
-        id=bill_id,
-        business_id=business_id,
-        bill_number=bill_number,
-        vendor_name=data.vendor_name,
-        vendor_phone=data.vendor_phone,
-        vendor_email=data.vendor_email,
-        vendor_gstin=data.vendor_gstin,
-        vendor_state=data.vendor_state,
-        bill_date=parse_date(data.bill_date),
-        due_date=parse_date(data.due_date) if data.due_date else None,
-        subtotal=subtotal,
-        tax_rate=data.tax_rate,
-        tax_amount=tax_amount,
-        cgst_rate=gst['cgst_rate'], cgst_amount=gst['cgst_amount'],
-        sgst_rate=gst['sgst_rate'], sgst_amount=gst['sgst_amount'],
-        igst_rate=gst['igst_rate'], igst_amount=gst['igst_amount'],
-        supply_type=gst['supply_type'],
-        discount_amount=data.discount_amount,
-        total_amount=total_amount,
-        amount_paid=0,
-        balance_due=total_amount,
-        status='unpaid',
-        notes=data.notes,
-        created_by=current_user.user_id,
-        created_at=now,
-        updated_at=now
-    ))
-
-    # Insert items + update stock
-    for item in data.items:
-        line_total = item.quantity * item.unit_price
-        await db.execute(insert(PurchaseBillItem).values(
-            id=generate_id(),
-            bill_id=bill_id,
-            business_id=business_id,
-            product_id=item.product_id or None,
-            description=item.description,
-            hsn_code=item.hsn_code or None,
-            quantity=item.quantity,
-            unit_price=item.unit_price,
-            total=line_total,
-            created_at=now
-        ))
-
-        # Update stock if product linked and update_stock is True
-        if item.product_id and item.update_stock:
-            prod_result = await db.execute(
-                select(Product).where(Product.id == item.product_id, Product.business_id == business_id)
-            )
-            product = prod_result.scalar_one_or_none()
-            if product:
-                prev_stock = product.current_stock or 0
-                new_stock = prev_stock + int(item.quantity)
-                await db.execute(
-                    update(Product).where(Product.id == item.product_id)
-                    .values(current_stock=new_stock, updated_at=now)
-                )
-                await db.execute(insert(StockMovement).values(
-                    id=generate_id(),
-                    business_id=business_id,
-                    product_id=item.product_id,
-                    movement_type=MovementType.stock_in,
-                    quantity=int(item.quantity),
-                    previous_stock=prev_stock,
-                    new_stock=new_stock,
-                    reference=f"Purchase: {bill_number}",
-                    notes=f"Stock added from purchase bill {bill_number}",
-                    created_by=current_user.user_id,
-                    created_at=now
-                ))
-
-    await db.commit()
-    return {"id": bill_id, "bill_number": bill_number, "message": "Purchase bill created", "total_amount": total_amount}
-
-@router.get("/{bill_id}")
-async def get_purchase_bill(
-    bill_id: str,
-    current_user: TokenData = Depends(require_access()),
-    db=Depends(get_db)
-):
-    from models import PurchaseBill, PurchaseBillItem, PurchasePayment
-    business_id = current_user.business_id
-
-    result = await db.execute(
-        select(PurchaseBill).where(PurchaseBill.id == bill_id, PurchaseBill.business_id == business_id)
-    )
-    bill = result.scalar_one_or_none()
-    if not bill:
-        raise HTTPException(status_code=404, detail="Bill not found")
-
-    items_result = await db.execute(select(PurchaseBillItem).where(PurchaseBillItem.bill_id == bill_id))
-    payments_result = await db.execute(
-        select(PurchasePayment).where(PurchasePayment.bill_id == bill_id)
-        .order_by(PurchasePayment.created_at.desc())
-    )
-
-    return {
-        "bill": serialize(bill),
-        "items": [serialize(i) for i in items_result.scalars()],
-        "payments": [serialize(p) for p in payments_result.scalars()]
+  const handlePayment = async (e) => {
+    e.preventDefault();
+    if (!showPayment) return;
+    setPaying(true);
+    try {
+      await api.post(`/purchases/${showPayment.id}/payments`, payForm);
+      toast.success('Payment recorded');
+      setShowPayment(null);
+      fetchBills();
+      if (showDetail?.id === showPayment.id) {
+        const res = await api.get(`/purchases/${showPayment.id}`);
+        setDetailData(res.data);
+      }
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to record payment');
     }
+    setPaying(false);
+  };
 
-@router.delete("/{bill_id}")
-async def delete_purchase_bill(
-    bill_id: str,
-    current_user: TokenData = Depends(require_access()),
-    db=Depends(get_db)
-):
-    from models import PurchaseBill, PurchaseBillItem, PurchasePayment
-    business_id = current_user.business_id
-
-    result = await db.execute(
-        select(PurchaseBill).where(PurchaseBill.id == bill_id, PurchaseBill.business_id == business_id)
-    )
-    if not result.scalar_one_or_none():
-        raise HTTPException(status_code=404, detail="Bill not found")
-
-    await db.execute(sql_delete(PurchaseBillItem).where(PurchaseBillItem.bill_id == bill_id))
-    await db.execute(sql_delete(PurchasePayment).where(PurchasePayment.bill_id == bill_id))
-    await db.execute(sql_delete(PurchaseBill).where(PurchaseBill.id == bill_id))
-    await db.commit()
-    return {"message": "Bill deleted"}
-
-@router.post("/{bill_id}/payments")
-async def record_purchase_payment(
-    bill_id: str,
-    data: PurchasePaymentCreate,
-    current_user: TokenData = Depends(require_access()),
-    db=Depends(get_db)
-):
-    from models import PurchaseBill, PurchasePayment
-    business_id = current_user.business_id
-
-    result = await db.execute(
-        select(PurchaseBill).where(PurchaseBill.id == bill_id, PurchaseBill.business_id == business_id)
-    )
-    bill = result.scalar_one_or_none()
-    if not bill:
-        raise HTTPException(status_code=404, detail="Bill not found")
-
-    if data.amount <= 0:
-        raise HTTPException(status_code=400, detail="Amount must be positive")
-
-    balance = float(bill.balance_due or 0)
-    if data.amount > balance + 0.01:
-        raise HTTPException(status_code=400, detail=f"Amount exceeds balance due of {balance:.2f}")
-
-    now = utc_now()
-    await db.execute(insert(PurchasePayment).values(
-        id=generate_id(),
-        bill_id=bill_id,
-        business_id=business_id,
-        amount=data.amount,
-        payment_date=parse_date(data.payment_date),
-        payment_method=data.payment_method,
-        reference=data.reference,
-        notes=data.notes,
-        created_at=now
-    ))
-
-    new_paid = float(bill.amount_paid or 0) + data.amount
-    new_balance = max(0, float(bill.total_amount or 0) - new_paid)
-    new_status = 'paid' if new_balance <= 0.01 else 'partial'
-
-    await db.execute(
-        update(PurchaseBill).where(PurchaseBill.id == bill_id)
-        .values(amount_paid=new_paid, balance_due=new_balance, status=new_status, updated_at=now)
-    )
-    await db.commit()
-    return {"message": "Payment recorded"}
-
-@router.get("/itc/summary")
-async def itc_summary(
-    start_date: str,
-    end_date: str,
-    current_user: TokenData = Depends(require_access()),
-    db=Depends(get_db)
-):
-    """Input Tax Credit summary for GSTR-3B"""
-    from models import PurchaseBill
-    from routes.finance import parse_date as fd_parse_date
-    business_id = current_user.business_id
-    start = parse_date(start_date)
-    end = parse_date(end_date)
-
-    result = await db.execute(
-        select(PurchaseBill).where(
-            PurchaseBill.business_id == business_id,
-            PurchaseBill.bill_date >= start,
-            PurchaseBill.bill_date <= end
-        )
-    )
-    bills = result.scalars().all()
-
-    total_itc_cgst = sum(float(b.cgst_amount or 0) for b in bills)
-    total_itc_sgst = sum(float(b.sgst_amount or 0) for b in bills)
-    total_itc_igst = sum(float(b.igst_amount or 0) for b in bills)
-    total_itc = total_itc_cgst + total_itc_sgst + total_itc_igst
-    total_purchases = sum(float(b.total_amount or 0) for b in bills)
-
-    return {
-        "period": {"start": start_date, "end": end_date},
-        "total_purchases": total_purchases,
-        "itc": {
-            "cgst": total_itc_cgst,
-            "sgst": total_itc_sgst,
-            "igst": total_itc_igst,
-            "total": total_itc
-        },
-        "bills": [serialize(b) for b in bills]
+  const handleDelete = async () => {
+    if (!deleteConfirm) return;
+    setDeleting(true);
+    try {
+      await api.delete(`/purchases/${deleteConfirm.id}`);
+      toast.success('Bill deleted');
+      setDeleteConfirm(null);
+      fetchBills();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to delete');
     }
+    setDeleting(false);
+  };
+
+  // Product search for items
+  const ProductSearch = ({ idx, item }) => {
+    const [q, setQ] = useState(item.description || '');
+    const [results, setResults] = useState([]);
+    const [show, setShow] = useState(false);
+    const timer = useRef(null);
+    const ref = useRef(null);
+
+    useEffect(() => {
+      const h = (e) => { if (ref.current && !ref.current.contains(e.target)) setShow(false); };
+      document.addEventListener('mousedown', h);
+      return () => document.removeEventListener('mousedown', h);
+    }, []);
+
+    const handleChange = (val) => {
+      setQ(val);
+      updateItem(idx, 'description', val);
+      if (timer.current) clearTimeout(timer.current);
+      if (val.length < 1) { setResults([]); setShow(false); return; }
+      timer.current = setTimeout(async () => {
+        try {
+          const res = await api.get(`/inventory/products?search=${encodeURIComponent(val)}&limit=6`);
+          setResults(res.data.products || []);
+          setShow((res.data.products || []).length > 0);
+        } catch { setResults([]); }
+      }, 250);
+    };
+
+    const select = (p) => {
+      setQ(p.name);
+      setShow(false);
+      const items = [...form.items];
+      items[idx] = { ...items[idx], description: p.name, unit_price: p.cost_price || p.unit_price, product_id: p.id, hsn_code: p.hsn_code || items[idx].hsn_code, update_stock: true };
+      setForm({ ...form, items });
+    };
+
+    return (
+      <div ref={ref} style={{ position: 'relative' }}>
+        <input className="input-premium text-sm w-full" placeholder="Description / product *"
+          value={q} onChange={e => handleChange(e.target.value)}
+          onFocus={() => q.length >= 1 && results.length > 0 && setShow(true)} autoComplete="off" />
+        {show && results.length > 0 && (
+          <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 999, background: '#0d0d14', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, marginTop: 4, overflow: 'hidden', boxShadow: '0 8px 32px rgba(0,0,0,0.5)' }}>
+            {results.map(p => (
+              <button key={p.id} type="button" onMouseDown={() => select(p)}
+                style={{ width: '100%', textAlign: 'left', padding: '8px 12px', background: 'transparent', border: 'none', cursor: 'pointer', borderBottom: '1px solid rgba(255,255,255,0.04)', display: 'flex', justifyContent: 'space-between' }}
+                onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.05)'}
+                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                <div>
+                  <p style={{ color: '#f9fafb', fontSize: 13, fontWeight: 500, margin: 0 }}>{p.name}</p>
+                  <p style={{ color: '#6b7280', fontSize: 11, margin: 0 }}>Cost: ₹{p.cost_price || 0} · Stock: {p.current_stock}</p>
+                </div>
+                <span style={{ color: '#D4AF37', fontSize: 12, flexShrink: 0, marginLeft: 8 }}>₹{p.unit_price}</span>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  return (
+    <DashboardLayout>
+      <div className="space-y-5">
+        {/* Header */}
+        <div className="flex items-center justify-between flex-wrap gap-3">
+          <div>
+            <h1 className="font-display text-2xl text-white">Purchases</h1>
+            <p className="text-sm text-gray-500">{total} purchase bills · Track vendor payments & ITC</p>
+          </div>
+          <button onClick={() => { resetForm(); setShowCreate(true); }} className="btn-premium btn-primary">
+            <Plus size={16} /> New Purchase Bill
+          </button>
+        </div>
+
+        {/* Stats */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          {[
+            { label: 'Total Purchases', value: fmt(stats.total_purchases), color: 'text-white', icon: ShoppingBag },
+            { label: 'Amount Paid', value: fmt(stats.total_paid), color: 'text-emerald-400', icon: CheckCircle },
+            { label: 'Outstanding', value: fmt(stats.total_outstanding), color: 'text-rose-400', icon: TrendingDown },
+            { label: 'Total ITC', value: fmt(stats.total_itc), color: 'text-blue-400', icon: IndianRupee },
+          ].map(s => (
+            <div key={s.label} className="glass-card rounded-2xl p-4">
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-xs text-gray-500">{s.label}</p>
+                <s.icon size={15} className={s.color} />
+              </div>
+              <p className={`text-xl font-bold ${s.color}`}>{s.value}</p>
+            </div>
+          ))}
+        </div>
+
+        {/* ITC Breakdown */}
+        {(stats.total_cgst_itc > 0 || stats.total_sgst_itc > 0 || stats.total_igst_itc > 0) && (
+          <div className="glass-card rounded-2xl p-4 border border-blue-500/20">
+            <p className="text-xs text-blue-400 font-semibold uppercase tracking-wider mb-3">Input Tax Credit Available</p>
+            <div className="flex flex-wrap gap-6">
+              <div><p className="text-[10px] text-gray-500">CGST ITC</p><p className="text-sm font-bold text-blue-400">{fmt(stats.total_cgst_itc)}</p></div>
+              <div><p className="text-[10px] text-gray-500">SGST ITC</p><p className="text-sm font-bold text-blue-400">{fmt(stats.total_sgst_itc)}</p></div>
+              <div><p className="text-[10px] text-gray-500">IGST ITC</p><p className="text-sm font-bold text-purple-400">{fmt(stats.total_igst_itc)}</p></div>
+              <div><p className="text-[10px] text-gray-500">Total ITC</p><p className="text-sm font-bold text-emerald-400">{fmt(stats.total_itc)}</p></div>
+            </div>
+          </div>
+        )}
+
+        {/* Filters */}
+        <div className="flex flex-wrap gap-3">
+          <div className="relative flex-1 min-w-[200px]">
+            <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
+            <input type="text" placeholder="Search vendor or bill no..." value={search}
+              onChange={e => { setSearch(e.target.value); setPage(1); }}
+              className="input-premium pl-9 text-sm h-10 w-full" />
+          </div>
+          <select value={filterStatus} onChange={e => { setFilterStatus(e.target.value); setPage(1); }}
+            className="input-premium w-auto text-sm h-10">
+            <option value="all">All Status</option>
+            <option value="unpaid">Unpaid</option>
+            <option value="partial">Partially Paid</option>
+            <option value="paid">Paid</option>
+          </select>
+        </div>
+
+        {/* Table */}
+        <div className="glass-card rounded-2xl overflow-hidden">
+          <table className="table-premium w-full">
+            <thead>
+              <tr>
+                <th>Bill #</th><th>Vendor</th><th>Date</th>
+                <th>Amount</th><th>ITC</th><th>Status</th>
+                <th className="text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {loading ? (
+                <tr><td colSpan={7} className="text-center text-gray-500 py-8">Loading...</td></tr>
+              ) : bills.length === 0 ? (
+                <tr><td colSpan={7} className="text-center text-gray-500 py-12">No purchase bills yet</td></tr>
+              ) : bills.map(bill => (
+                <tr key={bill.id}>
+                  <td className="font-mono text-white text-sm">{bill.bill_number}</td>
+                  <td>
+                    <p className="text-sm text-white">{bill.vendor_name}</p>
+                    {bill.vendor_phone && <p className="text-xs text-gray-500">{bill.vendor_phone}</p>}
+                  </td>
+                  <td className="text-sm text-gray-400">{fmtDate(bill.bill_date)}</td>
+                  <td>
+                    <p className="text-sm font-bold text-gold-400">{fmt(bill.total_amount)}</p>
+                    {bill.balance_due > 0 && bill.balance_due < bill.total_amount && (
+                      <p className="text-[10px] text-rose-400">Due: {fmt(bill.balance_due)}</p>
+                    )}
+                  </td>
+                  <td>
+                    <p className="text-sm text-blue-400">{fmt((bill.cgst_amount || 0) + (bill.sgst_amount || 0) + (bill.igst_amount || 0))}</p>
+                    <p className="text-[10px] text-gray-600">{bill.supply_type === 'interstate' ? 'IGST' : 'CGST+SGST'}</p>
+                  </td>
+                  <td>
+                    <span className={`badge-premium text-[10px] px-2 py-0.5 rounded-full border ${STATUS_COLORS[bill.status] || ''}`}>
+                      {bill.status}
+                    </span>
+                  </td>
+                  <td className="text-right">
+                    <div className="flex items-center justify-end gap-1">
+                      <button onClick={() => openDetail(bill)} className="p-1.5 text-gray-400 hover:text-white" title="View"><Eye size={15} /></button>
+                      {bill.status !== 'paid' && (
+                        <button onClick={() => { setShowPayment(bill); setPayForm({ amount: Number(bill.balance_due) || 0, payment_date: today, payment_method: 'cash', reference: '', notes: '' }); }}
+                          className="p-1.5 text-emerald-400 hover:text-emerald-300" title="Record Payment">
+                          <CheckCircle size={15} />
+                        </button>
+                      )}
+                      <button onClick={() => setDeleteConfirm(bill)} className="p-1.5 text-rose-400/50 hover:text-rose-400" title="Delete">
+                        <Trash2 size={15} />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {total > 15 && (
+            <div className="flex items-center justify-between px-5 py-3 border-t border-white/5">
+              <span className="text-xs text-gray-500">Page {page} of {Math.ceil(total / 15)}</span>
+              <div className="flex gap-2">
+                <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1} className="btn-premium btn-secondary text-xs py-1.5 px-3 disabled:opacity-30">Prev</button>
+                <button onClick={() => setPage(p => p + 1)} disabled={page >= Math.ceil(total / 15)} className="btn-premium btn-secondary text-xs py-1.5 px-3 disabled:opacity-30">Next</button>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Create Dialog */}
+      <Dialog open={showCreate} onOpenChange={setShowCreate}>
+        <DialogContent className="bg-void border-white/10 max-w-3xl max-h-[92vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="font-display text-white">New Purchase Bill</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleCreate} className="space-y-4">
+            {/* Vendor Info */}
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-gray-400 text-xs">Vendor Name *</Label>
+                <Input className="input-premium mt-1" value={form.vendor_name} onChange={e => setForm({...form, vendor_name: e.target.value})} required />
+              </div>
+              <div>
+                <Label className="text-gray-400 text-xs">Vendor Phone</Label>
+                <Input className="input-premium mt-1" value={form.vendor_phone} onChange={e => setForm({...form, vendor_phone: e.target.value})} />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-gray-400 text-xs">Vendor GSTIN</Label>
+                <Input className="input-premium mt-1" placeholder="22AAAAA0000A1Z5" value={form.vendor_gstin}
+                  onChange={e => setForm({...form, vendor_gstin: e.target.value.toUpperCase()})} maxLength={15} />
+              </div>
+              <div>
+                <Label className="text-gray-400 text-xs">Vendor State <span className="text-gold-400">(for GST)</span></Label>
+                <select className="input-premium mt-1 w-full" value={form.vendor_state} onChange={e => setForm({...form, vendor_state: e.target.value})}>
+                  <option value="">Select vendor state</option>
+                  {INDIAN_STATES.map(s => <option key={s} value={s}>{s}</option>)}
+                </select>
+              </div>
+            </div>
+
+            {/* Dates + Tax */}
+            <div className="grid grid-cols-4 gap-3">
+              <div>
+                <Label className="text-gray-400 text-xs">Bill Date *</Label>
+                <Input type="date" className="input-premium mt-1" value={form.bill_date} onChange={e => setForm({...form, bill_date: e.target.value})} required />
+              </div>
+              <div>
+                <Label className="text-gray-400 text-xs">Due Date</Label>
+                <Input type="date" className="input-premium mt-1" value={form.due_date} onChange={e => setForm({...form, due_date: e.target.value})} />
+              </div>
+              <div>
+                <Label className="text-gray-400 text-xs">Tax Rate (%)</Label>
+                <Input type="number" min="0" className="input-premium mt-1" value={form.tax_rate} onChange={e => setForm({...form, tax_rate: parseFloat(e.target.value) || 0})} />
+              </div>
+              <div>
+                <Label className="text-gray-400 text-xs">Discount (₹)</Label>
+                <Input type="number" min="0" className="input-premium mt-1" value={form.discount_amount} onChange={e => setForm({...form, discount_amount: parseFloat(e.target.value) || 0})} />
+              </div>
+            </div>
+
+            {/* Items */}
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <Label className="text-gray-400 text-xs">Items *</Label>
+                <button type="button" onClick={() => setForm({...form, items: [...form.items, { ...emptyItem }]})}
+                  className="text-xs text-gold-400 hover:text-gold-300">+ Add Item</button>
+              </div>
+              <div className="space-y-2">
+                <div className="grid grid-cols-12 gap-2 text-[10px] text-gray-600 uppercase tracking-wider px-1">
+                  <span className="col-span-4">Description</span>
+                  <span className="col-span-2">HSN</span>
+                  <span className="col-span-1">Qty</span>
+                  <span className="col-span-2">Cost Price</span>
+                  <span className="col-span-2">Stock+</span>
+                  <span className="col-span-1"></span>
+                </div>
+                {form.items.map((item, idx) => (
+                  <div key={idx} className="grid grid-cols-12 gap-2 items-center">
+                    <div className="col-span-4">
+                      <ProductSearch idx={idx} item={item} />
+                    </div>
+                    <div className="col-span-2">
+                      <Input placeholder="HSN" className="input-premium text-sm" value={item.hsn_code}
+                        onChange={e => updateItem(idx, 'hsn_code', e.target.value)} />
+                    </div>
+                    <div className="col-span-1">
+                      <Input type="number" min="0" className="input-premium text-sm" value={item.quantity}
+                        onChange={e => updateItem(idx, 'quantity', e.target.value)} />
+                    </div>
+                    <div className="col-span-2">
+                      <Input type="number" min="0" className="input-premium text-sm" value={item.unit_price}
+                        onChange={e => updateItem(idx, 'unit_price', e.target.value)} />
+                    </div>
+                    <div className="col-span-2 flex items-center gap-1.5">
+                      <input type="checkbox" checked={item.update_stock && !!item.product_id}
+                        disabled={!item.product_id}
+                        onChange={e => updateItem(idx, 'update_stock', e.target.checked)}
+                        className="w-3.5 h-3.5" />
+                      <span className="text-[10px] text-gray-500">{item.product_id ? 'Update stock' : 'No product linked'}</span>
+                    </div>
+                    <div className="col-span-1 text-center">
+                      {form.items.length > 1 && (
+                        <button type="button" onClick={() => setForm({...form, items: form.items.filter((_, i) => i !== idx)})}
+                          className="text-rose-400/50 hover:text-rose-400 p-1"><Trash2 size={13} /></button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Totals */}
+            <div className="border-t border-white/5 pt-3 space-y-1 text-sm">
+              <div className="flex justify-between text-gray-400"><span>Subtotal</span><span>{fmt(subtotal)}</span></div>
+              {form.tax_rate > 0 && <div className="flex justify-between text-gray-400"><span>Tax ({form.tax_rate}%)</span><span>{fmt(taxAmount)}</span></div>}
+              {form.discount_amount > 0 && <div className="flex justify-between text-rose-400"><span>Discount</span><span>-{fmt(form.discount_amount)}</span></div>}
+              <div className="flex justify-between text-white font-semibold text-base pt-2 border-t border-white/5">
+                <span>Total</span><span className="text-gold-400">{fmt(totalAmount)}</span>
+              </div>
+            </div>
+
+            <div>
+              <Label className="text-gray-400 text-xs">Notes</Label>
+              <textarea className="input-premium mt-1 h-16 resize-none w-full" value={form.notes}
+                onChange={e => setForm({...form, notes: e.target.value})} />
+            </div>
+
+            <DialogFooter>
+              <button type="button" onClick={() => setShowCreate(false)} className="btn-premium btn-secondary">Cancel</button>
+              <button type="submit" disabled={creating} className="btn-premium btn-primary">
+                {creating ? 'Creating...' : 'Create Purchase Bill'}
+              </button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Detail Dialog */}
+      <Dialog open={!!showDetail} onOpenChange={() => { setShowDetail(null); setDetailData(null); }}>
+        <DialogContent className="bg-void border-white/10 max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="font-display text-white">
+              {showDetail?.bill_number} — {showDetail?.vendor_name}
+            </DialogTitle>
+          </DialogHeader>
+          {detailData ? (
+            <div className="space-y-4">
+              {/* Bill info */}
+              <div className="grid grid-cols-3 gap-3">
+                {[
+                  { label: 'Total', value: fmt(detailData.bill?.total_amount), color: 'text-gold-400' },
+                  { label: 'Paid', value: fmt(detailData.bill?.amount_paid), color: 'text-emerald-400' },
+                  { label: 'Balance', value: fmt(detailData.bill?.balance_due), color: 'text-rose-400' },
+                ].map(s => (
+                  <div key={s.label} className="glass-card rounded-xl p-3">
+                    <p className="text-xs text-gray-500">{s.label}</p>
+                    <p className={`text-lg font-bold ${s.color}`}>{s.value}</p>
+                  </div>
+                ))}
+              </div>
+
+              {/* GST breakdown */}
+              {(detailData.bill?.cgst_amount > 0 || detailData.bill?.igst_amount > 0) && (
+                <div className="glass-card rounded-xl p-3 border border-blue-500/20">
+                  <p className="text-xs text-blue-400 font-semibold mb-2">Input Tax Credit (ITC)</p>
+                  <div className="flex gap-6 text-sm">
+                    {detailData.bill?.cgst_amount > 0 && (
+                      <>
+                        <div><p className="text-[10px] text-gray-500">CGST {detailData.bill.cgst_rate}%</p><p className="font-bold text-blue-400">{fmt(detailData.bill.cgst_amount)}</p></div>
+                        <div><p className="text-[10px] text-gray-500">SGST {detailData.bill.sgst_rate}%</p><p className="font-bold text-blue-400">{fmt(detailData.bill.sgst_amount)}</p></div>
+                      </>
+                    )}
+                    {detailData.bill?.igst_amount > 0 && (
+                      <div><p className="text-[10px] text-gray-500">IGST {detailData.bill.igst_rate}%</p><p className="font-bold text-purple-400">{fmt(detailData.bill.igst_amount)}</p></div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Items */}
+              <div>
+                <p className="text-xs text-gray-500 uppercase tracking-wider mb-2">Items</p>
+                <div className="glass-card rounded-xl overflow-hidden">
+                  <table className="w-full text-xs">
+                    <thead><tr className="bg-white/[0.02] border-b border-white/5">
+                      <th className="px-3 py-2 text-left text-gray-500">Description</th>
+                      <th className="px-3 py-2 text-center text-gray-500">HSN</th>
+                      <th className="px-3 py-2 text-center text-gray-500">Qty</th>
+                      <th className="px-3 py-2 text-right text-gray-500">Rate</th>
+                      <th className="px-3 py-2 text-right text-gray-500">Total</th>
+                    </tr></thead>
+                    <tbody>
+                      {detailData.items?.map((item, i) => (
+                        <tr key={i} className="border-b border-white/[0.03]">
+                          <td className="px-3 py-2 text-white">{item.description}</td>
+                          <td className="px-3 py-2 text-center text-gray-400">{item.hsn_code || '—'}</td>
+                          <td className="px-3 py-2 text-center text-gray-400">{item.quantity}</td>
+                          <td className="px-3 py-2 text-right text-gray-400">{fmt(item.unit_price)}</td>
+                          <td className="px-3 py-2 text-right font-bold text-gold-400">{fmt(item.total)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* Payments */}
+              {detailData.payments?.length > 0 && (
+                <div>
+                  <p className="text-xs text-gray-500 uppercase tracking-wider mb-2">Payment History</p>
+                  <div className="glass-card rounded-xl overflow-hidden divide-y divide-white/[0.03]">
+                    {detailData.payments.map(p => (
+                      <div key={p.id} className="flex justify-between items-center px-4 py-2.5">
+                        <div>
+                          <p className="text-xs text-white">{fmtDate(p.payment_date)} · {p.payment_method}</p>
+                          {p.reference && <p className="text-[10px] text-gray-500">{p.reference}</p>}
+                        </div>
+                        <p className="text-sm font-bold text-emerald-400">+{fmt(p.amount)}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {detailData.bill?.status !== 'paid' && (
+                <button onClick={() => { setShowPayment(showDetail); setPayForm({ amount: Number(detailData.bill?.balance_due) || 0, payment_date: today, payment_method: 'cash', reference: '', notes: '' }); }}
+                  className="btn-premium btn-primary w-full flex items-center justify-center gap-2">
+                  <CheckCircle size={15} /> Record Payment
+                </button>
+              )}
+            </div>
+          ) : (
+            <div className="flex items-center justify-center py-12">
+              <div className="w-6 h-6 border-2 border-gold-500 border-t-transparent rounded-full animate-spin" />
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Payment Dialog */}
+      <Dialog open={!!showPayment} onOpenChange={() => setShowPayment(null)}>
+        <DialogContent className="bg-void border-white/10 max-w-sm">
+          <DialogHeader><DialogTitle className="font-display text-white">Record Payment</DialogTitle></DialogHeader>
+          {showPayment && (
+            <form onSubmit={handlePayment} className="space-y-4">
+              <div className="p-3 rounded-xl bg-white/[0.03] border border-white/5">
+                <p className="text-sm text-white font-medium">{showPayment.vendor_name}</p>
+                <p className="text-xs text-gray-500">{showPayment.bill_number}</p>
+                <p className="text-xs text-gray-500 mt-1">Balance: <span className="text-gold-400 font-semibold">{fmt(showPayment.balance_due)}</span></p>
+              </div>
+              <div>
+                <Label className="text-gray-400 text-xs">Amount *</Label>
+                <Input type="number" min="1" step="0.01" className="input-premium mt-1" value={payForm.amount}
+                  onChange={e => setPayForm({...payForm, amount: parseFloat(e.target.value) || 0})} required />
+              </div>
+              <div>
+                <Label className="text-gray-400 text-xs">Payment Date *</Label>
+                <Input type="date" className="input-premium mt-1" value={payForm.payment_date}
+                  onChange={e => setPayForm({...payForm, payment_date: e.target.value})} required />
+              </div>
+              <div>
+                <Label className="text-gray-400 text-xs">Payment Method</Label>
+                <select className="input-premium mt-1 w-full" value={payForm.payment_method}
+                  onChange={e => setPayForm({...payForm, payment_method: e.target.value})}>
+                  <option value="cash">Cash</option>
+                  <option value="bank_transfer">Bank Transfer</option>
+                  <option value="upi">UPI</option>
+                  <option value="cheque">Cheque</option>
+                </select>
+              </div>
+              <div>
+                <Label className="text-gray-400 text-xs">Reference</Label>
+                <Input className="input-premium mt-1" placeholder="UPI ref, cheque no." value={payForm.reference}
+                  onChange={e => setPayForm({...payForm, reference: e.target.value})} />
+              </div>
+              <DialogFooter>
+                <button type="button" onClick={() => setShowPayment(null)} className="btn-premium btn-secondary">Cancel</button>
+                <button type="submit" disabled={paying} className="btn-premium btn-primary">{paying ? 'Recording...' : 'Record Payment'}</button>
+              </DialogFooter>
+            </form>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirm */}
+      <Dialog open={!!deleteConfirm} onOpenChange={() => setDeleteConfirm(null)}>
+        <DialogContent className="bg-void border-white/10 max-w-sm">
+          <DialogHeader><DialogTitle className="font-display text-white text-lg">Delete Bill?</DialogTitle></DialogHeader>
+          {deleteConfirm && (
+            <div className="space-y-4">
+              <div className="p-4 rounded-xl bg-rose-500/5 border border-rose-500/20">
+                <p className="text-sm text-white font-medium">{deleteConfirm.bill_number}</p>
+                <p className="text-xs text-gray-400 mt-1">{deleteConfirm.vendor_name} · {fmt(deleteConfirm.total_amount)}</p>
+              </div>
+              <p className="text-sm text-gray-400">This action <span className="text-rose-400 font-semibold">cannot be undone</span>. Stock changes will NOT be reversed.</p>
+              <DialogFooter>
+                <button onClick={() => setDeleteConfirm(null)} className="btn-premium btn-secondary">Cancel</button>
+                <button onClick={handleDelete} disabled={deleting}
+                  className="btn-premium px-4 py-2 rounded-xl text-sm font-medium bg-rose-500/20 border border-rose-500/30 text-rose-400 hover:bg-rose-500/30 disabled:opacity-50">
+                  {deleting ? 'Deleting...' : 'Yes, Delete'}
+                </button>
+              </DialogFooter>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+    </DashboardLayout>
+  );
+}
