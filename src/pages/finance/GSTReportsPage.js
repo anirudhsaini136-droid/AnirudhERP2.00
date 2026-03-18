@@ -343,6 +343,8 @@ export default function GSTReportsPage() {
               </div>
             </div>
         )}
+          </>
+        )}
 
         {!summary && !loading && (
           <div className="glass-card rounded-2xl py-16 text-center">
