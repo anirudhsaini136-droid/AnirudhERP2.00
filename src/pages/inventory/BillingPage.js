@@ -469,6 +469,14 @@ export default function BillingPage() {
               <Input className="input-premium text-sm" placeholder="Phone (for WhatsApp)" value={clientPhone} onChange={e => setClientPhone(e.target.value)} />
               <Input className="input-premium text-sm" placeholder="Email (optional)" value={clientEmail} onChange={e => setClientEmail(e.target.value)} />
               <Input className="input-premium text-sm" placeholder="GSTIN (optional)" value={clientGstin} onChange={e => setClientGstin(e.target.value.toUpperCase())} maxLength={15} />
+              <select
+                className="input-premium text-sm w-full"
+                value={clientState}
+                onChange={e => setClientState(e.target.value)}
+              >
+                <option value="">Buyer State (for GST)</option>
+                {INDIAN_STATES_BILL.map(s => <option key={s} value={s}>{s}</option>)}
+              </select>
             </div>
 
             {/* Cart items with editable price */}
