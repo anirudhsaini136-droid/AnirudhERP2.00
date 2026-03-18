@@ -38,7 +38,7 @@ export default function GSTReportsPage() {
       const [sumRes, gstr1Res, purRes] = await Promise.all([
         api.get(`/finance/gst/summary?start_date=${startDate}&end_date=${endDate}`),
         api.get(`/finance/gst/gstr1?start_date=${startDate}&end_date=${endDate}`),
-        api.get(`/purchases/summary?start_date=${startDate}&end_date=${endDate}`)
+        api.get(`/purchases/itc/summary?start_date=${startDate}&end_date=${endDate}`).catch(() => ({ data: null }))
       ]);
       setSummary(sumRes.data);
       setGstr1(gstr1Res.data);
