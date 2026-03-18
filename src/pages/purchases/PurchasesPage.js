@@ -28,6 +28,61 @@ const STATUS_COLORS = {
 
 const emptyItem = { description: '', hsn_code: '', quantity: 1, unit_price: 0, product_id: null, update_stock: true };
 
+// ── Defined OUTSIDE component to prevent remount on re-render ──
+function ProductSearch({ idx, description, api, onDescriptionChange, onSelect }) {
+  const [q, setQ] = useState(description || '');
+  const [results, setResults] = useState([]);
+  const [show, setShow] = useState(false);
+  const timer = useRef(null);
+  const ref = useRef(null);
+
+  useEffect(() => { setQ(description || ''); }, [description]);
+
+  useEffect(() => {
+    const h = (e) => { if (ref.current && !ref.current.contains(e.target)) setShow(false); };
+    document.addEventListener('mousedown', h);
+    return () => document.removeEventListener('mousedown', h);
+  }, []);
+
+  const handleChange = (val) => {
+    setQ(val);
+    onDescriptionChange(val);
+    if (timer.current) clearTimeout(timer.current);
+    if (val.length < 1) { setResults([]); setShow(false); return; }
+    timer.current = setTimeout(async () => {
+      try {
+        const res = await api.get(`/inventory/products?search=${encodeURIComponent(val)}&limit=6`);
+        setResults(res.data.products || []);
+        setShow((res.data.products || []).length > 0);
+      } catch { setResults([]); }
+    }, 250);
+  };
+
+  return (
+    <div ref={ref} style={{ position: 'relative' }}>
+      <input className="input-premium text-sm w-full" placeholder="Description / product *"
+        value={q} onChange={e => handleChange(e.target.value)}
+        onFocus={() => q.length >= 1 && results.length > 0 && setShow(true)} autoComplete="off" />
+      {show && results.length > 0 && (
+        <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 999, background: '#0d0d14', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, marginTop: 4, overflow: 'hidden', boxShadow: '0 8px 32px rgba(0,0,0,0.5)' }}>
+          {results.map(p => (
+            <button key={p.id} type="button" onMouseDown={() => { setShow(false); setQ(p.name); onSelect(p); }}
+              style={{ width: '100%', textAlign: 'left', padding: '8px 12px', background: 'transparent', border: 'none', cursor: 'pointer', borderBottom: '1px solid rgba(255,255,255,0.04)', display: 'flex', justifyContent: 'space-between' }}
+              onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.05)'}
+              onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+              <div>
+                <p style={{ color: '#f9fafb', fontSize: 13, fontWeight: 500, margin: 0 }}>{p.name}</p>
+                <p style={{ color: '#6b7280', fontSize: 11, margin: 0 }}>Cost: ₹{p.cost_price || 0} · Stock: {p.current_stock}</p>
+              </div>
+              <span style={{ color: '#D4AF37', fontSize: 12, flexShrink: 0, marginLeft: 8 }}>₹{p.unit_price}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function PurchasesPage() {
   const { api } = useAuth();
   const [bills, setBills] = useState([]);
@@ -159,67 +214,6 @@ export default function PurchasesPage() {
       toast.error(e.response?.data?.detail || 'Failed to delete');
     }
     setDeleting(false);
-  };
-
-  // Product search for items
-  const ProductSearch = ({ idx, item }) => {
-    const [q, setQ] = useState(item.description || '');
-    const [results, setResults] = useState([]);
-    const [show, setShow] = useState(false);
-    const timer = useRef(null);
-    const ref = useRef(null);
-
-    useEffect(() => {
-      const h = (e) => { if (ref.current && !ref.current.contains(e.target)) setShow(false); };
-      document.addEventListener('mousedown', h);
-      return () => document.removeEventListener('mousedown', h);
-    }, []);
-
-    const handleChange = (val) => {
-      setQ(val);
-      updateItem(idx, 'description', val);
-      if (timer.current) clearTimeout(timer.current);
-      if (val.length < 1) { setResults([]); setShow(false); return; }
-      timer.current = setTimeout(async () => {
-        try {
-          const res = await api.get(`/inventory/products?search=${encodeURIComponent(val)}&limit=6`);
-          setResults(res.data.products || []);
-          setShow((res.data.products || []).length > 0);
-        } catch { setResults([]); }
-      }, 250);
-    };
-
-    const select = (p) => {
-      setQ(p.name);
-      setShow(false);
-      const items = [...form.items];
-      items[idx] = { ...items[idx], description: p.name, unit_price: p.cost_price || p.unit_price, product_id: p.id, hsn_code: p.hsn_code || items[idx].hsn_code, update_stock: true };
-      setForm({ ...form, items });
-    };
-
-    return (
-      <div ref={ref} style={{ position: 'relative' }}>
-        <input className="input-premium text-sm w-full" placeholder="Description / product *"
-          value={q} onChange={e => handleChange(e.target.value)}
-          onFocus={() => q.length >= 1 && results.length > 0 && setShow(true)} autoComplete="off" />
-        {show && results.length > 0 && (
-          <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 999, background: '#0d0d14', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, marginTop: 4, overflow: 'hidden', boxShadow: '0 8px 32px rgba(0,0,0,0.5)' }}>
-            {results.map(p => (
-              <button key={p.id} type="button" onMouseDown={() => select(p)}
-                style={{ width: '100%', textAlign: 'left', padding: '8px 12px', background: 'transparent', border: 'none', cursor: 'pointer', borderBottom: '1px solid rgba(255,255,255,0.04)', display: 'flex', justifyContent: 'space-between' }}
-                onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.05)'}
-                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-                <div>
-                  <p style={{ color: '#f9fafb', fontSize: 13, fontWeight: 500, margin: 0 }}>{p.name}</p>
-                  <p style={{ color: '#6b7280', fontSize: 11, margin: 0 }}>Cost: ₹{p.cost_price || 0} · Stock: {p.current_stock}</p>
-                </div>
-                <span style={{ color: '#D4AF37', fontSize: 12, flexShrink: 0, marginLeft: 8 }}>₹{p.unit_price}</span>
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
-    );
   };
 
   return (
@@ -424,7 +418,17 @@ export default function PurchasesPage() {
                 {form.items.map((item, idx) => (
                   <div key={idx} className="grid grid-cols-12 gap-2 items-center">
                     <div className="col-span-4">
-                      <ProductSearch idx={idx} item={item} />
+                      <ProductSearch
+                        idx={idx}
+                        description={item.description}
+                        api={api}
+                        onDescriptionChange={(val) => updateItem(idx, 'description', val)}
+                        onSelect={(p) => {
+                          const items = [...form.items];
+                          items[idx] = { ...items[idx], description: p.name, unit_price: p.cost_price || p.unit_price, product_id: p.id, hsn_code: p.hsn_code || items[idx].hsn_code, update_stock: true };
+                          setForm({ ...form, items });
+                        }}
+                      />
                     </div>
                     <div className="col-span-2">
                       <Input placeholder="HSN" className="input-premium text-sm" value={item.hsn_code}
