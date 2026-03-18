@@ -34,6 +34,8 @@ function Toggle({ value, onChange, label, sublabel, color = 'gold' }) {
   );
 }
 
+const INDIAN_STATES_BILL = ['Andhra Pradesh','Arunachal Pradesh','Assam','Bihar','Chhattisgarh','Goa','Gujarat','Haryana','Himachal Pradesh','Jharkhand','Karnataka','Kerala','Madhya Pradesh','Maharashtra','Manipur','Meghalaya','Mizoram','Nagaland','Odisha','Punjab','Rajasthan','Sikkim','Tamil Nadu','Telangana','Tripura','Uttar Pradesh','Uttarakhand','West Bengal','Delhi'];
+
 export default function BillingPage() {
   const { api } = useAuth();
   const navigate = useNavigate();
@@ -45,6 +47,7 @@ export default function BillingPage() {
   const [clientPhone, setClientPhone] = useState('');
   const [clientEmail, setClientEmail] = useState('');
   const [clientGstin, setClientGstin] = useState('');
+  const [clientState, setClientState] = useState('');
   const [discount, setDiscount] = useState(0);
   const [taxRate, setTaxRate] = useState(0);
   const [createInvoice, setCreateInvoice] = useState(false);
@@ -238,6 +241,7 @@ export default function BillingPage() {
         client_name: clientName,
         client_phone: clientPhone,
         client_email: clientEmail,
+        client_state: clientState || null,
         items: billItems,
         create_invoice: createInvoice || sendWhatsApp,
         notes: fullNotes,
