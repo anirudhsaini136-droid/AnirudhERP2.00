@@ -3,7 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import {
   LayoutDashboard, Building2, Users, UserCheck, Calendar, FileText,
-  Receipt, BarChart3, Package, ShoppingCart, Settings, Bell,
+  Receipt, BarChart3, Package, ShoppingCart, Settings, Bell, Truck,
   LogOut, ChevronDown, Menu, X, Clock, Briefcase, CreditCard,
   Shield, Home, FileSpreadsheet, UserCircle, ArrowLeftRight, BookUser,
   IndianRupee
@@ -36,6 +36,7 @@ const NAV_CONFIG = {
       { path: '/finance/expenses', label: 'Expenses', icon: Receipt },
       { path: '/finance/reports', label: 'Reports', icon: BarChart3 },
       { path: '/finance/gst', label: 'GST Reports', icon: IndianRupee },
+      { path: '/purchases', label: 'Purchases', icon: Truck },
       { path: '/inventory', label: 'Inventory', icon: Package },
       { path: '/inventory/billing', label: 'Quick Bill', icon: ShoppingCart },
       { path: '/dashboard/settings', label: 'Settings', icon: Settings },
@@ -62,6 +63,7 @@ const NAV_CONFIG = {
       { path: '/finance/expenses', label: 'Expenses', icon: Receipt },
       { path: '/finance/reports', label: 'Reports', icon: BarChart3 },
       { path: '/finance/gst', label: 'GST Reports', icon: IndianRupee },
+      { path: '/purchases', label: 'Purchases', icon: Truck },
     ]
   },
   inventory_admin: {
@@ -162,6 +164,7 @@ export default function DashboardLayout({ children }) {
             const Icon = item.icon;
             // Highlight GST Reports with a subtle badge
             const isGST = item.path === '/finance/gst';
+            const isPurchases = item.path === '/purchases';
             return (
               <Link
                 key={item.path}
@@ -175,7 +178,7 @@ export default function DashboardLayout({ children }) {
               >
                 <Icon size={18} className={isActive ? 'text-gold-400' : ''} />
                 <span>{item.label}</span>
-                {isGST && !isActive && (
+                {(isGST || isPurchases) && !isActive && (
                   <span className="ml-auto text-[9px] px-1.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 font-semibold">
                     NEW
                   </span>
