@@ -27,17 +27,22 @@ export default function GSTReportsPage() {
   const [summary, setSummary] = useState(null);
   const [gstr1, setGstr1] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [itc, setItc] = useState(null);
   const [activeTab, setActiveTab] = useState('summary');
+
+  const [purchases, setPurchases] = useState(null);
 
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [sumRes, gstr1Res] = await Promise.all([
+      const [sumRes, gstr1Res, purRes] = await Promise.all([
         api.get(`/finance/gst/summary?start_date=${startDate}&end_date=${endDate}`),
-        api.get(`/finance/gst/gstr1?start_date=${startDate}&end_date=${endDate}`)
+        api.get(`/finance/gst/gstr1?start_date=${startDate}&end_date=${endDate}`),
+        api.get(`/purchases/summary?start_date=${startDate}&end_date=${endDate}`)
       ]);
       setSummary(sumRes.data);
       setGstr1(gstr1Res.data);
+      setPurchases(purRes.data);
     } catch {
       toast.error('Failed to load GST data');
     }
@@ -286,39 +291,57 @@ export default function GSTReportsPage() {
               </div>
             )}
 
-            {/* GSTR-3B Summary Box */}
+            {/* ITC Summary */}
+            {itc && (
+              <div className="glass-card rounded-2xl p-5 border border-emerald-500/20">
+                <div className="flex items-center gap-2 mb-4">
+                  <FileText size={16} className="text-emerald-400" />
+                  <h3 className="text-sm font-semibold text-white">Input Tax Credit (ITC) — From Purchases</h3>
+                </div>
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                  {[
+                    { label: 'Total Purchases', value: itc.total_purchases, color: 'text-white' },
+                    { label: 'ITC CGST', value: itc.itc?.cgst, color: 'text-emerald-400' },
+                    { label: 'ITC SGST', value: itc.itc?.sgst, color: 'text-emerald-400' },
+                    { label: 'ITC IGST', value: itc.itc?.igst, color: 'text-emerald-400' },
+                  ].map(c => (
+                    <div key={c.label}>
+                      <p className="text-[10px] text-gray-500 uppercase tracking-wider">{c.label}</p>
+                      <p className={`text-lg font-bold mt-1 ${c.color}`}>{fmt(c.value)}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* GSTR-3B Summary */}
             <div className="glass-card rounded-2xl p-5 border border-gold-500/20">
               <div className="flex items-center gap-2 mb-4">
                 <FileText size={16} className="text-gold-400" />
                 <h3 className="text-sm font-semibold text-white">GSTR-3B Summary</h3>
                 <span className="text-[10px] px-2 py-0.5 rounded-full bg-gold-500/10 text-gold-400 border border-gold-500/20">Share with CA</span>
               </div>
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                <div>
-                  <p className="text-[10px] text-gray-500 uppercase tracking-wider">3.1(a) Outward Taxable Supplies</p>
-                  <p className="text-lg font-bold text-white mt-1">{fmt(s.total_taxable_value)}</p>
-                </div>
-                <div>
-                  <p className="text-[10px] text-gray-500 uppercase tracking-wider">Output CGST</p>
-                  <p className="text-lg font-bold text-blue-400 mt-1">{fmt(s.total_cgst)}</p>
-                </div>
-                <div>
-                  <p className="text-[10px] text-gray-500 uppercase tracking-wider">Output SGST</p>
-                  <p className="text-lg font-bold text-blue-400 mt-1">{fmt(s.total_sgst)}</p>
-                </div>
-                <div>
-                  <p className="text-[10px] text-gray-500 uppercase tracking-wider">Output IGST</p>
-                  <p className="text-lg font-bold text-purple-400 mt-1">{fmt(s.total_igst)}</p>
-                </div>
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+                <div><p className="text-[10px] text-gray-500 uppercase tracking-wider">Outward Taxable</p><p className="text-lg font-bold text-white mt-1">{fmt(s.total_taxable_value)}</p></div>
+                <div><p className="text-[10px] text-gray-500 uppercase tracking-wider">Output Tax</p><p className="text-lg font-bold text-rose-400 mt-1">{fmt(s.total_tax)}</p></div>
+                <div><p className="text-[10px] text-gray-500 uppercase tracking-wider">Total ITC</p><p className="text-lg font-bold text-emerald-400 mt-1">{fmt(itc?.itc?.total || 0)}</p></div>
+                <div><p className="text-[10px] text-gray-500 uppercase tracking-wider">Net GST Payable</p><p className="text-xl font-bold text-gold-400 mt-1">{fmt(Math.max(0, s.total_tax - (itc?.itc?.total || 0)))}</p></div>
               </div>
-              <div className="mt-4 p-3 rounded-xl bg-amber-500/5 border border-amber-500/20">
-                <p className="text-xs text-amber-400">
-                  Net GST Payable = Output Tax ({fmt(s.total_tax)}) − Input Tax Credit (from purchases)
-                  <span className="ml-2 text-gray-500">· Purchase register coming in Phase 2</span>
-                </p>
+              <div className="grid grid-cols-3 gap-3">
+                {[
+                  { label: 'CGST', output: s.total_cgst, itc_val: itc?.itc?.cgst || 0 },
+                  { label: 'SGST', output: s.total_sgst, itc_val: itc?.itc?.sgst || 0 },
+                  { label: 'IGST', output: s.total_igst, itc_val: itc?.itc?.igst || 0 },
+                ].map(row => (
+                  <div key={row.label} className="p-3 rounded-xl bg-white/[0.02] border border-white/5">
+                    <p className="text-xs font-semibold text-gray-400 mb-2">{row.label}</p>
+                    <div className="flex justify-between text-xs"><span className="text-gray-500">Output</span><span className="text-rose-400">{fmt(row.output)}</span></div>
+                    <div className="flex justify-between text-xs mt-1"><span className="text-gray-500">ITC</span><span className="text-emerald-400">-{fmt(row.itc_val)}</span></div>
+                    <div className="flex justify-between text-xs mt-1 pt-1 border-t border-white/5 font-bold"><span className="text-white">Net</span><span className="text-gold-400">{fmt(Math.max(0, row.output - row.itc_val))}</span></div>
+                  </div>
+                ))}
               </div>
             </div>
-          </>
         )}
 
         {!summary && !loading && (
