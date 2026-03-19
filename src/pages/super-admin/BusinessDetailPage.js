@@ -345,7 +345,7 @@ export default function BusinessDetailPage() {
               </div>
               <div>
                 <Label className="text-gray-400 text-xs">Payment Date *</Label>
-                <Input type="date" className="input-premium mt-1" value={extendForm.payment_date} onChange={e => setExtendForm({...extendForm, payment_date: e.target.value})} required />
+                <Input type="date" lang="en-IN" className="input-premium mt-1" value={extendForm.payment_date} onChange={e => setExtendForm({...extendForm, payment_date: e.target.value})} required />
               </div>
             </div>
             <div>
