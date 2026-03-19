@@ -121,7 +121,7 @@ export default function ExpensesPage() {
             <div className="grid grid-cols-2 gap-3">
               <div><Label className="text-gray-400 text-xs">Category *</Label>
                 <select className="input-premium mt-1 w-full" value={form.category} onChange={e => setForm({...form, category: e.target.value})} data-testid="exp-category">{CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}</select></div>
-              <div><Label className="text-gray-400 text-xs">Date *</Label><Input type="date" className="input-premium mt-1" value={form.date} onChange={e => setForm({...form, date: e.target.value})} required /></div>
+              <div><Label className="text-gray-400 text-xs">Date *</Label><Input type="date" lang="en-IN" className="input-premium mt-1" value={form.date} onChange={e => setForm({...form, date: e.target.value})} required /></div>
             </div>
             <div><Label className="text-gray-400 text-xs">Amount (INR) *</Label><Input type="number" min="0" step="0.01" className="input-premium mt-1" value={form.amount} onChange={e => setForm({...form, amount: parseFloat(e.target.value) || 0})} required data-testid="exp-amount" /></div>
             <div><Label className="text-gray-400 text-xs">Description</Label><textarea className="input-premium mt-1 h-20 resize-none" value={form.description} onChange={e => setForm({...form, description: e.target.value})} /></div>
