@@ -509,3 +509,11 @@ h1, h2, h3, h4, h5, h6, .font-display {
     display: contents !important;
   }
 }
+
+/* Force DD/MM/YYYY date format in all date inputs */
+input[type="date"]::-webkit-datetime-edit-fields-wrapper {
+  direction: ltr;
+}
+input[type="date"]::-webkit-datetime-edit-month-field { order: 2; }
+input[type="date"]::-webkit-datetime-edit-day-field { order: 1; }
+input[type="date"]::-webkit-datetime-edit-year-field { order: 3; }
