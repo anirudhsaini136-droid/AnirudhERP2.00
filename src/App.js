@@ -41,6 +41,10 @@ const ROLE_HOMES = {
   hr_admin: '/hr',
   finance_admin: '/finance',
   inventory_admin: '/inventory',
+  // CA portal role(s) can vary by backend; include common aliases to avoid redirect loops.
+  ca_admin: '/ca',
+  ca: '/ca',
+  gst_ca: '/ca',
   staff: '/staff',
 };
 
@@ -55,7 +59,12 @@ function RequireAuth({ children, allowedRoles }) {
   if (loading) return <Spinner />;
   if (!user) return <Navigate to="/login" replace />;
   if (allowedRoles && !allowedRoles.includes(user.role)) {
-    return <Navigate to={ROLE_HOMES[user.role] || '/login'} replace />;
+    // Redirect to the user's closest "home" to avoid blank pages/redirect loops.
+    const role = (user.role || '').toString();
+    const roleHome =
+      ROLE_HOMES[role] ||
+      (role && role.toLowerCase().includes('ca') ? '/ca' : null);
+    return <Navigate to={roleHome || '/login'} replace />;
   }
   return children;
 }
@@ -63,7 +72,13 @@ function RequireAuth({ children, allowedRoles }) {
 function RedirectAuth() {
   const { user, loading } = useAuth();
   if (loading) return <Spinner />;
-  if (user) return <Navigate to={ROLE_HOMES[user.role] || '/dashboard'} replace />;
+  if (user) {
+    const role = (user.role || '').toString();
+    const roleHome =
+      ROLE_HOMES[role] ||
+      (role && role.toLowerCase().includes('ca') ? '/ca' : null);
+    return <Navigate to={roleHome || '/dashboard'} replace />;
+  }
   return <LoginPage />;
 }
 
