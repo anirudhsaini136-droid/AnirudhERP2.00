@@ -21,6 +21,33 @@ const MONTHS = [
   'July','August','September','October','November','December'
 ];
 
+
+function DateInput({ value, onChange, className, required, placeholder }) {
+  const toDisplay = (v) => {
+    if (!v) return '';
+    const parts = v.split('-');
+    if (parts.length === 3) return `${parts[2]}/${parts[1]}/${parts[0]}`;
+    return v;
+  };
+  const [display, setDisplay] = React.useState(() => toDisplay(value));
+  React.useEffect(() => { setDisplay(toDisplay(value)); }, [value]);
+  const handleChange = (e) => {
+    let v = e.target.value.replace(/[^0-9/]/g, '');
+    if (v.length === 2 && display.length === 1) v += '/';
+    if (v.length === 5 && display.length === 4) v += '/';
+    if (v.length > 10) v = v.slice(0, 10);
+    setDisplay(v);
+    if (v.length === 10) {
+      const [d, m, y] = v.split('/');
+      if (d && m && y && y.length === 4)
+        onChange({ target: { value: `${y}-${m.padStart(2,'0')}-${d.padStart(2,'0')}` } });
+    } else if (v === '') onChange({ target: { value: '' } });
+  };
+  return <input type="text" className={className} value={display}
+    onChange={handleChange} placeholder={placeholder || "DD/MM/YYYY"}
+    maxLength={10} required={required} />;
+}
+
 export default function GSTReportsPage() {
   const { api } = useAuth();
   const [startDate, setStartDate] = useState(() => {
@@ -122,13 +149,11 @@ export default function GSTReportsPage() {
         <div className="glass-card rounded-2xl p-4 flex flex-wrap items-end gap-4">
           <div>
             <label className="text-xs text-gray-500 block mb-1">From Date</label>
-            <input type="date" lang="en-IN" className="input-premium text-sm h-9" value={startDate}
-              onChange={e => setStartDate(e.target.value)} />
+            <DateInput className="input-premium text-sm h-9" value={startDate} onChange={e => setStartDate(e.target.value)} />
           </div>
           <div>
             <label className="text-xs text-gray-500 block mb-1">To Date</label>
-            <input type="date" lang="en-IN" className="input-premium text-sm h-9" value={endDate}
-              onChange={e => setEndDate(e.target.value)} />
+            <DateInput className="input-premium text-sm h-9" value={endDate} onChange={e => setEndDate(e.target.value)} />
           </div>
           {/* Quick month selectors */}
           <div className="flex flex-wrap gap-1.5">
