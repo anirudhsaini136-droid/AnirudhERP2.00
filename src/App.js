@@ -41,10 +41,6 @@ const ROLE_HOMES = {
   hr_admin: '/hr',
   finance_admin: '/finance',
   inventory_admin: '/inventory',
-  // CA portal role(s) can vary by backend; include common aliases to avoid redirect loops.
-  ca_admin: '/ca',
-  ca: '/ca',
-  gst_ca: '/ca',
   staff: '/staff',
 };
 
@@ -59,12 +55,7 @@ function RequireAuth({ children, allowedRoles }) {
   if (loading) return <Spinner />;
   if (!user) return <Navigate to="/login" replace />;
   if (allowedRoles && !allowedRoles.includes(user.role)) {
-    // Redirect to the user's closest "home" to avoid blank pages/redirect loops.
-    const role = (user.role || '').toString();
-    const roleHome =
-      ROLE_HOMES[role] ||
-      (role && role.toLowerCase().includes('ca') ? '/ca' : null);
-    return <Navigate to={roleHome || '/login'} replace />;
+    return <Navigate to={ROLE_HOMES[user.role] || '/login'} replace />;
   }
   return children;
 }
@@ -72,13 +63,7 @@ function RequireAuth({ children, allowedRoles }) {
 function RedirectAuth() {
   const { user, loading } = useAuth();
   if (loading) return <Spinner />;
-  if (user) {
-    const role = (user.role || '').toString();
-    const roleHome =
-      ROLE_HOMES[role] ||
-      (role && role.toLowerCase().includes('ca') ? '/ca' : null);
-    return <Navigate to={roleHome || '/dashboard'} replace />;
-  }
+  if (user) return <Navigate to={ROLE_HOMES[user.role] || '/dashboard'} replace />;
   return <LoginPage />;
 }
 
@@ -108,13 +93,13 @@ function AppRoutes() {
       <Route path="/hr/payroll" element={<RequireAuth allowedRoles={['hr_admin', 'business_owner']}><PayrollPage /></RequireAuth>} />
 
       {/* Finance */}
-      <Route path="/finance" element={<RequireAuth allowedRoles={['finance_admin', 'business_owner']}><FinanceDashboard /></RequireAuth>} />
-      <Route path="/finance/invoices" element={<RequireAuth allowedRoles={['finance_admin', 'business_owner']}><InvoicesPage /></RequireAuth>} />
-      <Route path="/finance/invoices/:id" element={<RequireAuth allowedRoles={['finance_admin', 'business_owner']}><InvoiceViewPage /></RequireAuth>} />
+      <Route path="/finance" element={<RequireAuth allowedRoles={['finance_admin', 'business_owner', 'ca_admin']}><FinanceDashboard /></RequireAuth>} />
+      <Route path="/finance/invoices" element={<RequireAuth allowedRoles={['finance_admin', 'business_owner', 'ca_admin']}><InvoicesPage /></RequireAuth>} />
+      <Route path="/finance/invoices/:id" element={<RequireAuth allowedRoles={['finance_admin', 'business_owner', 'ca_admin']}><InvoiceViewPage /></RequireAuth>} />
       <Route path="/finance/expenses" element={<RequireAuth allowedRoles={['finance_admin', 'business_owner']}><ExpensesPage /></RequireAuth>} />
       <Route path="/finance/reports" element={<RequireAuth allowedRoles={['finance_admin', 'business_owner']}><ReportsPage /></RequireAuth>} />
-      <Route path="/finance/gst" element={<RequireAuth allowedRoles={['finance_admin', 'business_owner']}><GSTReportsPage /></RequireAuth>} />
-      <Route path="/purchases" element={<RequireAuth allowedRoles={['finance_admin', 'business_owner', 'inventory_admin']}><PurchasesPage /></RequireAuth>} />
+      <Route path="/finance/gst" element={<RequireAuth allowedRoles={['finance_admin', 'business_owner', 'ca_admin']}><GSTReportsPage /></RequireAuth>} />
+      <Route path="/purchases" element={<RequireAuth allowedRoles={['finance_admin', 'business_owner', 'inventory_admin', 'ca_admin']}><PurchasesPage /></RequireAuth>} />
       <Route path="/ca" element={<RequireAuth allowedRoles={['ca_admin', 'business_owner', 'finance_admin']}><CAPortalPage /></RequireAuth>} />
       <Route path="/finance/customers" element={<RequireAuth allowedRoles={['finance_admin', 'business_owner']}><CustomersLedgerPage /></RequireAuth>} />
       <Route path="/finance/customers/:clientName" element={<RequireAuth allowedRoles={['finance_admin', 'business_owner']}><CustomerLedgerDetailPage /></RequireAuth>} />
