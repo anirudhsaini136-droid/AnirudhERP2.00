@@ -20,6 +20,33 @@ const STATUS_COLORS = {
   cancelled: 'text-gray-400 bg-gray-500/10 border-gray-500/20'
 };
 
+
+function DateInput({ value, onChange, className, required, placeholder }) {
+  const toDisplay = (v) => {
+    if (!v) return '';
+    const parts = v.split('-');
+    if (parts.length === 3) return `${parts[2]}/${parts[1]}/${parts[0]}`;
+    return v;
+  };
+  const [display, setDisplay] = React.useState(() => toDisplay(value));
+  React.useEffect(() => { setDisplay(toDisplay(value)); }, [value]);
+  const handleChange = (e) => {
+    let v = e.target.value.replace(/[^0-9/]/g, '');
+    if (v.length === 2 && display.length === 1) v += '/';
+    if (v.length === 5 && display.length === 4) v += '/';
+    if (v.length > 10) v = v.slice(0, 10);
+    setDisplay(v);
+    if (v.length === 10) {
+      const [d, m, y] = v.split('/');
+      if (d && m && y && y.length === 4)
+        onChange({ target: { value: `${y}-${m.padStart(2,'0')}-${d.padStart(2,'0')}` } });
+    } else if (v === '') onChange({ target: { value: '' } });
+  };
+  return <input type="text" className={className} value={display}
+    onChange={handleChange} placeholder={placeholder || "DD/MM/YYYY"}
+    maxLength={10} required={required} />;
+}
+
 export default function CustomerLedgerDetailPage() {
   const { clientName } = useParams();
   const { api } = useAuth();
