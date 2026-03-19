@@ -63,7 +63,7 @@ export default function HRDashboard() {
                 <div key={i} className="flex items-center gap-3 py-2 border-b border-white/[0.03] last:border-0">
                   <div className="w-8 h-8 bg-blue-500/10 rounded-full flex items-center justify-center text-blue-400 text-xs font-bold">{e.first_name?.[0]}{e.last_name?.[0]}</div>
                   <div className="flex-1"><p className="text-sm text-white">{e.first_name} {e.last_name}</p><p className="text-xs text-gray-500">{e.department} - {e.designation}</p></div>
-                  <span className="text-xs text-gray-500">{e.date_joined ? new Date(e.date_joined).toLocaleDateString() : ''}</span>
+                  <span className="text-xs text-gray-500">{e.date_joined ? new Date(e.date_joined).toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' }) : ''}</span>
                 </div>
               ))}
             </div>
