@@ -69,7 +69,7 @@ export default function PayrollPage() {
                   <td className="text-sm text-gray-400">{r.employee_count || '-'}</td>
                   <td className="text-sm text-gold-400 font-semibold">{fmt(r.total_amount)}</td>
                   <td><span className={`badge-premium ${STATUS_COLORS[r.status]}`}>{r.status}</span></td>
-                  <td className="text-sm text-gray-500">{r.processed_at ? new Date(r.processed_at).toLocaleDateString() : '-'}</td>
+                  <td className="text-sm text-gray-500">{r.processed_at ? new Date(r.processed_at).toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '-'}</td>
                   <td className="text-right">
                     <button onClick={() => viewPayrollDetails(r.id)} className="text-gold-400 hover:text-gold-300 text-sm" data-testid={`view-payroll-${r.id}`}><Eye size={15} /></button>
                   </td>
