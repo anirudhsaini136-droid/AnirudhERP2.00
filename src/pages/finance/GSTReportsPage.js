@@ -11,8 +11,9 @@ const getMonthRange = (offset = 0) => {
   const now = new Date();
   const y = now.getFullYear();
   const m = now.getMonth() + offset;
-  const start = new Date(y, m, 1).toISOString().split('T')[0];
-  const end = new Date(y, m + 1, 0).toISOString().split('T')[0];
+  const pad = n => String(n).padStart(2, '0');
+  const start = `${y}-${pad(m + 1)}-01`;
+  const end = `${y}-${pad(m + 1)}-${pad(new Date(y, m + 1, 0).getDate())}`;
   return { start, end };
 };
 
@@ -25,11 +26,14 @@ export default function GSTReportsPage() {
   const { api } = useAuth();
   const [startDate, setStartDate] = useState(() => {
     const now = new Date();
-    return new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
+    const y = now.getFullYear(), m = now.getMonth();
+    return `${y}-${String(m + 1).padStart(2, '0')}-01`;
   });
   const [endDate, setEndDate] = useState(() => {
     const now = new Date();
-    return new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0];
+    const y = now.getFullYear(), m = now.getMonth();
+    const lastDay = new Date(y, m + 1, 0).getDate();
+    return `${y}-${String(m + 1).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
   });
   const [summary, setSummary] = useState(null);
   const [gstr1, setGstr1] = useState(null);
@@ -140,8 +144,10 @@ export default function GSTReportsPage() {
               const now = new Date();
               const y = now.getFullYear();
               const m = now.getMonth() + offset;
-              const s = new Date(y, m, 1).toISOString().split('T')[0];
-              const e = new Date(y, m + 1, 0).toISOString().split('T')[0];
+              const pad = n => String(n).padStart(2, '0');
+              const s = `${y}-${pad(m + 1)}-01`;
+              const lastDay = new Date(y, m + 1, 0).getDate();
+              const e = `${y}-${pad(m + 1)}-${pad(lastDay)}`;
               return (
                 <button key={offset} onClick={() => { setStartDate(s); setEndDate(e); }}
                   className="text-xs px-3 py-1.5 rounded-lg border border-white/10 text-gray-400 hover:text-white hover:border-white/20 transition-all">
