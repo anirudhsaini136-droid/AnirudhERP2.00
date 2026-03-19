@@ -102,7 +102,7 @@ export default function SuperAdminDashboard() {
                 <div key={i} className="flex items-center gap-3 py-2 border-b border-white/[0.03] last:border-0">
                   <div className="w-2 h-2 rounded-full bg-gold-500/50 shrink-0" />
                   <p className="text-sm text-gray-400 flex-1">{a.description || a.action}</p>
-                  <span className="text-xs text-gray-600 shrink-0">{new Date(a.created_at).toLocaleDateString()}</span>
+                  <span className="text-xs text-gray-600 shrink-0">{new Date(a.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' })}</span>
                 </div>
               ))}
             </div>
