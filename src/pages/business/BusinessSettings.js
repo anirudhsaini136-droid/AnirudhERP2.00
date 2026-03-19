@@ -3,7 +3,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import DashboardLayout from '../../components/layout/DashboardLayout';
 import { Input } from '../../components/ui/input';
 import { Label } from '../../components/ui/label';
-import { Save, Building2, CreditCard, FileText, Landmark, Scale } from 'lucide-react';
+import { Save, Building2, CreditCard, FileText, Landmark, BookOpen } from 'lucide-react';
 import { toast } from 'sonner';
 
 const fmt = (n) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(n || 0);
@@ -328,7 +328,7 @@ export default function BusinessSettings() {
         {/* Invite CA */}
         <div className="glass-card rounded-2xl p-5">
           <div className="flex items-center gap-2 mb-1">
-            <Scale size={18} className="text-blue-400" />
+            <BookOpen size={18} className="text-blue-400" />
             <h2 className="font-display text-lg text-white">Invite CA / Accountant</h2>
           </div>
           <p className="text-xs text-gray-500 mb-4">Give your CA read-only access to GST Reports, Invoices and Finance data.</p>
@@ -362,7 +362,7 @@ export default function BusinessSettings() {
               <p className="text-xs text-blue-400">CA will get read-only access to: GST Reports · GSTR-1 Export · Invoices · Purchases · Finance Dashboard</p>
             </div>
             <button type="submit" className="btn-premium btn-secondary flex items-center gap-2">
-              <Scale size={15} /> Send CA Invite
+              <BookOpen size={15} /> Send CA Invite
             </button>
           </form>
         </div>
