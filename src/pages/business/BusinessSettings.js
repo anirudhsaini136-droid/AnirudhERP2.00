@@ -3,7 +3,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import DashboardLayout from '../../components/layout/DashboardLayout';
 import { Input } from '../../components/ui/input';
 import { Label } from '../../components/ui/label';
-import { Save, Building2, CreditCard, FileText, Landmark } from 'lucide-react';
+import { Save, Building2, CreditCard, FileText, Landmark, Scale } from 'lucide-react';
 import { toast } from 'sonner';
 
 const fmt = (n) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(n || 0);
@@ -321,6 +321,48 @@ export default function BusinessSettings() {
 
             <button type="submit" disabled={savingBank} className="btn-premium btn-primary flex items-center gap-2">
               <Save size={15} /> {savingBank ? 'Saving...' : 'Save Bank Details'}
+            </button>
+          </form>
+        </div>
+
+        {/* Invite CA */}
+        <div className="glass-card rounded-2xl p-5">
+          <div className="flex items-center gap-2 mb-1">
+            <Scale size={18} className="text-blue-400" />
+            <h2 className="font-display text-lg text-white">Invite CA / Accountant</h2>
+          </div>
+          <p className="text-xs text-gray-500 mb-4">Give your CA read-only access to GST Reports, Invoices and Finance data.</p>
+          <form onSubmit={async (e) => {
+            e.preventDefault();
+            const fd = new FormData(e.target);
+            try {
+              const res = await api.post('/dashboard/invite-ca', {
+                email: fd.get('email'), first_name: fd.get('first_name'),
+                last_name: fd.get('last_name'), role: 'ca_admin'
+              });
+              toast.success(`CA invited! Credentials: ${res.data.credentials.email} / ${res.data.credentials.temporary_password}`);
+              e.target.reset();
+            } catch (err) { toast.error(err.response?.data?.detail || 'Failed to invite CA'); }
+          }} className="space-y-3">
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-gray-400 text-xs">First Name *</Label>
+                <Input name="first_name" className="input-premium mt-1" placeholder="Ramesh" required />
+              </div>
+              <div>
+                <Label className="text-gray-400 text-xs">Last Name *</Label>
+                <Input name="last_name" className="input-premium mt-1" placeholder="Sharma" required />
+              </div>
+            </div>
+            <div>
+              <Label className="text-gray-400 text-xs">CA Email *</Label>
+              <Input name="email" type="email" className="input-premium mt-1" placeholder="ca@example.com" required />
+            </div>
+            <div className="p-3 rounded-xl bg-blue-500/5 border border-blue-500/20">
+              <p className="text-xs text-blue-400">CA will get read-only access to: GST Reports · GSTR-1 Export · Invoices · Purchases · Finance Dashboard</p>
+            </div>
+            <button type="submit" className="btn-premium btn-secondary flex items-center gap-2">
+              <Scale size={15} /> Send CA Invite
             </button>
           </form>
         </div>
