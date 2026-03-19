@@ -3,7 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import {
   LayoutDashboard, Building2, Users, UserCheck, Calendar, FileText,
-  Receipt, BarChart3, Package, ShoppingCart, Settings, Bell, Truck,
+  Receipt, BarChart3, Package, ShoppingCart, Settings, Bell, Truck, Scale,
   LogOut, ChevronDown, Menu, X, Clock, Briefcase, CreditCard,
   Shield, Home, FileSpreadsheet, UserCircle, ArrowLeftRight, BookUser,
   IndianRupee
@@ -64,6 +64,16 @@ const NAV_CONFIG = {
       { path: '/finance/reports', label: 'Reports', icon: BarChart3 },
       { path: '/finance/gst', label: 'GST Reports', icon: IndianRupee },
       { path: '/purchases', label: 'Purchases', icon: Truck },
+    ]
+  },
+  ca_admin: {
+    title: 'CA Portal',
+    icon: Scale,
+    items: [
+      { path: '/ca', label: 'GST Reports', icon: IndianRupee },
+      { path: '/finance/invoices', label: 'Invoices', icon: FileSpreadsheet },
+      { path: '/purchases', label: 'Purchases', icon: Truck },
+      { path: '/finance', label: 'Finance Dashboard', icon: BarChart3 },
     ]
   },
   inventory_admin: {
