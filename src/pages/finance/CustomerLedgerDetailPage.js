@@ -319,7 +319,7 @@ export default function CustomerLedgerDetailPage() {
             <div>
               <Label className="text-gray-400 text-xs">Payment Date *</Label>
               <Input
-                type="date"
+                type="date" lang="en-IN"
                 className="input-premium mt-1"
                 value={bulkForm.payment_date}
                 onChange={e => setBulkForm({ ...bulkForm, payment_date: e.target.value })}
