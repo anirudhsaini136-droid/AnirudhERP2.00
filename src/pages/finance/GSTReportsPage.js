@@ -23,9 +23,14 @@ const MONTHS = [
 
 export default function GSTReportsPage() {
   const { api } = useAuth();
-  const { start: defStart, end: defEnd } = getMonthRange(0);
-  const [startDate, setStartDate] = useState(defStart);
-  const [endDate, setEndDate] = useState(defEnd);
+  const [startDate, setStartDate] = useState(() => {
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
+  });
+  const [endDate, setEndDate] = useState(() => {
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0];
+  });
   const [summary, setSummary] = useState(null);
   const [gstr1, setGstr1] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -127,11 +132,16 @@ export default function GSTReportsPage() {
           </div>
           {/* Quick month selectors */}
           <div className="flex flex-wrap gap-1.5">
-            {[0, -1, -2].map(offset => {
-              const { start: s, end: e } = getMonthRange(offset);
-              const d = new Date();
-              d.setMonth(d.getMonth() + offset);
-              const label = offset === 0 ? 'This Month' : offset === -1 ? 'Last Month' : MONTHS[d.getMonth()];
+            {[
+              { label: 'This Month', offset: 0 },
+              { label: 'Last Month', offset: -1 },
+              { label: '2 Months Ago', offset: -2 }
+            ].map(({ label, offset }) => {
+              const now = new Date();
+              const y = now.getFullYear();
+              const m = now.getMonth() + offset;
+              const s = new Date(y, m, 1).toISOString().split('T')[0];
+              const e = new Date(y, m + 1, 0).toISOString().split('T')[0];
               return (
                 <button key={offset} onClick={() => { setStartDate(s); setEndDate(e); }}
                   className="text-xs px-3 py-1.5 rounded-lg border border-white/10 text-gray-400 hover:text-white hover:border-white/20 transition-all">
