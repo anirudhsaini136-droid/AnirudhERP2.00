@@ -242,7 +242,7 @@ function DateInput({ value, onChange, className, required, placeholder }) {
 }
 
 export default function InvoicesPage() {
-  const { api } = useAuth();
+  const { api, user } = useAuth();
   const navigate = useNavigate();
   const [invoices, setInvoices] = useState([]);
   const [total, setTotal] = useState(0);
@@ -528,7 +528,7 @@ export default function InvoicesPage() {
                       {['sent','partially_paid','overdue'].includes(inv.status) && (
                         <button onClick={() => openPayment(inv)} className="p-1.5 text-emerald-400 hover:text-emerald-300" title="Record Payment"><CheckCircle size={15} /></button>
                       )}
-                      <button onClick={() => setDeleteConfirm(inv)} className="p-1.5 text-rose-400/50 hover:text-rose-400" title="Delete"><Trash2 size={15} /></button>
+                      {user?.role !== "ca_admin" && <button onClick={() => setDeleteConfirm(inv)} className="p-1.5 text-rose-400/50 hover:text-rose-400" title="Delete"><Trash2 size={15} /></button>}
                     </div>
                   </td>
                 </tr>
