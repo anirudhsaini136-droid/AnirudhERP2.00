@@ -147,7 +147,7 @@ export default function EmployeesPage() {
                   <option value="full_time">Full Time</option><option value="part_time">Part Time</option><option value="contract">Contract</option><option value="intern">Intern</option>
                 </select></div>
               <div><Label className="text-gray-400 text-xs">Salary (INR)</Label><Input type="number" min="0" className="input-premium mt-1" value={form.salary_amount} onChange={e => setForm({...form, salary_amount: parseFloat(e.target.value) || 0})} data-testid="emp-salary" /></div>
-              <div><Label className="text-gray-400 text-xs">Date Joined</Label><Input type="date" className="input-premium mt-1" value={form.date_joined} onChange={e => setForm({...form, date_joined: e.target.value})} /></div>
+              <div><Label className="text-gray-400 text-xs">Date Joined</Label><Input type="date" lang="en-IN" className="input-premium mt-1" value={form.date_joined} onChange={e => setForm({...form, date_joined: e.target.value})} /></div>
             </div>
             <DialogFooter>
               <button type="button" onClick={() => setShowForm(false)} className="btn-premium btn-secondary">Cancel</button>
