@@ -92,8 +92,8 @@ export default function StaffLeave() {
                 {LEAVE_TYPES.map(t => <option key={t} value={t} className="capitalize">{t.replace('_', ' ')}</option>)}
               </select></div>
             <div className="grid grid-cols-2 gap-3">
-              <div><Label className="text-gray-400 text-xs">From *</Label><Input type="date" className="input-premium mt-1" value={form.start_date} onChange={e => setForm({...form, start_date: e.target.value})} required data-testid="leave-from" /></div>
-              <div><Label className="text-gray-400 text-xs">To *</Label><Input type="date" className="input-premium mt-1" value={form.end_date} onChange={e => setForm({...form, end_date: e.target.value})} required data-testid="leave-to" /></div>
+              <div><Label className="text-gray-400 text-xs">From *</Label><Input type="date" lang="en-IN" className="input-premium mt-1" value={form.start_date} onChange={e => setForm({...form, start_date: e.target.value})} required data-testid="leave-from" /></div>
+              <div><Label className="text-gray-400 text-xs">To *</Label><Input type="date" lang="en-IN" className="input-premium mt-1" value={form.end_date} onChange={e => setForm({...form, end_date: e.target.value})} required data-testid="leave-to" /></div>
             </div>
             <div><Label className="text-gray-400 text-xs">Reason</Label><textarea className="input-premium mt-1 h-20 resize-none" value={form.reason} onChange={e => setForm({...form, reason: e.target.value})} data-testid="leave-reason" /></div>
             <DialogFooter>
