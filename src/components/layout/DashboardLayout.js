@@ -6,7 +6,7 @@ import {
   Receipt, BarChart3, Package, ShoppingCart, Settings, Bell, Truck, 
   LogOut, ChevronDown, Menu, X, Clock, Briefcase, CreditCard,
   Shield, Home, FileSpreadsheet, UserCircle, ArrowLeftRight, BookUser,
-  IndianRupee
+  IndianRupee, BookOpen
 } from 'lucide-react';
 
 const NAV_CONFIG = {
@@ -68,7 +68,7 @@ const NAV_CONFIG = {
   },
   ca_admin: {
     title: 'CA Portal',
-    icon: 
+    icon: BookOpen,
     items: [
       { path: '/ca', label: 'GST Reports', icon: IndianRupee },
       { path: '/finance/invoices', label: 'Invoices', icon: FileSpreadsheet },
