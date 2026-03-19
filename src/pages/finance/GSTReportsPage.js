@@ -7,10 +7,12 @@ import { toast } from 'sonner';
 const fmt = (n) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 2 }).format(n || 0);
 
 // Get current month start/end
-const getMonthRange = () => {
+const getMonthRange = (offset = 0) => {
   const now = new Date();
-  const start = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
-  const end = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0];
+  const y = now.getFullYear();
+  const m = now.getMonth() + offset;
+  const start = new Date(y, m, 1).toISOString().split('T')[0];
+  const end = new Date(y, m + 1, 0).toISOString().split('T')[0];
   return { start, end };
 };
 
@@ -21,7 +23,7 @@ const MONTHS = [
 
 export default function GSTReportsPage() {
   const { api } = useAuth();
-  const { start: defStart, end: defEnd } = getMonthRange();
+  const { start: defStart, end: defEnd } = getMonthRange(0);
   const [startDate, setStartDate] = useState(defStart);
   const [endDate, setEndDate] = useState(defEnd);
   const [summary, setSummary] = useState(null);
@@ -111,22 +113,21 @@ export default function GSTReportsPage() {
         <div className="glass-card rounded-2xl p-4 flex flex-wrap items-end gap-4">
           <div>
             <label className="text-xs text-gray-500 block mb-1">From Date</label>
-            <input type="date" className="input-premium text-sm h-9" value={startDate}
+            <input type="date" lang="en-IN" className="input-premium text-sm h-9" value={startDate}
               onChange={e => setStartDate(e.target.value)} />
           </div>
           <div>
             <label className="text-xs text-gray-500 block mb-1">To Date</label>
-            <input type="date" className="input-premium text-sm h-9" value={endDate}
+            <input type="date" lang="en-IN" className="input-premium text-sm h-9" value={endDate}
               onChange={e => setEndDate(e.target.value)} />
           </div>
           {/* Quick month selectors */}
           <div className="flex flex-wrap gap-1.5">
-            {[0, 1, 2].map(offset => {
+            {[0, -1, -2].map(offset => {
+              const { start: s, end: e } = getMonthRange(offset);
               const d = new Date();
-              d.setMonth(d.getMonth() - offset);
-              const s = new Date(d.getFullYear(), d.getMonth(), 1).toISOString().split('T')[0];
-              const e = new Date(d.getFullYear(), d.getMonth() + 1, 0).toISOString().split('T')[0];
-              const label = offset === 0 ? 'This Month' : offset === 1 ? 'Last Month' : MONTHS[d.getMonth()];
+              d.setMonth(d.getMonth() + offset);
+              const label = offset === 0 ? 'This Month' : offset === -1 ? 'Last Month' : MONTHS[d.getMonth()];
               return (
                 <button key={offset} onClick={() => { setStartDate(s); setEndDate(e); }}
                   className="text-xs px-3 py-1.5 rounded-lg border border-white/10 text-gray-400 hover:text-white hover:border-white/20 transition-all">
