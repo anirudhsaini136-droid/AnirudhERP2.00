@@ -46,7 +46,7 @@ export default function AttendancePage() {
           </div>
           <div className="flex items-center gap-2">
             <button onClick={() => changeDate(-1)} className="btn-premium btn-secondary p-2"><ChevronLeft size={16} /></button>
-            <input type="date" value={date} onChange={e => setDate(e.target.value)} className="input-premium text-sm h-10" data-testid="attendance-date" />
+            <input type="date" lang="en-IN" value={date} onChange={e => setDate(e.target.value)} className="input-premium text-sm h-10" data-testid="attendance-date" />
             <button onClick={() => changeDate(1)} className="btn-premium btn-secondary p-2"><ChevronRight size={16} /></button>
           </div>
         </div>
