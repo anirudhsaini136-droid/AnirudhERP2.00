@@ -125,7 +125,11 @@ export default function CAPortalPage() {
           </div>
           <div className="flex flex-wrap gap-1.5">
             {[0, -1, -2].map(offset => {
-              const { start: s, end: e } = getRange(offset);
+              const now2 = new Date();
+              const y2 = now2.getFullYear(), m2 = now2.getMonth() + offset;
+              const pad2 = n => String(n).padStart(2, '0');
+              const s = `${y2}-${pad2(m2 + 1)}-01`;
+              const e = `${y2}-${pad2(m2 + 1)}-${pad2(new Date(y2, m2 + 1, 0).getDate())}`;
               const d = new Date(); d.setMonth(d.getMonth() + offset);
               const label = offset === 0 ? 'This Month' : offset === -1 ? 'Last Month' : MONTHS[d.getMonth()];
               return (
