@@ -37,14 +37,18 @@ export default function GSTReportsPage() {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [sumRes, gstr1Res, purRes] = await Promise.all([
+      const [sumRes, gstr1Res] = await Promise.all([
         api.get(`/finance/gst/summary?start_date=${startDate}&end_date=${endDate}`),
-        api.get(`/finance/gst/gstr1?start_date=${startDate}&end_date=${endDate}`),
-        api.get(`/purchases/itc/summary?start_date=${startDate}&end_date=${endDate}`).catch(() => ({ data: null }))
+        api.get(`/finance/gst/gstr1?start_date=${startDate}&end_date=${endDate}`)
       ]);
       setSummary(sumRes.data);
       setGstr1(gstr1Res.data);
-      setPurchases(purRes.data);
+      try {
+        const itcRes = await api.get(`/purchases/itc/summary?start_date=${startDate}&end_date=${endDate}`);
+        setItc(itcRes.data);
+      } catch {
+        setItc({ total_purchases: 0, itc: { cgst: 0, sgst: 0, igst: 0, total: 0 } });
+      }
     } catch {
       toast.error('Failed to load GST data');
     }
@@ -151,7 +155,7 @@ export default function GSTReportsPage() {
                 { label: 'Total Sales', value: fmt(s.total_sales), color: 'text-gold-400', sub: `${s.total_invoices} invoices` },
                 { label: 'Total Taxable Value', value: fmt(s.total_taxable_value), color: 'text-blue-400', sub: 'Before tax' },
                 { label: 'Total GST Collected', value: fmt(s.total_tax), color: 'text-emerald-400', sub: 'Output tax liability' },
-                { label: 'Net GST Payable', value: fmt(s.total_tax), color: 'text-rose-400', sub: 'After ITC (add purchases)' },
+                { label: 'Net GST Payable', value: fmt(Math.max(0, s.total_tax - (itc?.itc?.total || 0))), color: 'text-rose-400', sub: 'After ITC (add purchases)' },
               ].map(card => (
                 <div key={card.label} className="glass-card rounded-2xl p-4">
                   <p className="text-xs text-gray-500 mb-1">{card.label}</p>
