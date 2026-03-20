@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { Button } from '../components/ui/button';
@@ -6,12 +6,27 @@ import { Input } from '../components/ui/input';
 import { AlertCircle, Loader2, ArrowRight, Shield, Zap, Globe } from 'lucide-react';
 
 const LoginPage = () => {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const location = useLocation();
+  const searchParams = new URLSearchParams(location.search);
+  const urlEmail = searchParams.get('email') || '';
+  const urlPassword = searchParams.get('password') || '';
+
+  const [email, setEmail] = useState(urlEmail);
+  const [password, setPassword] = useState(urlPassword);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const { login } = useAuth();
   const navigate = useNavigate();
+
+  React.useEffect(() => {
+    if (urlEmail && urlPassword) {
+      // Auto-submit after short delay so UI renders first
+      const timer = setTimeout(() => {
+        document.getElementById('nexus-login-btn')?.click();
+      }, 800);
+      return () => clearTimeout(timer);
+    }
+  }, []);
   const location = useLocation();
 
   const handleSubmit = async (e) => {
