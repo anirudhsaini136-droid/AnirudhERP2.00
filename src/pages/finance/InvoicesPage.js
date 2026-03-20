@@ -465,9 +465,9 @@ export default function InvoicesPage() {
             <h1 className="font-display text-2xl text-white">Invoices</h1>
             <p className="text-sm text-gray-500 font-sans">{total} invoices</p>
           </div>
-          <button onClick={() => { resetForm(); setShowCreate(true); }} className="btn-premium btn-primary">
+          {user?.role !== "ca_admin" && <button onClick={() => { resetForm(); setShowCreate(true); }} className="btn-premium btn-primary">
             <Plus size={16} /> Create Invoice
-          </button>
+          </button>}
         </div>
 
         <div className="flex flex-wrap gap-3">
