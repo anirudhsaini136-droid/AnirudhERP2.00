@@ -107,7 +107,37 @@ export default function DashboardLayout({ children }) {
   const [showUserMenu, setShowUserMenu] = useState(false);
 
   const role = user?.role || 'staff';
-  const navConfig = NAV_CONFIG[role] || NAV_CONFIG.staff;
+  const rawNav = NAV_CONFIG[role] || NAV_CONFIG.staff;
+
+  // Filter nav items based on business modules
+  const enabledModules = React.useMemo(() => {
+    try { return JSON.parse(business?.modules || '[]'); } catch { return []; }
+  }, [business]);
+
+  const MODULE_NAV_MAP = {
+    'hr_payroll': ['/hr', '/hr/employees', '/hr/attendance', '/hr/leave', '/hr/payroll'],
+    'invoices_finance': ['/finance', '/finance/invoices', '/finance/invoices/:id', '/finance/reports'],
+    'inventory_billing': ['/inventory', '/inventory/billing'],
+    'purchases_itc': ['/purchases'],
+    'gst_reports': ['/finance/gst', '/ca'],
+    'customer_ledger': ['/finance/customers', '/finance/customers/:id'],
+    'expenses': ['/finance/expenses'],
+    'ca_portal': ['/ca'],
+  };
+
+  const isPathAllowed = (path) => {
+    // Super admin and business owner always have full access
+    if (role === 'super_admin' || role === 'business_owner') return true;
+    // If no modules set, allow all (backward compat)
+    if (!business?.modules || enabledModules.length === 0) return true;
+    // Check if path is covered by any enabled module
+    return enabledModules.some(mod => (MODULE_NAV_MAP[mod] || []).includes(path));
+  };
+
+  const navConfig = {
+    ...rawNav,
+    items: rawNav.items.filter(item => isPathAllowed(item.path))
+  };
 
   useEffect(() => {
     const fetchNotifications = async () => {
