@@ -41,6 +41,7 @@ const ROLE_HOMES = {
   hr_admin: '/hr',
   finance_admin: '/finance',
   inventory_admin: '/inventory',
+  ca_admin: '/ca',
   staff: '/staff',
 };
 
