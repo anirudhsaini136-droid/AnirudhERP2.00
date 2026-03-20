@@ -168,6 +168,18 @@ export default function BusinessDetailPage() {
     }
   };
 
+  const handleDelete = async () => {
+    const bizName = data?.business?.name;
+    if (!window.confirm(`DELETE ${bizName}? This permanently removes ALL data and cannot be undone.`)) return;
+    const confirmed = window.prompt(`Type the business name "${bizName}" to confirm:`);
+    if (confirmed !== bizName) { toast.error('Name did not match. Cancelled.'); return; }
+    try {
+      await api.delete(`/super-admin/businesses/${id}`);
+      toast.success('Business deleted');
+      navigate('/super-admin/businesses');
+    } catch(e) { toast.error(e.response?.data?.detail || 'Failed to delete'); }
+  };
+
   const handleChangePlan = async () => {
     try {
       await api.post(`/super-admin/businesses/${id}/change-plan`, { new_plan: newPlan });
@@ -394,6 +406,12 @@ export default function BusinessDetailPage() {
             </div>
           </TabsContent>
         </Tabs>
+      </div>
+
+      {/* Modules & Pricing Section */}
+      <div className="glass-card rounded-2xl p-5 space-y-4">
+        <h3 className="font-display text-lg text-white">Modules & Pricing</h3>
+        <ModulesEditor businessId={id} api={api} bizData={data?.business} onRefresh={fetchData} />
       </div>
 
       {/* Extend Subscription Dialog */}
