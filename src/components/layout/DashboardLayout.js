@@ -73,7 +73,6 @@ const NAV_CONFIG = {
       { path: '/ca', label: 'GST Reports', icon: IndianRupee },
       { path: '/finance/invoices', label: 'Invoices', icon: FileSpreadsheet },
       { path: '/purchases', label: 'Purchases', icon: Truck },
-      { path: '/finance', label: 'Finance Dashboard', icon: BarChart3 },
     ]
   },
   inventory_admin: {
