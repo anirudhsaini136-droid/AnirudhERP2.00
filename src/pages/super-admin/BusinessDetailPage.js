@@ -27,6 +27,95 @@ function PasswordCell({ password }) {
   );
 }
 
+
+const ALL_MODULES = [
+  { id: 'hr_payroll', label: 'HR & Payroll', icon: '👥' },
+  { id: 'invoices_finance', label: 'Invoices & Finance', icon: '🧾' },
+  { id: 'inventory_billing', label: 'Inventory & Billing', icon: '📦' },
+  { id: 'purchases_itc', label: 'Purchases & ITC', icon: '🛒' },
+  { id: 'gst_reports', label: 'GST Reports', icon: '📊' },
+  { id: 'customer_ledger', label: 'Customer Ledger', icon: '📒' },
+  { id: 'expenses', label: 'Expenses', icon: '💸' },
+  { id: 'ca_portal', label: 'CA Portal', icon: '🔐' },
+];
+
+function ModulesEditor({ businessId, api, data, onRefresh }) {
+  const biz = data?.business || {};
+  const [modules, setModules] = React.useState(() => {
+    try { return JSON.parse(biz.modules || '[]'); } catch { return []; }
+  });
+  const [monthly, setMonthly] = React.useState(biz.monthly_amount || 0);
+  const [maxUsers, setMaxUsers] = React.useState(biz.max_users || 5);
+  const [maxEmp, setMaxEmp] = React.useState(biz.max_employees || 10);
+  const [maxInv, setMaxInv] = React.useState(biz.max_invoices_month || 100);
+  const [maxProd, setMaxProd] = React.useState(biz.max_products || 50);
+  const [saving, setSaving] = React.useState(false);
+  const { toast } = require ? { toast: window.__toast } : {};
+
+  const toggleMod = (id) => setModules(m => m.includes(id) ? m.filter(x => x !== id) : [...m, id]);
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      await api.put(`/super-admin/businesses/${businessId}`, {
+        modules: JSON.stringify(modules),
+        monthly_amount: parseFloat(monthly) || 0,
+        max_users: parseInt(maxUsers) || 5,
+        max_employees: parseInt(maxEmp) || 10,
+        max_invoices_month: parseInt(maxInv) || 100,
+        max_products: parseInt(maxProd) || 50,
+      });
+      onRefresh();
+      alert('Saved successfully!');
+    } catch(e) { alert('Failed to save'); }
+    setSaving(false);
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label className="text-xs text-gray-400">Monthly Amount (₹)</label>
+          <input type="number" className="input-premium mt-1 w-full" value={monthly} onChange={e => setMonthly(e.target.value)} />
+        </div>
+        <div>
+          <label className="text-xs text-gray-400">Max Users</label>
+          <input type="number" className="input-premium mt-1 w-full" value={maxUsers} onChange={e => setMaxUsers(e.target.value)} />
+        </div>
+        <div>
+          <label className="text-xs text-gray-400">Max Employees</label>
+          <input type="number" className="input-premium mt-1 w-full" value={maxEmp} onChange={e => setMaxEmp(e.target.value)} />
+        </div>
+        <div>
+          <label className="text-xs text-gray-400">Max Invoices/Month</label>
+          <input type="number" className="input-premium mt-1 w-full" value={maxInv} onChange={e => setMaxInv(e.target.value)} />
+        </div>
+        <div>
+          <label className="text-xs text-gray-400">Max Products</label>
+          <input type="number" className="input-premium mt-1 w-full" value={maxProd} onChange={e => setMaxProd(e.target.value)} />
+        </div>
+      </div>
+      <div>
+        <p className="text-xs text-gray-400 mb-2">Active Modules</p>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+          {ALL_MODULES.map(mod => (
+            <button key={mod.id} type="button" onClick={() => toggleMod(mod.id)}
+              className={`flex items-center gap-2 p-2.5 rounded-xl border text-xs transition-all ${
+                modules.includes(mod.id) ? 'border-gold-500/40 bg-gold-500/10 text-gold-400' : 'border-white/10 text-gray-500 hover:border-white/20'
+              }`}>
+              <span>{mod.icon}</span> {mod.label.split(' ')[0]}
+            </button>
+          ))}
+        </div>
+        <p className="text-xs text-gray-600 mt-1">{modules.length}/{ALL_MODULES.length} modules active</p>
+      </div>
+      <button onClick={save} disabled={saving} className="btn-premium btn-primary text-sm">
+        {saving ? 'Saving...' : 'Save Changes'}
+      </button>
+    </div>
+  );
+}
+
 export default function BusinessDetailPage() {
   const { id } = useParams();
   const { api, startImpersonation } = useAuth();
@@ -345,7 +434,7 @@ export default function BusinessDetailPage() {
               </div>
               <div>
                 <Label className="text-gray-400 text-xs">Payment Date *</Label>
-                <Input type="date" lang="en-IN" className="input-premium mt-1" value={extendForm.payment_date} onChange={e => setExtendForm({...extendForm, payment_date: e.target.value})} required />
+                <Input type="date" className="input-premium mt-1" value={extendForm.payment_date} onChange={e => setExtendForm({...extendForm, payment_date: e.target.value})} required />
               </div>
             </div>
             <div>
