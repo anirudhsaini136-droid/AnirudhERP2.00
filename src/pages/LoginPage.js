@@ -6,23 +6,23 @@ import { Input } from '../components/ui/input';
 import { AlertCircle, Loader2, ArrowRight, Shield, Zap, Globe } from 'lucide-react';
 
 const LoginPage = () => {
-  const searchParams = new URLSearchParams(location.search);
-  const urlEmail = searchParams.get('email') || '';
-  const urlPassword = searchParams.get('password') || '';
-
-  const [email, setEmail] = useState(urlEmail);
-  const [password, setPassword] = useState(urlPassword);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const { login } = useAuth();
   const navigate = useNavigate();
 
   useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const urlEmail = params.get('email');
+    const urlPassword = params.get('password');
+    if (urlEmail) setEmail(urlEmail);
+    if (urlPassword) setPassword(urlPassword);
     if (urlEmail && urlPassword) {
-      const timer = setTimeout(() => {
+      setTimeout(() => {
         document.getElementById('nexus-login-btn')?.click();
-      }, 800);
-      return () => clearTimeout(timer);
+      }, 500);
     }
   }, []);
   const location = useLocation();
