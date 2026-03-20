@@ -6,7 +6,6 @@ import { Input } from '../components/ui/input';
 import { AlertCircle, Loader2, ArrowRight, Shield, Zap, Globe } from 'lucide-react';
 
 const LoginPage = () => {
-  const location = useLocation();
   const searchParams = new URLSearchParams(location.search);
   const urlEmail = searchParams.get('email') || '';
   const urlPassword = searchParams.get('password') || '';
@@ -18,9 +17,8 @@ const LoginPage = () => {
   const { login } = useAuth();
   const navigate = useNavigate();
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (urlEmail && urlPassword) {
-      // Auto-submit after short delay so UI renders first
       const timer = setTimeout(() => {
         document.getElementById('nexus-login-btn')?.click();
       }, 800);
