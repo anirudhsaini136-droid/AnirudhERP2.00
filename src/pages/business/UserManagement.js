@@ -43,7 +43,8 @@ export default function UserManagement() {
     first_name: '',
     last_name: '',
     phone: '',
-    role: 'staff'
+    role: 'staff',
+    password: ''
   });
   const [showResetPwd, setShowResetPwd] = useState(false);
   const [resetPwdUser, setResetPwdUser] = useState(null);
@@ -75,11 +76,11 @@ export default function UserManagement() {
     e.preventDefault();
     setCreating(true);
     try {
-      const res = await api.post('/dashboard/users', form);
+      const payload = {...form}; if (!payload.password) delete payload.password; const res = await api.post('/dashboard/users', payload);
       const creds = res.data.credentials;
       toast.success(`User created! Email: ${creds?.email} Password: ${creds?.temporary_password}`);
       setShowCreate(false);
-      setForm({ email: '', first_name: '', last_name: '', phone: '', role: 'staff' });
+      setForm({ email: '', first_name: '', last_name: '', phone: '', role: 'staff', password: '' });
       fetchUsers();
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Failed to create user');
@@ -257,11 +258,17 @@ export default function UserManagement() {
               <Input className="input-premium mt-1" value={form.phone} onChange={e => setForm({...form, phone: e.target.value})} />
             </div>
             <div>
+              <Label className="text-gray-400 text-xs">Password (leave blank to auto-generate)</Label>
+              <Input type="text" className="input-premium mt-1" placeholder="Enter password or leave blank"
+                value={form.password} onChange={e => setForm({...form, password: e.target.value})} />
+            </div>
+            <div>
               <Label className="text-gray-400 text-xs">Role *</Label>
               <select className="input-premium mt-1 w-full" value={form.role} onChange={e => setForm({...form, role: e.target.value})}>
                 <option value="hr_admin">HR Admin</option>
                 <option value="finance_admin">Finance Admin</option>
                 <option value="inventory_admin">Inventory Admin</option>
+                <option value="ca_admin">CA Admin</option>
                 <option value="staff">Staff</option>
               </select>
             </div>
