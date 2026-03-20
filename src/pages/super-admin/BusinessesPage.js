@@ -19,6 +19,7 @@ const ALL_MODULES = [
   { id: 'gst_reports', label: 'GST Reports', icon: '📊', desc: 'GSTR-1, GSTR-3B, tax summary' },
   { id: 'customer_ledger', label: 'Customer Ledger', icon: '📒', desc: 'Customer accounts, payments' },
   { id: 'expenses', label: 'Expenses', icon: '💸', desc: 'Expense tracking and approval' },
+  { id: 'accounting', label: 'Accounting', icon: '📒', desc: 'Double-entry bookkeeping, P&L, Balance Sheet' },
   { id: 'ca_portal', label: 'CA Portal', icon: '🔐', desc: 'CA read-only GST access' },
 ];
 
