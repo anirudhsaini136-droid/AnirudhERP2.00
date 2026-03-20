@@ -39,18 +39,16 @@ const ALL_MODULES = [
   { id: 'ca_portal', label: 'CA Portal', icon: '🔐' },
 ];
 
-function ModulesEditor({ businessId, api, data, onRefresh }) {
-  const biz = data?.business || {};
+function ModulesEditor({ businessId, api, bizData, onRefresh }) {
   const [modules, setModules] = React.useState(() => {
-    try { return JSON.parse(biz.modules || '[]'); } catch { return []; }
+    try { return JSON.parse(bizData?.modules || '[]'); } catch { return []; }
   });
-  const [monthly, setMonthly] = React.useState(biz.monthly_amount || 0);
-  const [maxUsers, setMaxUsers] = React.useState(biz.max_users || 5);
-  const [maxEmp, setMaxEmp] = React.useState(biz.max_employees || 10);
-  const [maxInv, setMaxInv] = React.useState(biz.max_invoices_month || 100);
-  const [maxProd, setMaxProd] = React.useState(biz.max_products || 50);
+  const [monthly, setMonthly] = React.useState(bizData?.monthly_amount || 0);
+  const [maxUsers, setMaxUsers] = React.useState(bizData?.max_users || 5);
+  const [maxEmp, setMaxEmp] = React.useState(bizData?.max_employees || 10);
+  const [maxInv, setMaxInv] = React.useState(bizData?.max_invoices_month || 100);
+  const [maxProd, setMaxProd] = React.useState(bizData?.max_products || 50);
   const [saving, setSaving] = React.useState(false);
-  const { toast } = require ? { toast: window.__toast } : {};
 
   const toggleMod = (id) => setModules(m => m.includes(id) ? m.filter(x => x !== id) : [...m, id]);
 
@@ -67,36 +65,26 @@ function ModulesEditor({ businessId, api, data, onRefresh }) {
       });
       onRefresh();
       alert('Saved successfully!');
-    } catch(e) { alert('Failed to save'); }
+    } catch(e) { alert('Failed to save: ' + (e.response?.data?.detail || e.message)); }
     setSaving(false);
   };
 
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 gap-3">
-        <div>
-          <label className="text-xs text-gray-400">Monthly Amount (₹)</label>
-          <input type="number" className="input-premium mt-1 w-full" value={monthly} onChange={e => setMonthly(e.target.value)} />
-        </div>
-        <div>
-          <label className="text-xs text-gray-400">Max Users</label>
-          <input type="number" className="input-premium mt-1 w-full" value={maxUsers} onChange={e => setMaxUsers(e.target.value)} />
-        </div>
-        <div>
-          <label className="text-xs text-gray-400">Max Employees</label>
-          <input type="number" className="input-premium mt-1 w-full" value={maxEmp} onChange={e => setMaxEmp(e.target.value)} />
-        </div>
-        <div>
-          <label className="text-xs text-gray-400">Max Invoices/Month</label>
-          <input type="number" className="input-premium mt-1 w-full" value={maxInv} onChange={e => setMaxInv(e.target.value)} />
-        </div>
-        <div>
-          <label className="text-xs text-gray-400">Max Products</label>
-          <input type="number" className="input-premium mt-1 w-full" value={maxProd} onChange={e => setMaxProd(e.target.value)} />
-        </div>
+        <div><label className="text-xs text-gray-400">Monthly Amount (₹)</label>
+          <input type="number" className="input-premium mt-1 w-full" value={monthly} onChange={e => setMonthly(e.target.value)} /></div>
+        <div><label className="text-xs text-gray-400">Max Users</label>
+          <input type="number" className="input-premium mt-1 w-full" value={maxUsers} onChange={e => setMaxUsers(e.target.value)} /></div>
+        <div><label className="text-xs text-gray-400">Max Employees</label>
+          <input type="number" className="input-premium mt-1 w-full" value={maxEmp} onChange={e => setMaxEmp(e.target.value)} /></div>
+        <div><label className="text-xs text-gray-400">Max Invoices/Month</label>
+          <input type="number" className="input-premium mt-1 w-full" value={maxInv} onChange={e => setMaxInv(e.target.value)} /></div>
+        <div><label className="text-xs text-gray-400">Max Products</label>
+          <input type="number" className="input-premium mt-1 w-full" value={maxProd} onChange={e => setMaxProd(e.target.value)} /></div>
       </div>
       <div>
-        <p className="text-xs text-gray-400 mb-2">Active Modules</p>
+        <p className="text-xs text-gray-400 mb-2">Active Modules ({modules.length}/{ALL_MODULES.length})</p>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
           {ALL_MODULES.map(mod => (
             <button key={mod.id} type="button" onClick={() => toggleMod(mod.id)}
@@ -107,7 +95,6 @@ function ModulesEditor({ businessId, api, data, onRefresh }) {
             </button>
           ))}
         </div>
-        <p className="text-xs text-gray-600 mt-1">{modules.length}/{ALL_MODULES.length} modules active</p>
       </div>
       <button onClick={save} disabled={saving} className="btn-premium btn-primary text-sm">
         {saving ? 'Saving...' : 'Save Changes'}
@@ -272,8 +259,8 @@ export default function BusinessDetailPage() {
                 <Ban size={15} /> Suspend
               </button>
             )}
-            <button onClick={handleDelete} className="btn-premium text-sm bg-red-900/20 border border-red-700/30 text-red-500 hover:bg-red-500/20">
-              <Trash2 size={15} /> Delete
+            <button onClick={handleDelete} className="btn-premium text-sm bg-red-900/20 border border-red-700/30 text-red-500 hover:bg-red-500/20 flex items-center gap-1.5">
+              🗑 Delete
             </button>
           </div>
         </div>
