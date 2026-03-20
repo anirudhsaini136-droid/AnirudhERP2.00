@@ -29,6 +29,7 @@ function PasswordCell({ password }) {
 
 
 const ALL_MODULES = [
+  { id: 'manage_users', label: 'Manage Users', icon: '👤', desc: 'User creation and management' },
   { id: 'hr_payroll', label: 'HR & Payroll', icon: '👥' },
   { id: 'invoices_finance', label: 'Invoices & Finance', icon: '🧾' },
   { id: 'inventory_billing', label: 'Inventory & Billing', icon: '📦' },
