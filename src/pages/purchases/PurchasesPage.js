@@ -361,9 +361,9 @@ export default function PurchasesPage() {
                           <CheckCircle size={15} />
                         </button>
                       )}
-                      <button onClick={() => setDeleteConfirm(bill)} className="p-1.5 text-rose-400/50 hover:text-rose-400" title="Delete">
+                      {user?.role !== "ca_admin" && <button onClick={() => setDeleteConfirm(bill)} className="p-1.5 text-rose-400/50 hover:text-rose-400" title="Delete">
                         <Trash2 size={15} />
-                      </button>
+                      </button>}
                     </div>
                   </td>
                 </tr>
@@ -692,12 +692,6 @@ export default function PurchasesPage() {
         </DialogContent>
       </Dialog>
     </DashboardLayout>
-  );
-}{user?.role !== "ca_admin" && }
-          ))}
-        </div>
-      )}
-    </div>
   );
 }
 
