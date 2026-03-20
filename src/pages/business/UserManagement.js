@@ -203,6 +203,14 @@ export default function UserManagement() {
                           {u.is_active ? 'Deactivate' : 'Activate'}
                         </button>
                       )}
+                      {!u.is_active && u.role !== 'business_owner' && (
+                        <button
+                          onClick={() => deleteUser(u.id, u.first_name + ' ' + u.last_name)}
+                          className="text-xs text-rose-500 hover:text-rose-400 font-medium transition-colors"
+                        >
+                          Delete
+                        </button>
+                      )}
                     </div>
                   </td>
                 </tr>
