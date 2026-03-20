@@ -272,6 +272,9 @@ export default function BusinessDetailPage() {
                 <Ban size={15} /> Suspend
               </button>
             )}
+            <button onClick={handleDelete} className="btn-premium text-sm bg-red-900/20 border border-red-700/30 text-red-500 hover:bg-red-500/20">
+              <Trash2 size={15} /> Delete
+            </button>
           </div>
         </div>
 
