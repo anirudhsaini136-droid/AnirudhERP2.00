@@ -126,10 +126,12 @@ export default function DashboardLayout({ children }) {
   };
 
   const isPathAllowed = (path) => {
-    // Super admin and business owner always have full access
-    if (role === 'super_admin' || role === 'business_owner') return true;
-    // If no modules set, allow all (backward compat)
+    // Super admin always has full access
+    if (role === 'super_admin') return true;
+    // If no modules set at all, allow all (backward compat for old businesses)
     if (!business?.modules || enabledModules.length === 0) return true;
+    // Always allow dashboard and settings
+    if (['/dashboard', '/dashboard/users', '/dashboard/settings'].includes(path)) return true;
     // Check if path is covered by any enabled module
     return enabledModules.some(mod => (MODULE_NAV_MAP[mod] || []).includes(path));
   };
