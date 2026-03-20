@@ -115,6 +115,7 @@ export default function DashboardLayout({ children }) {
   }, [business]);
 
   const MODULE_NAV_MAP = {
+    'manage_users': ['/dashboard/users'],
     'hr_payroll': ['/hr', '/hr/employees', '/hr/attendance', '/hr/leave', '/hr/payroll'],
     'invoices_finance': ['/finance', '/finance/invoices', '/finance/invoices/:id', '/finance/reports'],
     'inventory_billing': ['/inventory', '/inventory/billing'],
@@ -128,10 +129,12 @@ export default function DashboardLayout({ children }) {
   const isPathAllowed = (path) => {
     // Super admin always has full access
     if (role === 'super_admin') return true;
-    // If no modules set at all, allow all (backward compat for old businesses)
-    if (!business?.modules || enabledModules.length === 0) return true;
-    // Always allow dashboard and settings
-    if (['/dashboard', '/dashboard/users', '/dashboard/settings'].includes(path)) return true;
+    // Always allow dashboard and settings regardless of modules
+    if (['/dashboard', '/dashboard/settings'].includes(path)) return true;
+    // If modules field doesn't exist yet (old business before feature), allow all
+    if (business?.modules === undefined || business?.modules === null) return true;
+    // If modules is empty array '[]', only show dashboard/settings (already handled above)
+    if (enabledModules.length === 0) return false;
     // Check if path is covered by any enabled module
     return enabledModules.some(mod => (MODULE_NAV_MAP[mod] || []).includes(path));
   };
