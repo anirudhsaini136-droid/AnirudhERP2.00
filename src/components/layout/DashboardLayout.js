@@ -36,6 +36,7 @@ const NAV_CONFIG = {
       { path: '/finance/expenses', label: 'Expenses', icon: Receipt },
       { path: '/finance/reports', label: 'Reports', icon: BarChart3 },
       { path: '/finance/gst', label: 'GST Reports', icon: IndianRupee },
+      { path: '/accounting', label: 'Accounting', icon: BookOpen },
       { path: '/purchases', label: 'Purchases', icon: Truck },
       { path: '/inventory', label: 'Inventory', icon: Package },
       { path: '/inventory/billing', label: 'Quick Bill', icon: ShoppingCart },
@@ -63,6 +64,7 @@ const NAV_CONFIG = {
       { path: '/finance/expenses', label: 'Expenses', icon: Receipt },
       { path: '/finance/reports', label: 'Reports', icon: BarChart3 },
       { path: '/finance/gst', label: 'GST Reports', icon: IndianRupee },
+      { path: '/accounting', label: 'Accounting', icon: BookOpen },
       { path: '/purchases', label: 'Purchases', icon: Truck },
     ]
   },
@@ -121,6 +123,7 @@ export default function DashboardLayout({ children }) {
     'inventory_billing': ['/inventory', '/inventory/billing'],
     'purchases_itc': ['/purchases'],
     'gst_reports': ['/finance/gst', '/ca'],
+    'accounting': ['/accounting'],
     'customer_ledger': ['/finance/customers', '/finance/customers/:id'],
     'expenses': ['/finance/expenses'],
     'ca_portal': ['/ca'],
