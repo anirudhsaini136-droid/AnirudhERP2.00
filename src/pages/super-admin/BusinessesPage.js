@@ -11,6 +11,7 @@ import { toast } from 'sonner';
 const fmt = (n) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(n || 0);
 
 const ALL_MODULES = [
+  { id: 'manage_users', label: 'Manage Users', icon: '👤', desc: 'User creation and management' },
   { id: 'hr_payroll', label: 'HR & Payroll', icon: '👥', desc: 'Employees, attendance, leave, payroll' },
   { id: 'invoices_finance', label: 'Invoices & Finance', icon: '🧾', desc: 'Invoices, payments, finance dashboard' },
   { id: 'inventory_billing', label: 'Inventory & Billing', icon: '📦', desc: 'Products, stock, quick billing' },
