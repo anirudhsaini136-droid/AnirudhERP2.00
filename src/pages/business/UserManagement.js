@@ -97,6 +97,17 @@ export default function UserManagement() {
     }
   };
 
+  const deleteUser = async (userId, userName) => {
+    if (!window.confirm(`Permanently delete ${userName}? This cannot be undone.`)) return;
+    try {
+      await api.delete(`/dashboard/users/${userId}`);
+      toast.success('User deleted permanently');
+      fetchUsers();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to delete user');
+    }
+  };
+
   const openResetPassword = (u) => {
     setResetPwdUser(u);
     setResetPwdValue('');
@@ -205,7 +216,7 @@ export default function UserManagement() {
                       )}
                       {!u.is_active && u.role !== 'business_owner' && (
                         <button
-                          onClick={() => deleteUser(u.id, u.first_name + ' ' + u.last_name)}
+                          onClick={() => deleteUser(u.id, `${u.first_name} ${u.last_name}`)}
                           className="text-xs text-rose-500 hover:text-rose-400 font-medium transition-colors"
                         >
                           Delete
