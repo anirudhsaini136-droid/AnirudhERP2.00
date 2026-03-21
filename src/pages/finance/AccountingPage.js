@@ -154,12 +154,12 @@ export default function AccountingPage() {
   };
 
   const fetchPL = async (sd, ed) => {
-    const s = sd || startDate;
-    const e = ed || endDate;
+    const s = (typeof sd === 'string') ? sd : startDate;
+    const en = (typeof ed === 'string') ? ed : endDate;
     try {
-      const res = await api.get(`/accounting/reports/profit-loss?start_date=${s}&end_date=${e}`);
+      const res = await api.get(`/accounting/reports/profit-loss?start_date=${s}&end_date=${en}`);
       setPL(res.data);
-    } catch (e) { toast.error('Failed to load P&L'); }
+    } catch (err) { toast.error('Failed to load P&L'); }
   };
 
   const fetchBalanceSheet = async () => {
@@ -170,12 +170,12 @@ export default function AccountingPage() {
   };
 
   const fetchCashFlow = async (sd, ed) => {
-    const s = sd || startDate;
-    const e = ed || endDate;
+    const s = (typeof sd === 'string') ? sd : startDate;
+    const en = (typeof ed === 'string') ? ed : endDate;
     try {
-      const res = await api.get(`/accounting/reports/cash-flow?start_date=${s}&end_date=${e}`);
+      const res = await api.get(`/accounting/reports/cash-flow?start_date=${s}&end_date=${en}`);
       setCashFlow(res.data);
-    } catch (e) { toast.error('Failed to load cash flow'); }
+    } catch (err) { toast.error('Failed to load cash flow'); }
   };
 
   const closePeriod = async () => {
