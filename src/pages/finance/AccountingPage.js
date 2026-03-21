@@ -153,9 +153,11 @@ export default function AccountingPage() {
     } catch (e) { toast.error('Failed to load trial balance'); }
   };
 
-  const fetchPL = async () => {
+  const fetchPL = async (sd, ed) => {
+    const s = sd || startDate;
+    const e = ed || endDate;
     try {
-      const res = await api.get(`/accounting/reports/profit-loss?start_date=${startDate}&end_date=${endDate}`);
+      const res = await api.get(`/accounting/reports/profit-loss?start_date=${s}&end_date=${e}`);
       setPL(res.data);
     } catch (e) { toast.error('Failed to load P&L'); }
   };
@@ -167,9 +169,11 @@ export default function AccountingPage() {
     } catch (e) { toast.error('Failed to load balance sheet'); }
   };
 
-  const fetchCashFlow = async () => {
+  const fetchCashFlow = async (sd, ed) => {
+    const s = sd || startDate;
+    const e = ed || endDate;
     try {
-      const res = await api.get(`/accounting/reports/cash-flow?start_date=${startDate}&end_date=${endDate}`);
+      const res = await api.get(`/accounting/reports/cash-flow?start_date=${s}&end_date=${e}`);
       setCashFlow(res.data);
     } catch (e) { toast.error('Failed to load cash flow'); }
   };
@@ -189,19 +193,10 @@ export default function AccountingPage() {
   useEffect(() => {
     if (activeTab === 'Journal Entries') fetchJournal();
     if (activeTab === 'Trial Balance') fetchTrialBalance();
-    if (activeTab === 'P&L') fetchPL();
+    if (activeTab === 'P&L') fetchPL(startDate, endDate);
     if (activeTab === 'Balance Sheet') fetchBalanceSheet();
-    if (activeTab === 'Cash Flow') fetchCashFlow();
-  }, [activeTab]);
-
-  // Auto-fetch P&L and Cash Flow when dates change
-  useEffect(() => {
-    if (activeTab === 'P&L') fetchPL();
-  }, [startDate, endDate]);
-
-  useEffect(() => {
-    if (activeTab === 'Cash Flow') fetchCashFlow();
-  }, [startDate, endDate]);
+    if (activeTab === 'Cash Flow') fetchCashFlow(startDate, endDate);
+  }, [activeTab, startDate, endDate]);
 
   const addJournalLine = () => setJournalForm(f => ({
     ...f, lines: [...f.lines, { account_id: '', debit: 0, credit: 0, narration: '' }]
