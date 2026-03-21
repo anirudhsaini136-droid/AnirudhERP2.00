@@ -93,12 +93,15 @@ export default function AccountingPage() {
   useEffect(() => { fetchAccounts(); }, []);
 
   // ── Silent auto-sync + balance recalculation + period close on every page load ──
+  // CA admins have read-only access so skip write operations for them
   const silentSync = async () => {
-    try { await api.post('/finance/sync-to-accounting'); } catch (e) { /* silent */ }
-    try { await api.post('/purchases/sync-to-accounting'); } catch (e) { /* silent */ }
-    try { await api.post('/accounting/recalculate-balances'); } catch (e) { /* silent */ }
-    // Auto close current period so Balance Sheet stays balanced always
-    try { await api.post(`/accounting/reports/close-period?start_date=${range.start}&end_date=${range.end}`); } catch (e) { /* silent */ }
+    const isCA = user?.role === 'ca_admin';
+    if (!isCA) {
+      try { await api.post('/finance/sync-to-accounting'); } catch (e) { /* silent */ }
+      try { await api.post('/purchases/sync-to-accounting'); } catch (e) { /* silent */ }
+      try { await api.post('/accounting/recalculate-balances'); } catch (e) { /* silent */ }
+      try { await api.post(`/accounting/reports/close-period?start_date=${range.start}&end_date=${range.end}`); } catch (e) { /* silent */ }
+    }
   };
 
   const fetchAccounts = async () => {
@@ -252,7 +255,7 @@ export default function AccountingPage() {
             <h1 className="font-display text-2xl text-white">Accounting</h1>
             <p className="text-sm text-gray-500">Double-entry bookkeeping · Indian standards</p>
           </div>
-          {activeTab === 'Journal Entries' && (
+          {activeTab === 'Journal Entries' && user?.role !== 'ca_admin' && (
             <button onClick={() => setShowJournalForm(true)} className="btn-premium btn-primary flex items-center gap-2">
               <Plus size={15} /> New Journal Entry
             </button>
@@ -433,7 +436,7 @@ export default function AccountingPage() {
                       <td className="px-4 py-2 text-right text-blue-400 font-mono text-xs">{fmt(entry.total_debit)}</td>
                       <td className="px-4 py-2 text-right text-rose-400 font-mono text-xs">{fmt(entry.total_credit)}</td>
                       <td className="px-4 py-2 text-right">
-                        {entry.entry_type === 'manual' && (
+                        {entry.entry_type === 'manual' && user?.role !== 'ca_admin' && (
                           <button onClick={() => deleteJournal(entry.id)}
                             className="text-rose-400/40 hover:text-rose-400">
                             <Trash2 size={13} />
@@ -588,9 +591,11 @@ export default function AccountingPage() {
               <button onClick={fetchBalanceSheet} className="btn-premium btn-secondary text-sm flex items-center gap-2">
                 <RefreshCw size={13} /> Refresh
               </button>
-              <button onClick={closePeriod} className="btn-premium btn-primary text-sm flex items-center gap-2">
-                <Scale size={13} /> Close Period ({startDate.slice(0,7)})
-              </button>
+              {user?.role !== 'ca_admin' && (
+                <button onClick={closePeriod} className="btn-premium btn-primary text-sm flex items-center gap-2">
+                  <Scale size={13} /> Close Period ({startDate.slice(0,7)})
+                </button>
+              )}
             </div>
               {balanceSheet && (
                 <div className="flex items-center gap-2 text-xs">
