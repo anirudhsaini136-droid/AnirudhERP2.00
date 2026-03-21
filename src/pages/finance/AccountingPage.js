@@ -92,14 +92,11 @@ export default function AccountingPage() {
 
   useEffect(() => { fetchAccounts(); }, []);
 
-  // ── Silent auto-sync: runs once when COA is confirmed set up ──
+  // ── Silent auto-sync + balance recalculation on every page load ──
   const silentSync = async () => {
-    try {
-      await api.post('/finance/sync-to-accounting');
-    } catch (e) { /* silent */ }
-    try {
-      await api.post('/purchases/sync-to-accounting');
-    } catch (e) { /* silent */ }
+    try { await api.post('/finance/sync-to-accounting'); } catch (e) { /* silent */ }
+    try { await api.post('/purchases/sync-to-accounting'); } catch (e) { /* silent */ }
+    try { await api.post('/accounting/recalculate-balances'); } catch (e) { /* silent */ }
   };
 
   const fetchAccounts = async () => {
