@@ -100,6 +100,7 @@ export default function AccountingPage() {
       try { await api.post('/finance/sync-to-accounting'); } catch (e) { /* silent */ }
       try { await api.post('/purchases/sync-to-accounting'); } catch (e) { /* silent */ }
       try { await api.post('/finance/sync-payments-to-accounting'); } catch (e) { /* silent */ }
+      try { await api.post('/purchases/sync-payments-to-accounting'); } catch (e) { /* silent */ }
       try { await api.post('/accounting/recalculate-balances'); } catch (e) { /* silent */ }
       try { await api.post(`/accounting/reports/close-period?start_date=${range.start}&end_date=${range.end}`); } catch (e) { /* silent */ }
     }
