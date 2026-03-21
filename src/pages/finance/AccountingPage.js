@@ -63,7 +63,7 @@ const getMonthRange = () => {
 };
 
 export default function AccountingPage() {
-  const { api } = useAuth();
+  const { api, user } = useAuth();
   const [activeTab, setActiveTab] = useState('Chart of Accounts');
   const [loading, setLoading] = useState(false);
   const [accounts, setAccounts] = useState([]);
