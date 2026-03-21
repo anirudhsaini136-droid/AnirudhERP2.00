@@ -92,12 +92,27 @@ export default function AccountingPage() {
 
   useEffect(() => { fetchAccounts(); }, []);
 
+  // ── Silent auto-sync: runs once when COA is confirmed set up ──
+  const silentSync = async () => {
+    try {
+      await api.post('/finance/sync-to-accounting');
+    } catch (e) { /* silent */ }
+    try {
+      await api.post('/purchases/sync-to-accounting');
+    } catch (e) { /* silent */ }
+  };
+
   const fetchAccounts = async () => {
     setLoading(true);
     try {
       const res = await api.get('/accounting/accounts');
+      const total = res.data.total || 0;
       setAccounts(res.data.accounts || []);
-      setIsSetup((res.data.total || 0) > 0);
+      setIsSetup(total > 0);
+      // If COA is set up, silently sync existing invoices/purchases to accounting
+      if (total > 0) {
+        silentSync();
+      }
     } catch (e) {
       setIsSetup(false);
     }
