@@ -4,10 +4,6 @@ import { useAuth } from '../contexts/AuthContext';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { AlertCircle, Loader2, ArrowRight, Shield, Zap, Globe, Mail, RefreshCw } from 'lucide-react';
-import axios from 'axios';
-
-const API_BASE = process.env.REACT_APP_API_URL || 'https://anirudherp-backend-production.up.railway.app/api';
-
 const LoginPage = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -22,7 +18,7 @@ const LoginPage = () => {
   const [resendCooldown, setResendCooldown] = useState(0);
   const otpRefs = useRef([]);
 
-  const { login } = useAuth();
+  const { login, api } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -66,7 +62,7 @@ const LoginPage = () => {
     setError('');
     setLoading(true);
     try {
-      const res = await axios.post(`${API_BASE}/auth/login`, { email, password });
+      const res = await api.post('/auth/login', { email, password });
       if (res.data.otp_required) {
         setOtpEmail(res.data.email);
         setStep('otp');
@@ -115,15 +111,19 @@ const LoginPage = () => {
     setError('');
     setLoading(true);
     try {
-      const res = await axios.post(`${API_BASE}/auth/verify-otp`, {
+      const res = await api.post('/auth/verify-otp', {
         email: otpEmail,
         otp: otpValue
       });
-      // Store tokens and user in AuthContext
-      localStorage.setItem('access_token', res.data.access_token);
-      localStorage.setItem('refresh_token', res.data.refresh_token);
-      // Trigger auth refresh
-      window.location.href = res.data.user.role === 'super_admin' ? '/super-admin' : '/dashboard';
+      // Store tokens — use same keys as AuthContext
+      const tokenKey = 'token'; // matches AuthContext
+      localStorage.setItem(tokenKey, res.data.access_token);
+      localStorage.setItem('refreshToken', res.data.refresh_token);
+      // Hard navigate to trigger AuthContext reload
+      const role = res.data.user?.role;
+      if (role === 'super_admin') window.location.href = '/super-admin';
+      else if (role === 'ca_admin') window.location.href = '/ca';
+      else window.location.href = '/dashboard';
     } catch (err) {
       setError(err.response?.data?.detail || 'Invalid OTP. Please try again.');
       setOtp(['', '', '', '', '', '']);
@@ -138,7 +138,7 @@ const LoginPage = () => {
     setResendLoading(true);
     setError('');
     try {
-      await axios.post(`${API_BASE}/auth/login`, { email, password });
+      await api.post('/auth/login', { email, password });
       setResendCooldown(60);
       setOtp(['', '', '', '', '', '']);
       setTimeout(() => otpRefs.current[0]?.focus(), 100);
