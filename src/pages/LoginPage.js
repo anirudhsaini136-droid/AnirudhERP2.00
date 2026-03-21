@@ -115,10 +115,9 @@ const LoginPage = () => {
         email: otpEmail,
         otp: otpValue
       });
-      // Store tokens — use same keys as AuthContext
-      const tokenKey = 'token'; // matches AuthContext
-      localStorage.setItem(tokenKey, res.data.access_token);
-      localStorage.setItem('refreshToken', res.data.refresh_token);
+      // Store tokens using same keys as AuthContext
+      localStorage.setItem('access_token', res.data.access_token);
+      localStorage.setItem('refresh_token', res.data.refresh_token);
       // Hard navigate to trigger AuthContext reload
       const role = res.data.user?.role;
       if (role === 'super_admin') window.location.href = '/super-admin';
