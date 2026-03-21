@@ -1,17 +1,30 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
-import { AlertCircle, Loader2, ArrowRight, Shield, Zap, Globe } from 'lucide-react';
+import { AlertCircle, Loader2, ArrowRight, Shield, Zap, Globe, Mail, RefreshCw } from 'lucide-react';
+import axios from 'axios';
+
+const API_BASE = process.env.REACT_APP_API_URL || 'https://anirudherp-backend-production.up.railway.app/api';
 
 const LoginPage = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+
+  // OTP state
+  const [step, setStep] = useState('login'); // 'login' | 'otp'
+  const [otp, setOtp] = useState(['', '', '', '', '', '']);
+  const [otpEmail, setOtpEmail] = useState('');
+  const [resendLoading, setResendLoading] = useState(false);
+  const [resendCooldown, setResendCooldown] = useState(0);
+  const otpRefs = useRef([]);
+
   const { login } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -25,27 +38,44 @@ const LoginPage = () => {
       }, 500);
     }
   }, []);
-  const location = useLocation();
+
+  // Resend cooldown timer
+  useEffect(() => {
+    if (resendCooldown > 0) {
+      const t = setTimeout(() => setResendCooldown(c => c - 1), 1000);
+      return () => clearTimeout(t);
+    }
+  }, [resendCooldown]);
+
+  const navigateAfterLogin = (user) => {
+    const from = location.state?.from?.pathname;
+    if (from) { navigate(from); return; }
+    switch (user.role) {
+      case 'super_admin': navigate('/super-admin'); break;
+      case 'business_owner': navigate('/dashboard'); break;
+      case 'hr_admin': navigate('/hr'); break;
+      case 'finance_admin': navigate('/finance'); break;
+      case 'ca_admin': navigate('/ca'); break;
+      case 'staff': navigate('/staff'); break;
+      default: navigate('/dashboard');
+    }
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
     setLoading(true);
-
     try {
-      const user = await login(email, password);
-      const from = location.state?.from?.pathname;
-      if (from) {
-        navigate(from);
+      const res = await axios.post(`${API_BASE}/auth/login`, { email, password });
+      if (res.data.otp_required) {
+        setOtpEmail(res.data.email);
+        setStep('otp');
+        setResendCooldown(60);
+        setTimeout(() => otpRefs.current[0]?.focus(), 100);
       } else {
-        switch (user.role) {
-          case 'super_admin': navigate('/super-admin'); break;
-          case 'business_owner': navigate('/dashboard'); break;
-          case 'hr_admin': navigate('/hr'); break;
-          case 'finance_admin': navigate('/finance'); break;
-          case 'staff': navigate('/staff'); break;
-          default: navigate('/dashboard');
-        }
+        // Non-OTP roles (staff, hr_admin etc) — direct login
+        const user = await login(email, password);
+        navigateAfterLogin(user);
       }
     } catch (err) {
       setError(err.response?.data?.detail || 'Invalid email or password');
@@ -54,17 +84,81 @@ const LoginPage = () => {
     }
   };
 
+  const handleOtpChange = (idx, val) => {
+    if (!/^\d*$/.test(val)) return;
+    const newOtp = [...otp];
+    newOtp[idx] = val.slice(-1);
+    setOtp(newOtp);
+    if (val && idx < 5) otpRefs.current[idx + 1]?.focus();
+    if (newOtp.every(d => d !== '')) {
+      handleVerifyOtp(newOtp.join(''));
+    }
+  };
+
+  const handleOtpKeyDown = (idx, e) => {
+    if (e.key === 'Backspace' && !otp[idx] && idx > 0) {
+      otpRefs.current[idx - 1]?.focus();
+    }
+  };
+
+  const handleOtpPaste = (e) => {
+    const pasted = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6);
+    if (pasted.length === 6) {
+      const newOtp = pasted.split('');
+      setOtp(newOtp);
+      otpRefs.current[5]?.focus();
+      handleVerifyOtp(pasted);
+    }
+  };
+
+  const handleVerifyOtp = async (otpValue) => {
+    setError('');
+    setLoading(true);
+    try {
+      const res = await axios.post(`${API_BASE}/auth/verify-otp`, {
+        email: otpEmail,
+        otp: otpValue
+      });
+      // Store tokens and user in AuthContext
+      localStorage.setItem('access_token', res.data.access_token);
+      localStorage.setItem('refresh_token', res.data.refresh_token);
+      // Trigger auth refresh
+      window.location.href = res.data.user.role === 'super_admin' ? '/super-admin' : '/dashboard';
+    } catch (err) {
+      setError(err.response?.data?.detail || 'Invalid OTP. Please try again.');
+      setOtp(['', '', '', '', '', '']);
+      setTimeout(() => otpRefs.current[0]?.focus(), 100);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResendOtp = async () => {
+    if (resendCooldown > 0) return;
+    setResendLoading(true);
+    setError('');
+    try {
+      await axios.post(`${API_BASE}/auth/login`, { email, password });
+      setResendCooldown(60);
+      setOtp(['', '', '', '', '', '']);
+      setTimeout(() => otpRefs.current[0]?.focus(), 100);
+    } catch (err) {
+      setError('Failed to resend OTP. Please try again.');
+    } finally {
+      setResendLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen flex bg-obsidian relative overflow-hidden">
       {/* Ambient Background */}
       <div className="absolute inset-0 bg-gradient-mesh pointer-events-none" />
       <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[1000px] h-[600px] bg-gradient-radial from-gold-500/5 via-transparent to-transparent pointer-events-none" />
-      
+
       {/* Left Panel - Hero */}
       <div className="hidden lg:flex lg:w-3/5 relative">
-        {/* Background Image with Overlay */}
         <div className="absolute inset-0">
-          <img 
+          <img
             src="https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?auto=format&fit=crop&w=2000&q=80"
             alt="Modern Architecture"
             className="w-full h-full object-cover"
@@ -72,46 +166,34 @@ const LoginPage = () => {
           <div className="absolute inset-0 bg-gradient-to-r from-obsidian via-obsidian/95 to-obsidian/70" />
           <div className="absolute inset-0 bg-gradient-to-t from-obsidian via-transparent to-transparent" />
         </div>
-        
-        {/* Content */}
         <div className="relative z-10 flex flex-col justify-between p-12 w-full">
-          {/* Logo */}
           <div>
             <h1 className="font-display text-4xl text-white tracking-tight">
               Nexus<span className="text-gold">ERP</span>
             </h1>
           </div>
-          
-          {/* Hero Text */}
           <div className="max-w-xl">
             <h2 className="font-display text-5xl text-white leading-tight mb-6">
               Enterprise Excellence,<br />
               <span className="text-gold italic">Simplified.</span>
             </h2>
             <p className="text-gray-400 text-lg leading-relaxed mb-10">
-              The next generation of business management. Streamline HR, Finance, 
+              The next generation of business management. Streamline HR, Finance,
               and Operations with India's most sophisticated ERP platform.
             </p>
-            
-            {/* Feature Pills */}
             <div className="flex flex-wrap gap-3">
               {[
                 { icon: Shield, text: 'Bank-Grade Security' },
                 { icon: Zap, text: 'Real-time Analytics' },
                 { icon: Globe, text: 'Multi-Branch Support' },
               ].map((feature, idx) => (
-                <div 
-                  key={idx}
-                  className="flex items-center gap-2 px-4 py-2 rounded-full bg-white/5 border border-white/10 backdrop-blur-sm"
-                >
+                <div key={idx} className="flex items-center gap-2 px-4 py-2 rounded-full bg-white/5 border border-white/10 backdrop-blur-sm">
                   <feature.icon className="w-4 h-4 text-gold" strokeWidth={1.5} />
                   <span className="text-sm text-gray-300">{feature.text}</span>
                 </div>
               ))}
             </div>
           </div>
-          
-          {/* Stats */}
           <div className="flex gap-12">
             {[
               { value: '₹500Cr+', label: 'Managed Monthly' },
@@ -127,104 +209,135 @@ const LoginPage = () => {
         </div>
       </div>
 
-      {/* Right Panel - Login Form */}
+      {/* Right Panel */}
       <div className="flex-1 flex items-center justify-center p-6 lg:p-12 relative">
         <div className="w-full max-w-md">
-          {/* Mobile Logo */}
           <div className="lg:hidden text-center mb-10">
             <h1 className="font-display text-3xl text-white">
               Nexus<span className="text-gold">ERP</span>
             </h1>
           </div>
 
-          {/* Login Card */}
-          <div className="glass-card rounded-3xl p-8 lg:p-10 animate-fade-in">
-            <div className="text-center mb-10">
-              <h2 className="font-display text-2xl text-white mb-2">Welcome Back</h2>
-              <p className="text-gray-500">Sign in to continue to your dashboard</p>
-            </div>
-
-            {error && (
-              <div className="mb-6 p-4 rounded-xl bg-rose/10 border border-rose/20 flex items-center gap-3 animate-scale-in">
-                <AlertCircle className="h-5 w-5 text-rose flex-shrink-0" />
-                <p className="text-rose-light text-sm">{error}</p>
-              </div>
-            )}
-
-            <form onSubmit={handleSubmit} className="space-y-6">
-              <div className="space-y-2">
-                <label className="block text-sm font-medium text-gray-400 pl-1">
-                  Email Address
-                </label>
-                <Input
-                  type="email"
-                  placeholder="you@company.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  required
-                  className="input-premium h-14 text-base"
-                  data-testid="login-email-input"
-                />
+          {/* ── LOGIN STEP ── */}
+          {step === 'login' && (
+            <div className="glass-card rounded-3xl p-8 lg:p-10 animate-fade-in">
+              <div className="text-center mb-10">
+                <h2 className="font-display text-2xl text-white mb-2">Welcome Back</h2>
+                <p className="text-gray-500">Sign in to continue to your dashboard</p>
               </div>
 
-              <div className="space-y-2">
-                <label className="block text-sm font-medium text-gray-400 pl-1">
-                  Password
-                </label>
-                <Input
-                  type="password"
-                  placeholder="••••••••••••"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required
-                  className="input-premium h-14 text-base"
-                  data-testid="login-password-input"
-                />
-              </div>
-
-              <Button
-                type="submit"
-                disabled={loading}
-                className="btn-premium btn-primary w-full h-14 text-base rounded-xl"
-                data-testid="login-submit-btn"
-              >
-                {loading ? (
-                  <Loader2 className="h-5 w-5 animate-spin" />
-                ) : (
-                  <>
-                    Sign In
-                    <ArrowRight className="h-5 w-5 ml-2" />
-                  </>
-                )}
-              </Button>
-            </form>
-
-            {/* Divider */}
-            <div className="relative my-8">
-              <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-white/10"></div>
-              </div>
-              <div className="relative flex justify-center">
-                <span className="px-4 text-xs text-gray-600 bg-abyss">Demo Access</span>
-              </div>
-            </div>
-
-            {/* Demo Credentials */}
-            <div className="p-4 rounded-xl bg-white/[0.02] border border-white/5">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-xs text-gray-500 mb-1">Super Admin</p>
-                  <p className="text-sm text-gray-300 font-mono">admin@nexuserp.com</p>
+              {error && (
+                <div className="mb-6 p-4 rounded-xl bg-rose/10 border border-rose/20 flex items-center gap-3 animate-scale-in">
+                  <AlertCircle className="h-5 w-5 text-rose flex-shrink-0" />
+                  <p className="text-rose-light text-sm">{error}</p>
                 </div>
-                <div className="text-right">
-                  <p className="text-xs text-gray-500 mb-1">Password</p>
-                  <p className="text-sm text-gray-300 font-mono">Admin123!</p>
+              )}
+
+              <form onSubmit={handleSubmit} className="space-y-6">
+                <div className="space-y-2">
+                  <label className="block text-sm font-medium text-gray-400 pl-1">Email Address</label>
+                  <Input
+                    type="email"
+                    placeholder="you@company.com"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    required
+                    className="input-premium h-14 text-base"
+                  />
                 </div>
+                <div className="space-y-2">
+                  <label className="block text-sm font-medium text-gray-400 pl-1">Password</label>
+                  <Input
+                    type="password"
+                    placeholder="••••••••••••"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    required
+                    className="input-premium h-14 text-base"
+                  />
+                </div>
+                <Button
+                  id="nexus-login-btn"
+                  type="submit"
+                  disabled={loading}
+                  className="btn-premium btn-primary w-full h-14 text-base rounded-xl"
+                >
+                  {loading ? (
+                    <Loader2 className="h-5 w-5 animate-spin" />
+                  ) : (
+                    <>Sign In <ArrowRight className="h-5 w-5 ml-2" /></>
+                  )}
+                </Button>
+              </form>
+            </div>
+          )}
+
+          {/* ── OTP STEP ── */}
+          {step === 'otp' && (
+            <div className="glass-card rounded-3xl p-8 lg:p-10 animate-fade-in">
+              <div className="text-center mb-8">
+                <div className="w-16 h-16 rounded-2xl bg-gold-500/10 border border-gold-500/20 flex items-center justify-center mx-auto mb-4">
+                  <Mail size={28} className="text-gold-400" />
+                </div>
+                <h2 className="font-display text-2xl text-white mb-2">Verify Your Identity</h2>
+                <p className="text-gray-500 text-sm">
+                  We've sent a 6-digit OTP to<br />
+                  <span className="text-white font-medium">{otpEmail}</span>
+                </p>
+              </div>
+
+              {error && (
+                <div className="mb-6 p-4 rounded-xl bg-rose/10 border border-rose/20 flex items-center gap-3">
+                  <AlertCircle className="h-5 w-5 text-rose flex-shrink-0" />
+                  <p className="text-rose-light text-sm">{error}</p>
+                </div>
+              )}
+
+              {/* OTP Input Boxes */}
+              <div className="flex gap-3 justify-center mb-8" onPaste={handleOtpPaste}>
+                {otp.map((digit, idx) => (
+                  <input
+                    key={idx}
+                    ref={el => otpRefs.current[idx] = el}
+                    type="text"
+                    inputMode="numeric"
+                    maxLength={1}
+                    value={digit}
+                    onChange={e => handleOtpChange(idx, e.target.value)}
+                    onKeyDown={e => handleOtpKeyDown(idx, e)}
+                    className="w-12 h-14 text-center text-xl font-bold rounded-xl border border-white/10 bg-white/[0.05] text-white focus:outline-none focus:border-gold-500 focus:bg-white/[0.08] transition-all"
+                    disabled={loading}
+                  />
+                ))}
+              </div>
+
+              {loading && (
+                <div className="flex items-center justify-center gap-2 text-gray-400 text-sm mb-4">
+                  <Loader2 size={16} className="animate-spin" />
+                  Verifying...
+                </div>
+              )}
+
+              {/* Resend */}
+              <div className="text-center space-y-3">
+                <button
+                  onClick={handleResendOtp}
+                  disabled={resendCooldown > 0 || resendLoading}
+                  className="flex items-center gap-2 mx-auto text-sm text-gray-500 hover:text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  <RefreshCw size={13} className={resendLoading ? 'animate-spin' : ''} />
+                  {resendCooldown > 0 ? `Resend OTP in ${resendCooldown}s` : 'Resend OTP'}
+                </button>
+                <button
+                  onClick={() => { setStep('login'); setError(''); setOtp(['','','','','','']); }}
+                  className="block mx-auto text-xs text-gray-600 hover:text-gray-400 transition-colors"
+                >
+                  ← Back to login
+                </button>
               </div>
             </div>
-          </div>
+          )}
 
-          {/* Footer */}
           <p className="text-center text-gray-600 text-xs mt-8">
             By signing in, you agree to our Terms of Service and Privacy Policy
           </p>
