@@ -92,11 +92,13 @@ export default function AccountingPage() {
 
   useEffect(() => { fetchAccounts(); }, []);
 
-  // ── Silent auto-sync + balance recalculation on every page load ──
+  // ── Silent auto-sync + balance recalculation + period close on every page load ──
   const silentSync = async () => {
     try { await api.post('/finance/sync-to-accounting'); } catch (e) { /* silent */ }
     try { await api.post('/purchases/sync-to-accounting'); } catch (e) { /* silent */ }
     try { await api.post('/accounting/recalculate-balances'); } catch (e) { /* silent */ }
+    // Auto close current period so Balance Sheet stays balanced always
+    try { await api.post(`/accounting/reports/close-period?start_date=${range.start}&end_date=${range.end}`); } catch (e) { /* silent */ }
   };
 
   const fetchAccounts = async () => {
@@ -161,6 +163,18 @@ export default function AccountingPage() {
       const res = await api.get(`/accounting/reports/cash-flow?start_date=${startDate}&end_date=${endDate}`);
       setCashFlow(res.data);
     } catch (e) { toast.error('Failed to load cash flow'); }
+  };
+
+  const closePeriod = async () => {
+    if (!window.confirm(`Close period ${startDate} to ${endDate}? This will transfer net P&L into Retained Earnings, making the Balance Sheet balance. You can re-run this anytime to update.`)) return;
+    try {
+      const res = await api.post(`/accounting/reports/close-period?start_date=${startDate}&end_date=${endDate}`);
+      toast.success(res.data.message);
+      fetchBalanceSheet();
+      fetchTrialBalance();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Period close failed');
+    }
   };
 
   useEffect(() => {
@@ -570,9 +584,14 @@ export default function AccountingPage() {
         {activeTab === 'Balance Sheet' && (
           <div className="space-y-4">
             <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
               <button onClick={fetchBalanceSheet} className="btn-premium btn-secondary text-sm flex items-center gap-2">
                 <RefreshCw size={13} /> Refresh
               </button>
+              <button onClick={closePeriod} className="btn-premium btn-primary text-sm flex items-center gap-2">
+                <Scale size={13} /> Close Period ({startDate.slice(0,7)})
+              </button>
+            </div>
               {balanceSheet && (
                 <div className="flex items-center gap-2 text-xs">
                   {balanceSheet.is_balanced
