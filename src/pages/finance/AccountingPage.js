@@ -102,6 +102,12 @@ export default function AccountingPage() {
       try { await api.post('/accounting/recalculate-balances'); } catch (e) { /* silent */ }
       try { await api.post(`/accounting/reports/close-period?start_date=${range.start}&end_date=${range.end}`); } catch (e) { /* silent */ }
     }
+    // After sync, refresh whichever report tab is active
+    if (activeTab === 'Trial Balance') fetchTrialBalance();
+    if (activeTab === 'P&L') fetchPL();
+    if (activeTab === 'Balance Sheet') fetchBalanceSheet();
+    if (activeTab === 'Cash Flow') fetchCashFlow();
+    if (activeTab === 'Journal Entries') fetchJournal();
   };
 
   const fetchAccounts = async () => {
@@ -187,6 +193,15 @@ export default function AccountingPage() {
     if (activeTab === 'Balance Sheet') fetchBalanceSheet();
     if (activeTab === 'Cash Flow') fetchCashFlow();
   }, [activeTab]);
+
+  // Auto-fetch P&L and Cash Flow when dates change
+  useEffect(() => {
+    if (activeTab === 'P&L') fetchPL();
+  }, [startDate, endDate]);
+
+  useEffect(() => {
+    if (activeTab === 'Cash Flow') fetchCashFlow();
+  }, [startDate, endDate]);
 
   const addJournalLine = () => setJournalForm(f => ({
     ...f, lines: [...f.lines, { account_id: '', debit: 0, credit: 0, narration: '' }]
