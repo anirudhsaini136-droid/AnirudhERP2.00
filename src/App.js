@@ -5,6 +5,7 @@ import AuthProvider, { useAuth } from './contexts/AuthContext';
 import { ThemeProvider } from './contexts/ThemeContext';
 
 import LoginPage from './pages/LoginPage';
+import SignupPage from './pages/SignupPage';
 import PublicInvoicePage from './pages/finance/PublicInvoicePage';
 import SuperAdminDashboard from './pages/super-admin/SuperAdminDashboard';
 import BusinessesPage from './pages/super-admin/BusinessesPage';
@@ -63,11 +64,11 @@ function RequireAuth({ children, allowedRoles }) {
   return children;
 }
 
-function RedirectAuth() {
+function RedirectAuth({ children }) {
   const { user, loading } = useAuth();
   if (loading) return <Spinner />;
   if (user) return <Navigate to={ROLE_HOMES[user.role] || '/dashboard'} replace />;
-  return <LoginPage />;
+  return children || <LoginPage />;
 }
 
 function AppRoutes() {
@@ -75,6 +76,7 @@ function AppRoutes() {
     <Routes>
       {/* PUBLIC - No auth required */}
       <Route path="/login" element={<RedirectAuth />} />
+      <Route path="/signup" element={<RedirectAuth><SignupPage /></RedirectAuth>} />
       <Route path="/invoice/:id" element={<PublicInvoicePage />} />
 
       {/* Super Admin */}
