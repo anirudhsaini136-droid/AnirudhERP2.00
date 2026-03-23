@@ -200,6 +200,8 @@ h1, h2, h3, h4, h5, h6, .font-display {
 .light-theme .border-white\/10 { border-color: rgba(148, 163, 184, 0.3); }
 .light-theme .bg-white\/5 { background-color: rgba(148, 163, 184, 0.08); }
 .light-theme .hover\:bg-white\/10:hover { background-color: rgba(148, 163, 184, 0.14); }
+.light-theme .hover\:bg-white\/\[0\.04\]:hover { background-color: rgba(148, 163, 184, 0.12); }
+.light-theme .hover\:text-white:hover { color: #0f172a; }
 .light-theme .bg-void\/50 { background-color: rgba(255, 255, 255, 0.92); }
 
 .light-theme .btn-secondary {
