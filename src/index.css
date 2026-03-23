@@ -54,6 +54,26 @@
   --radius: 0.75rem;
 }
 
+.light-theme {
+  --bg-obsidian: #f4f7fb;
+  --bg-void: #ffffff;
+  --bg-abyss: #eaf0f7;
+  --bg-slate: #dbe4ef;
+  --bg-surface: #ffffff;
+  --background: 210 40% 98%;
+  --foreground: 222 47% 11%;
+  --card: 0 0% 100%;
+  --card-foreground: 222 47% 11%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 222 47% 11%;
+  --secondary: 210 40% 96%;
+  --secondary-foreground: 222 47% 11%;
+  --muted: 210 40% 96%;
+  --muted-foreground: 215 16% 35%;
+  --border: 214 32% 91%;
+  --input: 0 0% 100%;
+}
+
 * {
   margin: 0;
   padding: 0;
@@ -73,6 +93,10 @@ body {
   color: #E5E7EB;
   line-height: 1.6;
   overflow-x: hidden;
+}
+
+.light-theme body {
+  color: #0f172a;
 }
 
 /* Premium Typography */
@@ -147,6 +171,19 @@ h1, h2, h3, h4, h5, h6, .font-display {
     0 4px 30px rgba(0, 0, 0, 0.3),
     inset 0 1px 0 rgba(255, 255, 255, 0.05);
 }
+
+.light-theme .glass,
+.light-theme .glass-heavy,
+.light-theme .glass-card {
+  background: rgba(255, 255, 255, 0.88);
+  border: 1px solid rgba(15, 23, 42, 0.1);
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
+}
+
+.light-theme [class*='text-white'] { color: #0f172a !important; }
+.light-theme [class*='text-gray-500'] { color: #475569 !important; }
+.light-theme [class*='text-gray-400'] { color: #334155 !important; }
+.light-theme [class*='text-gray-300'] { color: #1e293b !important; }
 
 /* Gold variants */
 .text-gold { color: var(--gold-500); }
