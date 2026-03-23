@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
 import { Button } from '../components/ui/button';
@@ -188,6 +188,9 @@ const LoginPage = () => {
 
           <p className="text-center text-gray-600 text-xs mt-8">
             By signing in, you agree to our Terms of Service and Privacy Policy
+          </p>
+          <p className="text-center text-sm text-gray-500 mt-3">
+            New business? <Link to="/signup" className="text-gold-400 hover:text-gold-300">Create account</Link>
           </p>
         </div>
       </div>
