@@ -1,24 +1,18 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { useTheme } from '../contexts/ThemeContext';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
-import { AlertCircle, Loader2, ArrowRight, Shield, Zap, Globe, Mail, RefreshCw } from 'lucide-react';
+import { AlertCircle, Loader2, ArrowRight, Shield, Zap, Globe } from 'lucide-react';
 const LoginPage = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  // OTP state
-  const [step, setStep] = useState('login'); // 'login' | 'otp'
-  const [otp, setOtp] = useState(['', '', '', '', '', '']);
-  const [otpEmail, setOtpEmail] = useState('');
-  const [resendLoading, setResendLoading] = useState(false);
-  const [resendCooldown, setResendCooldown] = useState(0);
-  const otpRefs = useRef([]);
-
-  const { login, api } = useAuth();
+  const { login } = useAuth();
+  const { isLight, toggleTheme } = useTheme();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -34,14 +28,6 @@ const LoginPage = () => {
       }, 500);
     }
   }, []);
-
-  // Resend cooldown timer
-  useEffect(() => {
-    if (resendCooldown > 0) {
-      const t = setTimeout(() => setResendCooldown(c => c - 1), 1000);
-      return () => clearTimeout(t);
-    }
-  }, [resendCooldown]);
 
   const navigateAfterLogin = (user) => {
     const from = location.state?.from?.pathname;
@@ -62,89 +48,12 @@ const LoginPage = () => {
     setError('');
     setLoading(true);
     try {
-      const res = await api.post('/auth/login', { email, password });
-      if (res.data.otp_required) {
-        setOtpEmail(res.data.email);
-        setStep('otp');
-        setResendCooldown(60);
-        setTimeout(() => otpRefs.current[0]?.focus(), 100);
-      } else {
-        // Non-OTP roles (staff, hr_admin etc) — direct login
-        const user = await login(email, password);
-        navigateAfterLogin(user);
-      }
+      const user = await login(email, password);
+      navigateAfterLogin(user);
     } catch (err) {
       setError(err.response?.data?.detail || 'Invalid email or password');
     } finally {
       setLoading(false);
-    }
-  };
-
-  const handleOtpChange = (idx, val) => {
-    if (!/^\d*$/.test(val)) return;
-    const newOtp = [...otp];
-    newOtp[idx] = val.slice(-1);
-    setOtp(newOtp);
-    if (val && idx < 5) otpRefs.current[idx + 1]?.focus();
-    if (newOtp.every(d => d !== '')) {
-      handleVerifyOtp(newOtp.join(''));
-    }
-  };
-
-  const handleOtpKeyDown = (idx, e) => {
-    if (e.key === 'Backspace' && !otp[idx] && idx > 0) {
-      otpRefs.current[idx - 1]?.focus();
-    }
-  };
-
-  const handleOtpPaste = (e) => {
-    const pasted = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6);
-    if (pasted.length === 6) {
-      const newOtp = pasted.split('');
-      setOtp(newOtp);
-      otpRefs.current[5]?.focus();
-      handleVerifyOtp(pasted);
-    }
-  };
-
-  const handleVerifyOtp = async (otpValue) => {
-    setError('');
-    setLoading(true);
-    try {
-      const res = await api.post('/auth/verify-otp', {
-        email: otpEmail,
-        otp: otpValue
-      });
-      // Store tokens using same keys as AuthContext
-      localStorage.setItem('access_token', res.data.access_token);
-      localStorage.setItem('refresh_token', res.data.refresh_token);
-      // Hard navigate to trigger AuthContext reload
-      const role = res.data.user?.role;
-      if (role === 'super_admin') window.location.href = '/super-admin';
-      else if (role === 'ca_admin') window.location.href = '/ca';
-      else window.location.href = '/dashboard';
-    } catch (err) {
-      setError(err.response?.data?.detail || 'Invalid OTP. Please try again.');
-      setOtp(['', '', '', '', '', '']);
-      setTimeout(() => otpRefs.current[0]?.focus(), 100);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleResendOtp = async () => {
-    if (resendCooldown > 0) return;
-    setResendLoading(true);
-    setError('');
-    try {
-      await api.post('/auth/login', { email, password });
-      setResendCooldown(60);
-      setOtp(['', '', '', '', '', '']);
-      setTimeout(() => otpRefs.current[0]?.focus(), 100);
-    } catch (err) {
-      setError('Failed to resend OTP. Please try again.');
-    } finally {
-      setResendLoading(false);
     }
   };
 
@@ -153,6 +62,15 @@ const LoginPage = () => {
       {/* Ambient Background */}
       <div className="absolute inset-0 bg-gradient-mesh pointer-events-none" />
       <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[1000px] h-[600px] bg-gradient-radial from-gold-500/5 via-transparent to-transparent pointer-events-none" />
+      <div className="absolute top-5 right-5 z-20">
+        <button
+          type="button"
+          onClick={toggleTheme}
+          className="px-3 py-1.5 rounded-lg text-xs font-medium text-gray-300 hover:text-white bg-white/5 hover:bg-white/10 border border-white/10 transition-colors"
+        >
+          {isLight ? 'Dark' : 'Light'}
+        </button>
+      </div>
 
       {/* Left Panel - Hero */}
       <div className="hidden lg:flex lg:w-3/5 relative">
@@ -217,13 +135,11 @@ const LoginPage = () => {
             </h1>
           </div>
 
-          {/* ── LOGIN STEP ── */}
-          {step === 'login' && (
-            <div className="glass-card rounded-3xl p-8 lg:p-10 animate-fade-in">
-              <div className="text-center mb-10">
-                <h2 className="font-display text-2xl text-white mb-2">Welcome Back</h2>
-                <p className="text-gray-500">Sign in to continue to your dashboard</p>
-              </div>
+          <div className="glass-card rounded-3xl p-8 lg:p-10 animate-fade-in">
+            <div className="text-center mb-10">
+              <h2 className="font-display text-2xl text-white mb-2">Welcome Back</h2>
+              <p className="text-gray-500">Sign in to continue to your dashboard</p>
+            </div>
 
               {error && (
                 <div className="mb-6 p-4 rounded-xl bg-rose/10 border border-rose/20 flex items-center gap-3 animate-scale-in">
@@ -232,110 +148,43 @@ const LoginPage = () => {
                 </div>
               )}
 
-              <form onSubmit={handleSubmit} className="space-y-6">
-                <div className="space-y-2">
-                  <label className="block text-sm font-medium text-gray-400 pl-1">Email Address</label>
-                  <Input
-                    type="email"
-                    placeholder="you@company.com"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    required
-                    className="input-premium h-14 text-base"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label className="block text-sm font-medium text-gray-400 pl-1">Password</label>
-                  <Input
-                    type="password"
-                    placeholder="••••••••••••"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    required
-                    className="input-premium h-14 text-base"
-                  />
-                </div>
-                <Button
-                  id="nexus-login-btn"
-                  type="submit"
-                  disabled={loading}
-                  className="btn-premium btn-primary w-full h-14 text-base rounded-xl"
-                >
-                  {loading ? (
-                    <Loader2 className="h-5 w-5 animate-spin" />
-                  ) : (
-                    <>Sign In <ArrowRight className="h-5 w-5 ml-2" /></>
-                  )}
-                </Button>
-              </form>
-            </div>
-          )}
-
-          {/* ── OTP STEP ── */}
-          {step === 'otp' && (
-            <div className="glass-card rounded-3xl p-8 lg:p-10 animate-fade-in">
-              <div className="text-center mb-8">
-                <div className="w-16 h-16 rounded-2xl bg-gold-500/10 border border-gold-500/20 flex items-center justify-center mx-auto mb-4">
-                  <Mail size={28} className="text-gold-400" />
-                </div>
-                <h2 className="font-display text-2xl text-white mb-2">Verify Your Identity</h2>
-                <p className="text-gray-500 text-sm">
-                  We've sent a 6-digit OTP to<br />
-                  <span className="text-white font-medium">{otpEmail}</span>
-                </p>
+            <form onSubmit={handleSubmit} className="space-y-6">
+              <div className="space-y-2">
+                <label className="block text-sm font-medium text-gray-400 pl-1">Email Address</label>
+                <Input
+                  type="email"
+                  placeholder="you@company.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                  className="input-premium h-14 text-base"
+                />
               </div>
-
-              {error && (
-                <div className="mb-6 p-4 rounded-xl bg-rose/10 border border-rose/20 flex items-center gap-3">
-                  <AlertCircle className="h-5 w-5 text-rose flex-shrink-0" />
-                  <p className="text-rose-light text-sm">{error}</p>
-                </div>
-              )}
-
-              {/* OTP Input Boxes */}
-              <div className="flex gap-3 justify-center mb-8" onPaste={handleOtpPaste}>
-                {otp.map((digit, idx) => (
-                  <input
-                    key={idx}
-                    ref={el => otpRefs.current[idx] = el}
-                    type="text"
-                    inputMode="numeric"
-                    maxLength={1}
-                    value={digit}
-                    onChange={e => handleOtpChange(idx, e.target.value)}
-                    onKeyDown={e => handleOtpKeyDown(idx, e)}
-                    className="w-12 h-14 text-center text-xl font-bold rounded-xl border border-white/10 bg-white/[0.05] text-white focus:outline-none focus:border-gold-500 focus:bg-white/[0.08] transition-all"
-                    disabled={loading}
-                  />
-                ))}
+              <div className="space-y-2">
+                <label className="block text-sm font-medium text-gray-400 pl-1">Password</label>
+                <Input
+                  type="password"
+                  placeholder="••••••••••••"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  className="input-premium h-14 text-base"
+                />
               </div>
-
-              {loading && (
-                <div className="flex items-center justify-center gap-2 text-gray-400 text-sm mb-4">
-                  <Loader2 size={16} className="animate-spin" />
-                  Verifying...
-                </div>
-              )}
-
-              {/* Resend */}
-              <div className="text-center space-y-3">
-                <button
-                  onClick={handleResendOtp}
-                  disabled={resendCooldown > 0 || resendLoading}
-                  className="flex items-center gap-2 mx-auto text-sm text-gray-500 hover:text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  <RefreshCw size={13} className={resendLoading ? 'animate-spin' : ''} />
-                  {resendCooldown > 0 ? `Resend OTP in ${resendCooldown}s` : 'Resend OTP'}
-                </button>
-                <button
-                  onClick={() => { setStep('login'); setError(''); setOtp(['','','','','','']); }}
-                  className="block mx-auto text-xs text-gray-600 hover:text-gray-400 transition-colors"
-                >
-                  ← Back to login
-                </button>
-              </div>
-            </div>
-          )}
+              <Button
+                id="nexus-login-btn"
+                type="submit"
+                disabled={loading}
+                className="btn-premium btn-primary w-full h-14 text-base rounded-xl"
+              >
+                {loading ? (
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                ) : (
+                  <>Sign In <ArrowRight className="h-5 w-5 ml-2" /></>
+                )}
+              </Button>
+            </form>
+          </div>
 
           <p className="text-center text-gray-600 text-xs mt-8">
             By signing in, you agree to our Terms of Service and Privacy Policy
