@@ -46,8 +46,8 @@ function ModuleCheckbox({ mod, checked, onChange }) {
 
 const DEFAULT_FORM = {
   name: '', owner_name: '', email: '', phone: '', address: '', city: '', country: 'India',
-  initial_days: 30, payment_method: 'cash', amount_paid: 0, notes: '',
-  monthly_amount: 0, modules: [], max_users: 5, max_invoices_month: 100, max_products: 50, max_employees: 10
+  initial_days: 7, payment_method: 'cash', amount_paid: 0, notes: '',
+  monthly_amount: 399, modules: [], max_users: 5, max_invoices_month: 100, max_products: 50, max_employees: 10
 };
 
 export default function BusinessesPage() {
@@ -218,14 +218,20 @@ export default function BusinessesPage() {
               <div className="grid grid-cols-2 gap-3">
                 <div><Label className="text-gray-400 text-xs">Email *</Label>
                   <Input type="email" className="input-premium mt-1" value={form.email} onChange={e => setForm({...form, email: e.target.value})} required /></div>
-                <div><Label className="text-gray-400 text-xs">Phone</Label>
-                  <Input className="input-premium mt-1" value={form.phone} onChange={e => setForm({...form, phone: e.target.value})} /></div>
+                <div><Label className="text-gray-400 text-xs">Phone *</Label>
+                  <Input className="input-premium mt-1" value={form.phone} onChange={e => setForm({...form, phone: e.target.value})} required /></div>
               </div>
               <div className="grid grid-cols-2 gap-3">
-                <div><Label className="text-gray-400 text-xs">City</Label>
-                  <Input className="input-premium mt-1" value={form.city} onChange={e => setForm({...form, city: e.target.value})} /></div>
-                <div><Label className="text-gray-400 text-xs">Duration (days)</Label>
-                  <Input type="number" className="input-premium mt-1" value={form.initial_days} onChange={e => setForm({...form, initial_days: parseInt(e.target.value) || 30})} /></div>
+                <div><Label className="text-gray-400 text-xs">City *</Label>
+                  <Input className="input-premium mt-1" value={form.city} onChange={e => setForm({...form, city: e.target.value})} required /></div>
+                <div><Label className="text-gray-400 text-xs">Country *</Label>
+                  <Input className="input-premium mt-1" value={form.country} onChange={e => setForm({...form, country: e.target.value})} required /></div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div><Label className="text-gray-400 text-xs">Address *</Label>
+                  <Input className="input-premium mt-1" value={form.address} onChange={e => setForm({...form, address: e.target.value})} required /></div>
+                <div><Label className="text-gray-400 text-xs">Trial Duration (days)</Label>
+                  <Input type="number" className="input-premium mt-1" value={form.initial_days} onChange={e => setForm({...form, initial_days: parseInt(e.target.value) || 7})} /></div>
               </div>
             </div>
 
