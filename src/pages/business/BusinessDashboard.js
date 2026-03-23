@@ -9,6 +9,7 @@ export default function BusinessDashboard() {
   const { api, business } = useAuth();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [billingCycle, setBillingCycle] = useState('yearly');
 
   useEffect(() => {
     api.get('/dashboard').then(r => setData(r.data)).catch(() => {}).finally(() => setLoading(false));
@@ -20,14 +21,15 @@ export default function BusinessDashboard() {
   const isTrialOrExpired = ['trial', 'expired', 'suspended'].includes((business?.status || '').toLowerCase());
   const upiId = process.env.REACT_APP_UPI_ID || 'anirudhsaini85-2@okaxis';
   const upiName = process.env.REACT_APP_UPI_NAME || 'Anirudh Saini';
-  const amount = 399;
+  const amount = billingCycle === 'yearly' ? 399 * 12 : 499;
 
   const handlePayNow = () => {
     if (!upiId) {
       window.alert('Payment UPI is not configured. Please set REACT_APP_UPI_ID in frontend env.');
       return;
     }
-    const note = `NexusERP subscription - ${business?.name || 'Business'} - ${business?.id || ''}`;
+    const planLabel = billingCycle === 'yearly' ? 'Yearly (399x12)' : 'Monthly (499)';
+    const note = `NexusERP ${planLabel} - ${business?.name || 'Business'} - ${business?.id || ''}`;
     const upiUrl = `upi://pay?pa=${encodeURIComponent(upiId)}&pn=${encodeURIComponent(upiName)}&am=${amount}&cu=INR&tn=${encodeURIComponent(note)}`;
     window.location.href = upiUrl;
   };
@@ -53,9 +55,33 @@ export default function BusinessDashboard() {
                     : 'Your access is limited. Pay ₹399/month to reactivate your account.'}
                 </p>
                 <p className="text-xs text-gray-600 mt-1">Direct UPI payment (no gateway fee).</p>
+                <div className="flex gap-2 mt-3">
+                  <button
+                    type="button"
+                    onClick={() => setBillingCycle('yearly')}
+                    className={`px-3 py-1.5 rounded-lg text-xs border transition-colors ${
+                      billingCycle === 'yearly'
+                        ? 'bg-gold-500/15 border-gold-500/40 text-gold-300'
+                        : 'bg-white/5 border-white/10 text-gray-400 hover:bg-white/10'
+                    }`}
+                  >
+                    Yearly - ₹4,788 (₹399 x 12)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setBillingCycle('monthly')}
+                    className={`px-3 py-1.5 rounded-lg text-xs border transition-colors ${
+                      billingCycle === 'monthly'
+                        ? 'bg-gold-500/15 border-gold-500/40 text-gold-300'
+                        : 'bg-white/5 border-white/10 text-gray-400 hover:bg-white/10'
+                    }`}
+                  >
+                    Monthly - ₹499
+                  </button>
+                </div>
               </div>
               <button onClick={handlePayNow} className="btn-premium btn-primary whitespace-nowrap">
-                Pay ₹399 Now
+                Pay ₹{amount} Now
               </button>
             </div>
           </div>
