@@ -25,6 +25,9 @@ export default function BusinessDashboard() {
   const upiId = process.env.REACT_APP_UPI_ID || 'anirudhsaini85-2@okaxis';
   const upiName = process.env.REACT_APP_UPI_NAME || 'Anirudh Saini';
   const amount = billingCycle === 'yearly' ? 399 * 12 : 499;
+  const monthlyTotalYearlyEquivalent = 499 * 12;
+  const yearlySavings = monthlyTotalYearlyEquivalent - (399 * 12);
+  const yearlySavingsPct = Math.round((yearlySavings / monthlyTotalYearlyEquivalent) * 100);
   const planLabel = billingCycle === 'yearly' ? 'Yearly (399x12)' : 'Monthly (499)';
   const paymentNote = `NexusERP ${planLabel} - ${business?.name || 'Business'} - ${business?.id || ''}`;
   const upiUrl = `upi://pay?pa=${encodeURIComponent(upiId)}&pn=${encodeURIComponent(upiName)}&am=${amount}&cu=INR&tn=${encodeURIComponent(paymentNote)}`;
@@ -147,14 +150,20 @@ export default function BusinessDashboard() {
                 <button
                   type="button"
                   onClick={() => setBillingCycle('yearly')}
-                  className={`flex-1 px-3 py-2 rounded-xl text-sm border transition-colors ${
+                  className={`flex-1 px-3 py-2 rounded-xl text-sm border transition-colors relative ${
                     billingCycle === 'yearly'
-                      ? 'bg-gold-500/15 border-gold-500/40 text-gold-300'
+                      ? 'bg-gold-500/15 border-gold-500/40 text-gold-300 shadow-[0_0_0_1px_rgba(212,175,55,0.25)]'
                       : 'bg-white/5 border-white/10 text-gray-400 hover:bg-white/10'
                   }`}
                 >
+                  <span className="absolute -top-2 right-2 text-[9px] px-1.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                    MOST POPULAR
+                  </span>
                   Yearly
                   <div className="text-xs mt-1">₹4,788 (₹399 x 12)</div>
+                  <div className="text-[10px] mt-1 text-emerald-300">
+                    Save ₹{yearlySavings.toLocaleString('en-IN')} / year ({yearlySavingsPct}% OFF)
+                  </div>
                 </button>
                 <button
                   type="button"
@@ -167,6 +176,7 @@ export default function BusinessDashboard() {
                 >
                   Monthly
                   <div className="text-xs mt-1">₹499</div>
+                  <div className="text-[10px] mt-1 text-gray-500">Flexible pay-as-you-go</div>
                 </button>
               </div>
               <div className="glass-card rounded-xl p-4 border border-gold-500/20">
@@ -200,6 +210,25 @@ export default function BusinessDashboard() {
                       <p className="text-xs text-gray-400">{item}</p>
                     </div>
                   ))}
+                </div>
+              </div>
+
+              <div className="glass-card rounded-xl p-4 border border-gold-500/20">
+                <h4 className="text-sm font-semibold text-white mb-3">Plan Comparison</h4>
+                <div className="space-y-2 text-xs">
+                  <div className="flex items-center justify-between text-gray-400">
+                    <span>Monthly plan (12 months)</span>
+                    <span>₹{monthlyTotalYearlyEquivalent.toLocaleString('en-IN')}</span>
+                  </div>
+                  <div className="flex items-center justify-between text-gray-300">
+                    <span>Yearly plan total</span>
+                    <span>₹{(399 * 12).toLocaleString('en-IN')}</span>
+                  </div>
+                  <div className="h-px bg-white/10" />
+                  <div className="flex items-center justify-between text-emerald-300 font-semibold">
+                    <span>Your savings with yearly</span>
+                    <span>₹{yearlySavings.toLocaleString('en-IN')} ({yearlySavingsPct}% OFF)</span>
+                  </div>
                 </div>
               </div>
             </div>
