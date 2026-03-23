@@ -655,12 +655,21 @@ input[type="date"]::-webkit-datetime-edit-year-field { order: 3; }
 }
 
 .theme-toggle-compact {
-  min-width: 84px;
+  min-width: 36px;
+  width: 36px;
   height: 34px;
+  padding: 3px;
+  justify-content: center;
 }
 
 .theme-toggle-compact .theme-toggle-pill-right {
-  transform: translateX(44px);
+  transform: none;
+}
+
+.theme-toggle-compact .theme-toggle-pill {
+  width: 26px;
+  height: 26px;
+  transform: none !important;
 }
 
 .light-theme .theme-toggle {
