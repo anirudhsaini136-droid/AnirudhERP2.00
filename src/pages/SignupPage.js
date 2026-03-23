@@ -3,12 +3,11 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
-import { useTheme } from '../contexts/ThemeContext';
+import ThemeToggle from '../components/ThemeToggle';
 import { AlertCircle, ArrowRight, Loader2, RefreshCw } from 'lucide-react';
 
 export default function SignupPage() {
   const { api, login } = useAuth();
-  const { isLight, toggleTheme } = useTheme();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -73,13 +72,7 @@ export default function SignupPage() {
     <div className="min-h-screen bg-obsidian flex items-center justify-center p-6 relative overflow-hidden">
       <div className="absolute inset-0 bg-gradient-mesh pointer-events-none" />
       <div className="absolute top-5 right-5 z-20">
-        <button
-          type="button"
-          onClick={toggleTheme}
-          className="px-3 py-1.5 rounded-lg text-xs font-medium text-gray-300 hover:text-white bg-white/5 hover:bg-white/10 border border-white/10 transition-colors"
-        >
-          {isLight ? 'Dark' : 'Light'}
-        </button>
+        <ThemeToggle />
       </div>
 
       <div className="w-full max-w-2xl glass-card rounded-3xl p-8 lg:p-10">
