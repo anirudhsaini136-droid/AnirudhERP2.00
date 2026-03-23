@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import DashboardLayout from '../../components/layout/DashboardLayout';
-import { IndianRupee, Users, FileText, TrendingUp, AlertTriangle, Sparkles, Copy, QrCode, Smartphone } from 'lucide-react';
+import { IndianRupee, Users, FileText, TrendingUp, AlertTriangle, Sparkles, Copy, QrCode, Smartphone, ShieldCheck, Headphones, Clock3, CheckCircle2 } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../../components/ui/dialog';
 import { toast } from 'sonner';
 
@@ -185,6 +185,23 @@ export default function BusinessDashboard() {
               <button onClick={() => copyText(paymentNote, 'Payment note')} className="w-full text-xs text-gray-400 hover:text-gray-300">
                 Copy payment note
               </button>
+
+              <div className="glass-card rounded-xl p-4 border border-white/10">
+                <h4 className="text-sm font-semibold text-white mb-3">Why Upgrade</h4>
+                <div className="space-y-2">
+                  {[
+                    'Unlimited access to all enabled ERP modules',
+                    'No interruption after trial period ends',
+                    'Faster invoicing, GST reports and ledger workflows',
+                    'Priority support for setup and migration'
+                  ].map((item) => (
+                    <div key={item} className="flex items-start gap-2">
+                      <CheckCircle2 size={14} className="text-emerald-400 mt-0.5 shrink-0" />
+                      <p className="text-xs text-gray-400">{item}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
             </div>
             <div className="glass-card rounded-xl p-4 border border-white/10 flex flex-col items-center">
               <div className="flex items-center gap-2 text-gray-300 mb-3">
@@ -193,6 +210,20 @@ export default function BusinessDashboard() {
               </div>
               <img src={qrUrl} alt="UPI QR for payment" className="w-52 h-52 rounded-xl bg-white p-2" />
               <p className="text-xs text-gray-500 mt-3 text-center">UPI: {upiId}<br />Name: {upiName}</p>
+              <div className="w-full mt-4 pt-4 border-t border-white/10 grid grid-cols-3 gap-2">
+                <div className="text-center">
+                  <ShieldCheck size={14} className="mx-auto text-emerald-400 mb-1" />
+                  <p className="text-[10px] text-gray-500">Secure</p>
+                </div>
+                <div className="text-center">
+                  <Headphones size={14} className="mx-auto text-blue-400 mb-1" />
+                  <p className="text-[10px] text-gray-500">Support</p>
+                </div>
+                <div className="text-center">
+                  <Clock3 size={14} className="mx-auto text-amber-400 mb-1" />
+                  <p className="text-[10px] text-gray-500">Quick Activation</p>
+                </div>
+              </div>
             </div>
           </div>
         </DialogContent>
