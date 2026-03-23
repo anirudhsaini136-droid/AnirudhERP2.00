@@ -13,10 +13,10 @@ export default function ThemeToggle({ compact = false }) {
       title={isLight ? 'Switch to dark mode' : 'Switch to light mode'}
       aria-label={isLight ? 'Switch to dark mode' : 'Switch to light mode'}
     >
-      <span className={`theme-toggle-pill ${isLight ? 'theme-toggle-pill-right' : ''}`}>
+      <span className={`theme-toggle-pill ${!compact && isLight ? 'theme-toggle-pill-right' : ''}`}>
         {isLight ? <Moon size={14} /> : <Sun size={14} />}
       </span>
-      <span className="theme-toggle-label">{isLight ? 'Dark' : 'Light'}</span>
+      {!compact && <span className="theme-toggle-label">{isLight ? 'Dark' : 'Light'}</span>}
     </button>
   );
 }
