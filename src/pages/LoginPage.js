@@ -80,21 +80,21 @@ const LoginPage = () => {
             alt="Modern Architecture"
             className="w-full h-full object-cover"
           />
-          <div className="absolute inset-0 bg-gradient-to-r from-obsidian via-obsidian/95 to-obsidian/70" />
-          <div className="absolute inset-0 bg-gradient-to-t from-obsidian via-transparent to-transparent" />
+          <div className={`absolute inset-0 ${isLight ? 'bg-gradient-to-r from-white/45 via-slate-100/35 to-white/20' : 'bg-gradient-to-r from-obsidian via-obsidian/95 to-obsidian/70'}`} />
+          <div className={`absolute inset-0 ${isLight ? 'bg-gradient-to-t from-slate-100/60 via-transparent to-transparent' : 'bg-gradient-to-t from-obsidian via-transparent to-transparent'}`} />
         </div>
         <div className="relative z-10 flex flex-col justify-between p-12 w-full">
           <div>
-            <h1 className="font-display text-4xl text-white tracking-tight">
+            <h1 className={`font-display text-4xl tracking-tight ${isLight ? 'text-slate-900' : 'text-white'}`}>
               Nexus<span className="text-gold">ERP</span>
             </h1>
           </div>
           <div className="max-w-xl">
-            <h2 className="font-display text-5xl text-white leading-tight mb-6">
+            <h2 className={`font-display text-5xl leading-tight mb-6 ${isLight ? 'text-slate-900' : 'text-white'}`}>
               Enterprise Excellence,<br />
               <span className="text-gold italic">Simplified.</span>
             </h2>
-            <p className="text-gray-400 text-lg leading-relaxed mb-10">
+            <p className={`text-lg leading-relaxed mb-10 ${isLight ? 'text-slate-700' : 'text-gray-400'}`}>
               The next generation of business management. Streamline HR, Finance,
               and Operations with India's most sophisticated ERP platform.
             </p>
@@ -104,9 +104,9 @@ const LoginPage = () => {
                 { icon: Zap, text: 'Real-time Analytics' },
                 { icon: Globe, text: 'Multi-Branch Support' },
               ].map((feature, idx) => (
-                <div key={idx} className="flex items-center gap-2 px-4 py-2 rounded-full bg-white/5 border border-white/10 backdrop-blur-sm">
+                <div key={idx} className={`flex items-center gap-2 px-4 py-2 rounded-full backdrop-blur-sm ${isLight ? 'bg-white/70 border border-slate-300/70' : 'bg-white/5 border border-white/10'}`}>
                   <feature.icon className="w-4 h-4 text-gold" strokeWidth={1.5} />
-                  <span className="text-sm text-gray-300">{feature.text}</span>
+                  <span className={`text-sm ${isLight ? 'text-slate-700' : 'text-gray-300'}`}>{feature.text}</span>
                 </div>
               ))}
             </div>
@@ -118,8 +118,8 @@ const LoginPage = () => {
               { value: '99.9%', label: 'Uptime SLA' },
             ].map((stat, idx) => (
               <div key={idx}>
-                <p className="text-3xl font-display text-white">{stat.value}</p>
-                <p className="text-sm text-gray-500 mt-1">{stat.label}</p>
+                <p className={`text-3xl font-display ${isLight ? 'text-slate-900' : 'text-white'}`}>{stat.value}</p>
+                <p className={`text-sm mt-1 ${isLight ? 'text-slate-600' : 'text-gray-500'}`}>{stat.label}</p>
               </div>
             ))}
           </div>
@@ -130,7 +130,7 @@ const LoginPage = () => {
       <div className="flex-1 flex items-center justify-center p-6 lg:p-12 relative">
         <div className="w-full max-w-md">
           <div className="lg:hidden text-center mb-10">
-            <h1 className="font-display text-3xl text-white">
+            <h1 className={`font-display text-3xl ${isLight ? 'text-slate-900' : 'text-white'}`}>
               Nexus<span className="text-gold">ERP</span>
             </h1>
           </div>
