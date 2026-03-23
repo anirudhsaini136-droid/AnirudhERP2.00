@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import DashboardLayout from '../../components/layout/DashboardLayout';
-import { IndianRupee, Users, FileText, Package, TrendingUp, TrendingDown, AlertTriangle, ArrowUpRight } from 'lucide-react';
+import { IndianRupee, Users, FileText, TrendingUp } from 'lucide-react';
 
 const fmt = (n) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(n || 0);
 
 export default function BusinessDashboard() {
-  const { api } = useAuth();
+  const { api, business } = useAuth();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -17,6 +17,20 @@ export default function BusinessDashboard() {
   if (loading) return <DashboardLayout><div className="flex items-center justify-center h-64"><div className="w-8 h-8 border-2 border-gold-500 border-t-transparent rounded-full animate-spin" /></div></DashboardLayout>;
 
   const s = data?.stats || {};
+  const isTrialOrExpired = ['trial', 'expired', 'suspended'].includes((business?.status || '').toLowerCase());
+  const upiId = process.env.REACT_APP_UPI_ID || 'anirudhsaini85-2@okaxis';
+  const upiName = process.env.REACT_APP_UPI_NAME || 'Anirudh Saini';
+  const amount = 399;
+
+  const handlePayNow = () => {
+    if (!upiId) {
+      window.alert('Payment UPI is not configured. Please set REACT_APP_UPI_ID in frontend env.');
+      return;
+    }
+    const note = `NexusERP subscription - ${business?.name || 'Business'} - ${business?.id || ''}`;
+    const upiUrl = `upi://pay?pa=${encodeURIComponent(upiId)}&pn=${encodeURIComponent(upiName)}&am=${amount}&cu=INR&tn=${encodeURIComponent(note)}`;
+    window.location.href = upiUrl;
+  };
 
   const statCards = [
     { label: 'Monthly Revenue', value: fmt(s.monthly_revenue), icon: IndianRupee, color: 'text-gold-400', bg: 'from-gold-500/10' },
@@ -28,6 +42,25 @@ export default function BusinessDashboard() {
   return (
     <DashboardLayout>
       <div className="space-y-6" data-testid="business-dashboard">
+        {isTrialOrExpired && (
+          <div className="glass-card rounded-2xl p-5 border border-gold-500/30">
+            <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+              <div>
+                <h2 className="font-display text-lg text-white">Subscription Payment</h2>
+                <p className="text-sm text-gray-500 mt-1">
+                  {business?.status === 'trial'
+                    ? `Trial ends in ${business?.days_remaining ?? 0} days. Pay ₹399/month to continue without interruption.`
+                    : 'Your access is limited. Pay ₹399/month to reactivate your account.'}
+                </p>
+                <p className="text-xs text-gray-600 mt-1">Direct UPI payment (no gateway fee).</p>
+              </div>
+              <button onClick={handlePayNow} className="btn-premium btn-primary whitespace-nowrap">
+                Pay ₹399 Now
+              </button>
+            </div>
+          </div>
+        )}
+
         <div>
           <h1 className="font-display text-2xl text-white">Dashboard</h1>
           <p className="text-sm text-gray-500 font-sans mt-1">Business overview and key metrics</p>
