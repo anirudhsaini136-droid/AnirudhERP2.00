@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import DashboardLayout from '../../components/layout/DashboardLayout';
-import { IndianRupee, Users, FileText, TrendingUp } from 'lucide-react';
+import { IndianRupee, Users, FileText, TrendingUp, AlertTriangle, Sparkles, Copy, QrCode, Smartphone } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../../components/ui/dialog';
+import { toast } from 'sonner';
 
 const fmt = (n) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(n || 0);
 
@@ -10,6 +12,7 @@ export default function BusinessDashboard() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [billingCycle, setBillingCycle] = useState('yearly');
+  const [showUpgrade, setShowUpgrade] = useState(false);
 
   useEffect(() => {
     api.get('/dashboard').then(r => setData(r.data)).catch(() => {}).finally(() => setLoading(false));
@@ -22,16 +25,26 @@ export default function BusinessDashboard() {
   const upiId = process.env.REACT_APP_UPI_ID || 'anirudhsaini85-2@okaxis';
   const upiName = process.env.REACT_APP_UPI_NAME || 'Anirudh Saini';
   const amount = billingCycle === 'yearly' ? 399 * 12 : 499;
+  const planLabel = billingCycle === 'yearly' ? 'Yearly (399x12)' : 'Monthly (499)';
+  const paymentNote = `NexusERP ${planLabel} - ${business?.name || 'Business'} - ${business?.id || ''}`;
+  const upiUrl = `upi://pay?pa=${encodeURIComponent(upiId)}&pn=${encodeURIComponent(upiName)}&am=${amount}&cu=INR&tn=${encodeURIComponent(paymentNote)}`;
+  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(upiUrl)}`;
 
   const handlePayNow = () => {
     if (!upiId) {
       window.alert('Payment UPI is not configured. Please set REACT_APP_UPI_ID in frontend env.');
       return;
     }
-    const planLabel = billingCycle === 'yearly' ? 'Yearly (399x12)' : 'Monthly (499)';
-    const note = `NexusERP ${planLabel} - ${business?.name || 'Business'} - ${business?.id || ''}`;
-    const upiUrl = `upi://pay?pa=${encodeURIComponent(upiId)}&pn=${encodeURIComponent(upiName)}&am=${amount}&cu=INR&tn=${encodeURIComponent(note)}`;
-    window.location.href = upiUrl;
+    window.location.assign(upiUrl);
+  };
+
+  const copyText = async (value, label) => {
+    try {
+      await navigator.clipboard.writeText(value);
+      toast.success(`${label} copied`);
+    } catch {
+      toast.error(`Failed to copy ${label.toLowerCase()}`);
+    }
   };
 
   const statCards = [
@@ -45,43 +58,23 @@ export default function BusinessDashboard() {
     <DashboardLayout>
       <div className="space-y-6" data-testid="business-dashboard">
         {isTrialOrExpired && (
-          <div className="glass-card rounded-2xl p-5 border border-gold-500/30">
+          <div className="glass-card rounded-2xl p-4 border border-amber-500/30 bg-gradient-to-r from-amber-500/10 to-rose-500/5">
             <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-              <div>
-                <h2 className="font-display text-lg text-white">Subscription Payment</h2>
-                <p className="text-sm text-gray-500 mt-1">
+              <div className="flex items-start gap-3">
+                <div className="w-10 h-10 rounded-xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center shrink-0">
+                  <AlertTriangle className="w-5 h-5 text-amber-400" />
+                </div>
+                <div>
+                <h2 className="font-display text-lg text-white">Warning: Upgrade Required</h2>
+                <p className="text-sm text-gray-400 mt-1">
                   {business?.status === 'trial'
-                    ? `Trial ends in ${business?.days_remaining ?? 0} days. Pay ₹399/month to continue without interruption.`
-                    : 'Your access is limited. Pay ₹399/month to reactivate your account.'}
+                    ? `Only ${business?.days_remaining ?? 0} days left in trial. Upgrade now to avoid service interruption.`
+                    : 'Your account is restricted. Upgrade now to reactivate all features.'}
                 </p>
-                <p className="text-xs text-gray-600 mt-1">Direct UPI payment (no gateway fee).</p>
-                <div className="flex gap-2 mt-3">
-                  <button
-                    type="button"
-                    onClick={() => setBillingCycle('yearly')}
-                    className={`px-3 py-1.5 rounded-lg text-xs border transition-colors ${
-                      billingCycle === 'yearly'
-                        ? 'bg-gold-500/15 border-gold-500/40 text-gold-300'
-                        : 'bg-white/5 border-white/10 text-gray-400 hover:bg-white/10'
-                    }`}
-                  >
-                    Yearly - ₹4,788 (₹399 x 12)
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setBillingCycle('monthly')}
-                    className={`px-3 py-1.5 rounded-lg text-xs border transition-colors ${
-                      billingCycle === 'monthly'
-                        ? 'bg-gold-500/15 border-gold-500/40 text-gold-300'
-                        : 'bg-white/5 border-white/10 text-gray-400 hover:bg-white/10'
-                    }`}
-                  >
-                    Monthly - ₹499
-                  </button>
                 </div>
               </div>
-              <button onClick={handlePayNow} className="btn-premium btn-primary whitespace-nowrap">
-                Pay ₹{amount} Now
+              <button onClick={() => setShowUpgrade(true)} className="btn-premium btn-primary whitespace-nowrap">
+                <Sparkles size={16} /> Upgrade Plan
               </button>
             </div>
           </div>
@@ -139,6 +132,71 @@ export default function BusinessDashboard() {
           </div>
         </div>
       </div>
+
+      <Dialog open={showUpgrade} onOpenChange={setShowUpgrade}>
+        <DialogContent className="bg-void border-white/10 max-w-3xl">
+          <DialogHeader>
+            <DialogTitle className="font-display text-white text-2xl flex items-center gap-2">
+              <Sparkles className="w-5 h-5 text-gold-400" /> Upgrade Your Subscription
+            </DialogTitle>
+          </DialogHeader>
+          <div className="grid lg:grid-cols-2 gap-5 mt-2">
+            <div className="space-y-4">
+              <p className="text-gray-400 text-sm">Choose a billing plan and pay directly via UPI. After payment, share transaction ID with support/admin for instant activation.</p>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setBillingCycle('yearly')}
+                  className={`flex-1 px-3 py-2 rounded-xl text-sm border transition-colors ${
+                    billingCycle === 'yearly'
+                      ? 'bg-gold-500/15 border-gold-500/40 text-gold-300'
+                      : 'bg-white/5 border-white/10 text-gray-400 hover:bg-white/10'
+                  }`}
+                >
+                  Yearly
+                  <div className="text-xs mt-1">₹4,788 (₹399 x 12)</div>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setBillingCycle('monthly')}
+                  className={`flex-1 px-3 py-2 rounded-xl text-sm border transition-colors ${
+                    billingCycle === 'monthly'
+                      ? 'bg-gold-500/15 border-gold-500/40 text-gold-300'
+                      : 'bg-white/5 border-white/10 text-gray-400 hover:bg-white/10'
+                  }`}
+                >
+                  Monthly
+                  <div className="text-xs mt-1">₹499</div>
+                </button>
+              </div>
+              <div className="glass-card rounded-xl p-4 border border-gold-500/20">
+                <p className="text-xs text-gray-500">Paying now</p>
+                <p className="text-3xl font-bold text-gold-400 mt-1">₹{amount}</p>
+                <p className="text-xs text-gray-500 mt-1">{planLabel}</p>
+              </div>
+              <div className="flex gap-2">
+                <button onClick={handlePayNow} className="btn-premium btn-primary flex-1">
+                  <Smartphone size={16} /> Open UPI App
+                </button>
+                <button onClick={() => copyText(upiId, 'UPI ID')} className="btn-premium btn-secondary flex-1">
+                  <Copy size={16} /> Copy UPI ID
+                </button>
+              </div>
+              <button onClick={() => copyText(paymentNote, 'Payment note')} className="w-full text-xs text-gray-400 hover:text-gray-300">
+                Copy payment note
+              </button>
+            </div>
+            <div className="glass-card rounded-xl p-4 border border-white/10 flex flex-col items-center">
+              <div className="flex items-center gap-2 text-gray-300 mb-3">
+                <QrCode size={16} className="text-gold-400" />
+                <span className="text-sm">Scan QR and pay</span>
+              </div>
+              <img src={qrUrl} alt="UPI QR for payment" className="w-52 h-52 rounded-xl bg-white p-2" />
+              <p className="text-xs text-gray-500 mt-3 text-center">UPI: {upiId}<br />Name: {upiName}</p>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </DashboardLayout>
   );
 }
