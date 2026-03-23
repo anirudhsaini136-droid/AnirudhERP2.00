@@ -8,6 +8,7 @@ import {
   Shield, Home, FileSpreadsheet, UserCircle, ArrowLeftRight, BookUser,
   IndianRupee, BookOpen
 } from 'lucide-react';
+import { useTheme } from '../../contexts/ThemeContext';
 
 const NAV_CONFIG = {
   super_admin: {
@@ -100,6 +101,7 @@ const NAV_CONFIG = {
 
 export default function DashboardLayout({ children }) {
   const { user, business, logout, impersonating, endImpersonation, api } = useAuth();
+  const { isLight, toggleTheme } = useTheme();
   const location = useLocation();
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -281,6 +283,13 @@ export default function DashboardLayout({ children }) {
           <div className="hidden lg:block" />
 
           <div className="flex items-center gap-3">
+            <button
+              onClick={toggleTheme}
+              className="px-3 py-1.5 rounded-lg text-xs font-medium text-gray-300 hover:text-white bg-white/5 hover:bg-white/10 border border-white/10 transition-colors"
+              title={isLight ? 'Switch to dark mode' : 'Switch to light mode'}
+            >
+              {isLight ? 'Dark' : 'Light'}
+            </button>
             {/* Notifications */}
             <div className="relative">
               <button
