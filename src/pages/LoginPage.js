@@ -4,6 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
+import ThemeToggle from '../components/ThemeToggle';
 import { AlertCircle, Loader2, ArrowRight, Shield, Zap, Globe } from 'lucide-react';
 const LoginPage = () => {
   const [email, setEmail] = useState('');
@@ -12,7 +13,7 @@ const LoginPage = () => {
   const [loading, setLoading] = useState(false);
 
   const { login } = useAuth();
-  const { isLight, toggleTheme } = useTheme();
+  const { isLight } = useTheme();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -63,13 +64,7 @@ const LoginPage = () => {
       <div className="absolute inset-0 bg-gradient-mesh pointer-events-none" />
       <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[1000px] h-[600px] bg-gradient-radial from-gold-500/5 via-transparent to-transparent pointer-events-none" />
       <div className="absolute top-5 right-5 z-20">
-        <button
-          type="button"
-          onClick={toggleTheme}
-          className="px-3 py-1.5 rounded-lg text-xs font-medium text-gray-300 hover:text-white bg-white/5 hover:bg-white/10 border border-white/10 transition-colors"
-        >
-          {isLight ? 'Dark' : 'Light'}
-        </button>
+        <ThemeToggle />
       </div>
 
       {/* Left Panel - Hero */}
