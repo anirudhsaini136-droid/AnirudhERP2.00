@@ -116,6 +116,7 @@ export default function BusinessDetailPage() {
   const [extending, setExtending] = useState(false);
   const [extendForm, setExtendForm] = useState({
     duration_days: 30,
+    mode: 'add', // 'add' | 'set_from_today'
     payment_method: 'cash',
     amount: 0,
     currency: 'INR',
@@ -240,6 +241,22 @@ export default function BusinessDetailPage() {
   const payments = data?.manual_payments || [];
   const history = data?.subscription_history || [];
 
+  const previewNewExpiry = () => {
+    const n = parseInt(extendForm.duration_days, 10) || 0;
+    if (n < 1) return null;
+    const now = new Date();
+    let base;
+    if (extendForm.mode === 'set_from_today') {
+      base = new Date(now);
+    } else {
+      const cur = b.subscription_expires_at ? new Date(b.subscription_expires_at) : now;
+      base = cur > now ? new Date(cur) : new Date(now);
+    }
+    base.setDate(base.getDate() + n);
+    return base;
+  };
+  const previewDate = previewNewExpiry();
+
   return (
     <DashboardLayout>
       <div className="space-y-6">
@@ -260,7 +277,7 @@ export default function BusinessDetailPage() {
           </div>
           <div className="flex flex-wrap gap-2">
             <button onClick={() => setShowExtend(true)} className="btn-premium btn-primary text-sm">
-              <CreditCard size={15} /> Extend Subscription
+              <CreditCard size={15} /> Adjust subscription
             </button>
             <button onClick={handleImpersonate} className="btn-premium btn-secondary text-sm">
               <LogIn size={15} /> Login As
@@ -416,15 +433,44 @@ export default function BusinessDetailPage() {
         <ModulesEditor businessId={id} api={api} bizData={data?.business} onRefresh={fetchData} />
       </div>
 
-      {/* Extend Subscription Dialog */}
+      {/* Extend / set subscription dialog */}
       <Dialog open={showExtend} onOpenChange={setShowExtend}>
         <DialogContent className="bg-void border-white/10 max-w-md">
-          <DialogHeader><DialogTitle className="font-display text-white">Extend Subscription</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle className="font-display text-white">Adjust subscription end date</DialogTitle></DialogHeader>
           <form onSubmit={handleExtend} className="space-y-4">
+            <div className="rounded-xl border border-white/10 p-3 space-y-2 bg-white/[0.02]">
+              <p className="text-xs text-gray-400 font-medium">How should &quot;Duration (days)&quot; apply?</p>
+              <label className="flex items-start gap-2 cursor-pointer text-sm text-gray-200">
+                <input
+                  type="radio"
+                  name="sub-mode"
+                  checked={extendForm.mode === 'add'}
+                  onChange={() => setExtendForm({ ...extendForm, mode: 'add' })}
+                  className="mt-1"
+                />
+                <span><strong className="text-white">Add to current end date</strong> — extends (or stacks) from the later of today or the current expiry. Use for renewals.</span>
+              </label>
+              <label className="flex items-start gap-2 cursor-pointer text-sm text-gray-200">
+                <input
+                  type="radio"
+                  name="sub-mode"
+                  checked={extendForm.mode === 'set_from_today'}
+                  onChange={() => setExtendForm({ ...extendForm, mode: 'set_from_today' })}
+                  className="mt-1"
+                />
+                <span><strong className="text-white">Set from today</strong> — expiry becomes <em>exactly</em> that many days from <em>right now</em>. Use to shorten (e.g. 30 → 20) or set a fixed window.</span>
+              </label>
+            </div>
+            {previewDate && (
+              <p className="text-xs text-gold-400 font-sans rounded-lg bg-gold-500/10 border border-gold-500/20 px-3 py-2">
+                Preview: subscription ends on <strong>{previewDate.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</strong>
+                {' '}({extendForm.mode === 'set_from_today' ? 'from today' : 'after adding to current end'})
+              </p>
+            )}
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label className="text-gray-400 text-xs">Duration (days) *</Label>
-                <Input type="number" min="1" className="input-premium mt-1" value={extendForm.duration_days} onChange={e => setExtendForm({...extendForm, duration_days: parseInt(e.target.value) || 30})} required />
+                <Input type="number" min="1" className="input-premium mt-1" value={extendForm.duration_days} onChange={e => setExtendForm({...extendForm, duration_days: parseInt(e.target.value, 10) || 1})} required />
               </div>
               <div>
                 <Label className="text-gray-400 text-xs">Amount (INR) *</Label>
@@ -457,7 +503,7 @@ export default function BusinessDetailPage() {
             </div>
             <DialogFooter>
               <button type="button" onClick={() => setShowExtend(false)} className="btn-premium btn-secondary">Cancel</button>
-              <button type="submit" disabled={extending} className="btn-premium btn-primary">{extending ? 'Extending...' : 'Extend Now'}</button>
+              <button type="submit" disabled={extending} className="btn-premium btn-primary">{extending ? 'Applying...' : 'Apply'}</button>
             </DialogFooter>
           </form>
         </DialogContent>
