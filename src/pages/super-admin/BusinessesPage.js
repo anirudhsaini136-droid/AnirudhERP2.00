@@ -136,7 +136,7 @@ export default function BusinessesPage() {
               <tr className="border-b border-white/5 text-xs text-gray-500 uppercase tracking-wider">
                 <th className="px-4 py-3 text-left">Business</th>
                 <th className="px-4 py-3 text-left">Modules</th>
-                <th className="px-4 py-3 text-left">Monthly</th>
+                <th className="px-4 py-3 text-left">Earning / mo</th>
                 <th className="px-4 py-3 text-left">Expires</th>
                 <th className="px-4 py-3 text-left">Status</th>
                 <th className="px-4 py-3 text-right">Actions</th>
@@ -171,8 +171,8 @@ export default function BusinessesPage() {
                         {mods.length > 3 && <span className="text-[10px] text-gray-500">+{mods.length - 3}</span>}
                       </div>
                     </td>
-                    <td className="px-4 py-3 text-gold-400 font-semibold">
-                      {biz.monthly_amount > 0 ? fmt(biz.monthly_amount) : <span className="text-gray-600 text-xs">—</span>}
+                    <td className="px-4 py-3 text-gold-400 font-semibold" title="Matches platform MRR rules for this status">
+                      {(biz.mrr ?? 0) > 0 ? fmt(biz.mrr) : <span className="text-gray-600 text-xs">—</span>}
                     </td>
                     <td className="px-4 py-3">
                       <span className={`text-xs ${daysLeft <= 7 ? 'text-rose-400' : 'text-gray-400'}`}>

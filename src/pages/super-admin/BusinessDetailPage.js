@@ -52,6 +52,16 @@ function ModulesEditor({ businessId, api, bizData, onRefresh }) {
   const [maxProd, setMaxProd] = React.useState(bizData?.max_products || 50);
   const [saving, setSaving] = React.useState(false);
 
+  React.useEffect(() => {
+    if (!bizData) return;
+    try { setModules(JSON.parse(bizData.modules || '[]')); } catch { setModules([]); }
+    setMonthly(bizData.monthly_amount != null && bizData.monthly_amount !== '' ? Number(bizData.monthly_amount) : 0);
+    setMaxUsers(Number(bizData.max_users) || 5);
+    setMaxEmp(Number(bizData.max_employees) || 10);
+    setMaxInv(Number(bizData.max_invoices_month) || 100);
+    setMaxProd(Number(bizData.max_products) || 50);
+  }, [bizData]);
+
   const toggleMod = (id) => setModules(m => m.includes(id) ? m.filter(x => x !== id) : [...m, id]);
 
   const save = async () => {
@@ -74,8 +84,11 @@ function ModulesEditor({ businessId, api, bizData, onRefresh }) {
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 gap-3">
-        <div><label className="text-xs text-gray-400">Monthly Amount (₹)</label>
-          <input type="number" className="input-premium mt-1 w-full" value={monthly} onChange={e => setMonthly(e.target.value)} /></div>
+        <div className="col-span-2">
+          <label className="text-xs text-gray-400">Your monthly revenue from this business (₹)</label>
+          <input type="number" className="input-premium mt-1 w-full" value={monthly} onChange={e => setMonthly(e.target.value)} min={0} step={1} />
+          <p className="text-[10px] text-gray-600 mt-1">Counted in platform MRR. For active accounts, if this is 0 the plan list price is used instead.</p>
+        </div>
         <div><label className="text-xs text-gray-400">Max Users</label>
           <input type="number" className="input-premium mt-1 w-full" value={maxUsers} onChange={e => setMaxUsers(e.target.value)} /></div>
         <div><label className="text-xs text-gray-400">Max Employees</label>
@@ -309,7 +322,7 @@ export default function BusinessDetailPage() {
             <p className="text-sm text-white mt-1 font-sans">{fmtDate(b.subscription_expires_at)}</p>
           </div>
           <div className="stat-card">
-            <p className="text-xs text-gray-500">Monthly Revenue</p>
+            <p className="text-xs text-gray-500">Your monthly earning</p>
             <p className="text-lg text-gold-400 font-bold font-sans mt-1">{fmt(b.mrr)}</p>
           </div>
           <div className="stat-card">
@@ -430,7 +443,7 @@ export default function BusinessDetailPage() {
       {/* Modules & Pricing Section */}
       <div className="glass-card rounded-2xl p-5 space-y-4">
         <h3 className="font-display text-lg text-white">Modules & Pricing</h3>
-        <ModulesEditor businessId={id} api={api} bizData={data?.business} onRefresh={fetchData} />
+        <ModulesEditor key={id} businessId={id} api={api} bizData={data?.business} onRefresh={fetchData} />
       </div>
 
       {/* Extend / set subscription dialog */}

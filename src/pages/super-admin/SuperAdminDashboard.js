@@ -24,7 +24,7 @@ export default function SuperAdminDashboard() {
     { label: 'Total Businesses', value: s.total_businesses || 0, icon: Building2, color: 'text-gold-400', bg: 'from-gold-500/10' },
     { label: 'Active', value: s.active_businesses || 0, icon: TrendingUp, color: 'text-emerald-400', bg: 'from-emerald-500/10' },
     { label: 'Trial', value: s.trial_businesses || 0, icon: Clock, color: 'text-blue-400', bg: 'from-blue-500/10' },
-    { label: 'MRR', value: fmt(s.mrr), icon: IndianRupee, color: 'text-gold-400', bg: 'from-gold-500/10', isText: true },
+    { label: 'Platform MRR', value: fmt(s.mrr), icon: IndianRupee, color: 'text-gold-400', bg: 'from-gold-500/10', isText: true },
     { label: 'Expired', value: s.expired_businesses || 0, icon: AlertTriangle, color: 'text-rose-400', bg: 'from-rose-500/10' },
     { label: 'New This Month', value: s.new_signups_this_month || 0, icon: ArrowUpRight, color: 'text-emerald-400', bg: 'from-emerald-500/10' },
   ];
@@ -35,6 +35,7 @@ export default function SuperAdminDashboard() {
         <div>
           <h1 className="font-display text-2xl text-white">Platform Overview</h1>
           <p className="text-sm text-gray-500 mt-1 font-sans">Monitor all businesses and subscriptions</p>
+          <p className="text-xs text-gray-600 mt-1 max-w-2xl font-sans">Platform MRR is the sum of each active account’s revenue (your figure under Modules &amp; Pricing, or the plan list price if that field is 0) plus trial accounts only when you set an amount &gt; 0.</p>
         </div>
 
         {/* Stats grid */}
