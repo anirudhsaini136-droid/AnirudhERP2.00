@@ -3,12 +3,12 @@ import { Moon, Sun } from 'lucide-react';
 import { useTheme } from '../contexts/ThemeContext';
 
 export default function ThemeToggle({ compact = false }) {
-  const { isLight, isAuto, toggleTheme, useAutoSchedule } = useTheme();
+  const { isLight, isAuto, toggleTheme, enableAutoSchedule } = useTheme();
 
   const onClick = (e) => {
     if (e.shiftKey) {
       e.preventDefault();
-      useAutoSchedule();
+      enableAutoSchedule();
       return;
     }
     toggleTheme();

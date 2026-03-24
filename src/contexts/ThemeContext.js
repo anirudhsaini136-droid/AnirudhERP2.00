@@ -58,7 +58,7 @@ export const ThemeProvider = ({ children }) => {
     });
   }, []);
 
-  const useAutoSchedule = useCallback(() => {
+  const enableAutoSchedule = useCallback(() => {
     setPreference('auto');
   }, []);
 
@@ -69,9 +69,9 @@ export const ThemeProvider = ({ children }) => {
       isLight: effectiveTheme === 'light',
       isAuto: preference === 'auto',
       toggleTheme,
-      useAutoSchedule,
+      enableAutoSchedule,
     }),
-    [effectiveTheme, preference, toggleTheme, useAutoSchedule]
+    [effectiveTheme, preference, toggleTheme, enableAutoSchedule]
   );
 
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
