@@ -31,6 +31,7 @@ import CAPortalPage from './pages/ca/CAPortalPage';
 import AccountingPage from './pages/finance/AccountingPage';
 import CustomersLedgerPage from './pages/finance/CustomersLedgerPage';
 import CustomerLedgerDetailPage from './pages/finance/CustomerLedgerDetailPage';
+import DataMigrationPage from './pages/finance/DataMigrationPage';
 import InventoryPage from './pages/inventory/InventoryPage';
 import BillingPage from './pages/inventory/BillingPage';
 import StaffHome from './pages/staff/StaffHome';
@@ -111,6 +112,7 @@ function AppRoutes() {
       <Route path="/accounting" element={<RequireAuth allowedRoles={['finance_admin', 'business_owner', 'ca_admin']}><AccountingPage /></RequireAuth>} />
       <Route path="/finance/customers" element={<RequireAuth allowedRoles={['finance_admin', 'business_owner']}><CustomersLedgerPage /></RequireAuth>} />
       <Route path="/finance/customers/:clientName" element={<RequireAuth allowedRoles={['finance_admin', 'business_owner']}><CustomerLedgerDetailPage /></RequireAuth>} />
+      <Route path="/finance/migration" element={<RequireAuth allowedRoles={['finance_admin', 'business_owner']}><DataMigrationPage /></RequireAuth>} />
 
       {/* Inventory */}
       <Route path="/inventory" element={<RequireAuth allowedRoles={['inventory_admin', 'business_owner']}><InventoryPage /></RequireAuth>} />

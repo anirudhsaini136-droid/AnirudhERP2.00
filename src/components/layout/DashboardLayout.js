@@ -6,7 +6,7 @@ import {
   Receipt, BarChart3, Package, ShoppingCart, Settings, Bell, Truck, 
   LogOut, ChevronDown, Menu, X, Clock, Briefcase, CreditCard,
   Shield, Home, FileSpreadsheet, UserCircle, ArrowLeftRight, BookUser,
-  IndianRupee, BookOpen
+  IndianRupee, BookOpen, HardDriveDownload
 } from 'lucide-react';
 import ThemeToggle from '../ThemeToggle';
 
@@ -34,6 +34,7 @@ const NAV_CONFIG = {
       { path: '/finance', label: 'Finance Dashboard', icon: BarChart3 },
       { path: '/finance/invoices', label: 'Invoices', icon: FileSpreadsheet },
       { path: '/finance/customers', label: 'Customer Ledger', icon: BookUser },
+      { path: '/finance/migration', label: 'Import data', icon: HardDriveDownload },
       { path: '/finance/expenses', label: 'Expenses', icon: Receipt },
       { path: '/finance/reports', label: 'Reports', icon: BarChart3 },
       { path: '/finance/gst', label: 'GST Reports', icon: IndianRupee },
@@ -62,6 +63,7 @@ const NAV_CONFIG = {
       { path: '/finance', label: 'Dashboard', icon: LayoutDashboard },
       { path: '/finance/invoices', label: 'Invoices', icon: FileSpreadsheet },
       { path: '/finance/customers', label: 'Customer Ledger', icon: BookUser },
+      { path: '/finance/migration', label: 'Import data', icon: HardDriveDownload },
       { path: '/finance/expenses', label: 'Expenses', icon: Receipt },
       { path: '/finance/reports', label: 'Reports', icon: BarChart3 },
       { path: '/finance/gst', label: 'GST Reports', icon: IndianRupee },
@@ -120,7 +122,7 @@ export default function DashboardLayout({ children }) {
   const MODULE_NAV_MAP = {
     'manage_users': ['/dashboard/users'],
     'hr_payroll': ['/hr', '/hr/employees', '/hr/attendance', '/hr/leave', '/hr/payroll'],
-    'invoices_finance': ['/finance', '/finance/invoices', '/finance/invoices/:id', '/finance/reports'],
+    'invoices_finance': ['/finance', '/finance/invoices', '/finance/invoices/:id', '/finance/reports', '/finance/migration'],
     'inventory_billing': ['/inventory', '/inventory/billing'],
     'purchases_itc': ['/purchases'],
     'gst_reports': ['/finance/gst', '/ca'],
