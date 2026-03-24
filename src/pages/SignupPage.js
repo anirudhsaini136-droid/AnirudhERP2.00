@@ -35,7 +35,12 @@ export default function SignupPage() {
       await api.post('/auth/signup/request-otp', form);
       setOtpSent(true);
     } catch (err) {
-      setError(err.response?.data?.detail || 'Signup failed, please try again');
+      const detail = err.response?.data?.detail || 'Signup failed, please try again';
+      if (typeof detail === 'string' && detail.toLowerCase().includes('already exists')) {
+        setError('User already exists. Please login.');
+      } else {
+        setError(detail);
+      }
     } finally {
       setLoading(false);
     }

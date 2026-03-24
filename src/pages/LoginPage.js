@@ -4,13 +4,18 @@ import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../components/ui/dialog';
 import ThemeToggle from '../components/ThemeToggle';
-import { AlertCircle, Loader2, ArrowRight, Shield, Zap, Globe } from 'lucide-react';
+import { AlertCircle, Loader2, ArrowRight, Shield, Zap, Globe, CheckCircle2, Mail } from 'lucide-react';
 const LoginPage = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showForgot, setShowForgot] = useState(false);
+  const [forgotEmail, setForgotEmail] = useState('');
+  const [forgotLoading, setForgotLoading] = useState(false);
+  const [forgotMsg, setForgotMsg] = useState('');
 
   const { login } = useAuth();
   const { isLight } = useTheme();
@@ -165,6 +170,15 @@ const LoginPage = () => {
                   required
                   className="input-premium h-14 text-base"
                 />
+                <div className="text-right">
+                  <button
+                    type="button"
+                    onClick={() => { setForgotEmail(email); setForgotMsg(''); setShowForgot(true); }}
+                    className="text-xs text-gold-400 hover:text-gold-300"
+                  >
+                    Forgot password?
+                  </button>
+                </div>
               </div>
               <Button
                 id="nexus-login-btn"
@@ -189,8 +203,95 @@ const LoginPage = () => {
           </p>
         </div>
       </div>
+
+      <ForgotPasswordDialog
+        open={showForgot}
+        onOpenChange={setShowForgot}
+        initialEmail={forgotEmail}
+        setInitialEmail={setForgotEmail}
+        forgotLoading={forgotLoading}
+        setForgotLoading={setForgotLoading}
+        forgotMsg={forgotMsg}
+        setForgotMsg={setForgotMsg}
+      />
     </div>
   );
 };
+
+function ForgotPasswordDialog({
+  open,
+  onOpenChange,
+  initialEmail,
+  setInitialEmail,
+  forgotLoading,
+  setForgotLoading,
+  forgotMsg,
+  setForgotMsg,
+}) {
+  const { api } = useAuth();
+  const success = forgotMsg.toLowerCase().includes('reset link sent');
+
+  const submitForgot = async (e) => {
+    e.preventDefault();
+    setForgotMsg('');
+    setForgotLoading(true);
+    try {
+      await api.post('/auth/forgot-password', { email: initialEmail });
+      setForgotMsg('Reset link sent to your email if account exists.');
+    } catch (err) {
+      setForgotMsg(err.response?.data?.detail || 'Unable to send reset link right now.');
+    } finally {
+      setForgotLoading(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="bg-void border-white/10 max-w-md">
+        <DialogHeader>
+          <DialogTitle className="font-display text-white">Forgot Password</DialogTitle>
+        </DialogHeader>
+        <form onSubmit={submitForgot} className="space-y-4">
+          {!success ? (
+            <>
+              <Input
+                type="email"
+                required
+                className="input-premium h-12"
+                placeholder="Enter your account email"
+                value={initialEmail}
+                onChange={(e) => setInitialEmail(e.target.value)}
+              />
+              <Button type="submit" disabled={forgotLoading} className="btn-premium btn-primary w-full h-12 rounded-xl">
+                {forgotLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : 'Send Reset Link'}
+              </Button>
+            </>
+          ) : (
+            <div className="rounded-xl border border-emerald-500/25 bg-emerald-500/10 p-4 animate-fade-in">
+              <div className="flex items-start gap-3">
+                <CheckCircle2 className="h-5 w-5 text-emerald-400 mt-0.5" />
+                <div>
+                  <p className="text-sm text-emerald-300 font-medium">Reset link sent</p>
+                  <p className="text-xs text-emerald-200/80 mt-1">
+                    Check your inbox and spam folder. The link expires in 1 hour.
+                  </p>
+                </div>
+              </div>
+              <a
+                href="https://mail.google.com"
+                target="_blank"
+                rel="noreferrer"
+                className="mt-3 inline-flex items-center gap-2 text-xs text-gold-300 hover:text-gold-200"
+              >
+                <Mail size={13} /> Open Gmail
+              </a>
+            </div>
+          )}
+          {forgotMsg && !success && <p className="text-xs text-gray-400 text-center">{forgotMsg}</p>}
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
 
 export default LoginPage;

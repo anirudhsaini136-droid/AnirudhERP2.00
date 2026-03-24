@@ -6,6 +6,7 @@ import { ThemeProvider } from './contexts/ThemeContext';
 
 import LoginPage from './pages/LoginPage';
 import SignupPage from './pages/SignupPage';
+import ResetPasswordPage from './pages/ResetPasswordPage';
 import PublicInvoicePage from './pages/finance/PublicInvoicePage';
 import SuperAdminDashboard from './pages/super-admin/SuperAdminDashboard';
 import BusinessesPage from './pages/super-admin/BusinessesPage';
@@ -77,6 +78,7 @@ function AppRoutes() {
       {/* PUBLIC - No auth required */}
       <Route path="/login" element={<RedirectAuth />} />
       <Route path="/signup" element={<RedirectAuth><SignupPage /></RedirectAuth>} />
+      <Route path="/reset-password" element={<ResetPasswordPage />} />
       <Route path="/invoice/:id" element={<PublicInvoicePage />} />
 
       {/* Super Admin */}
