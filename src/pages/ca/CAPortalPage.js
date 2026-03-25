@@ -3,6 +3,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import DashboardLayout from '../../components/layout/DashboardLayout';
 import { FileText, Download, TrendingUp, TrendingDown, RefreshCw, Shield, BookOpen, CheckCircle, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
+import { loadLocalInvoices } from '../../lib/offlineInvoices';
 
 const fmt = (n) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 2 }).format(n || 0);
 const fmtDate = (d) => d ? new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '-';
@@ -52,12 +53,13 @@ const getMonthRange = () => {
 };
 
 export default function CAPortalPage() {
-  const { api, user } = useAuth();
+  const { api, user, business } = useAuth();
   const [loading, setLoading] = useState(false);
   const [summary, setSummary] = useState(null);
   const [gstr1, setGstr1] = useState(null);
   const [itc, setItc] = useState(null);
   const [activeTab, setActiveTab] = useState('summary');
+  const [exportMode, setExportMode] = useState('combined');
   const [mainTab, setMainTab] = useState('gst'); // 'gst' | 'accounting'
 
   // Accounting states
@@ -117,8 +119,71 @@ export default function CAPortalPage() {
         api.get(`/finance/gst/summary?start_date=${startDate}&end_date=${endDate}`),
         api.get(`/finance/gst/gstr1?start_date=${startDate}&end_date=${endDate}`)
       ]);
-      setSummary(sumRes.data);
-      setGstr1(gstr1Res.data);
+      const toNum = (n) => Number(n || 0);
+      const inRange = (d, start, end) => d && d >= start && d <= end;
+      const locals = business?.id ? loadLocalInvoices(business.id) : [];
+      const pending = (locals || []).filter((inv) =>
+        inv &&
+        inv.sync_status === 'local_pending' &&
+        !inv.server_invoice_id &&
+        inv.status !== 'cancelled' &&
+        inRange(inv.issue_date, startDate, endDate)
+      );
+
+      const offlineRows = [];
+      for (const inv of pending) {
+        for (const item of (inv.items || [])) {
+          offlineRows.push({
+            invoice_number: inv.invoice_number,
+            invoice_date: inv.issue_date || '',
+            customer_name: inv.client_name || '',
+            customer_gstin: '',
+            place_of_supply: inv.place_of_supply || inv.buyer_state || '',
+            supply_type: inv.supply_type || 'intrastate',
+            hsn_code: item.hsn_code || '',
+            description: item.description || '',
+            quantity: toNum(item.quantity),
+            unit_price: toNum(item.unit_price),
+            taxable_value: toNum(item.total),
+            tax_rate: toNum(inv.tax_rate),
+            cgst_rate: toNum(inv.cgst_rate),
+            cgst_amount: toNum(inv.cgst_amount),
+            sgst_rate: toNum(inv.sgst_rate),
+            sgst_amount: toNum(inv.sgst_amount),
+            igst_rate: toNum(inv.igst_rate),
+            igst_amount: toNum(inv.igst_amount),
+            invoice_value: toNum(inv.total_amount),
+            source: 'offline_pending',
+          });
+        }
+      }
+
+      const serverSummary = sumRes.data?.summary || {};
+      const mergedSummary = {
+        ...serverSummary,
+        total_invoices: toNum(serverSummary.total_invoices) + pending.length,
+        total_taxable_value: toNum(serverSummary.total_taxable_value) + pending.reduce((s, i) => s + toNum(i.subtotal), 0),
+        total_cgst: toNum(serverSummary.total_cgst) + pending.reduce((s, i) => s + toNum(i.cgst_amount), 0),
+        total_sgst: toNum(serverSummary.total_sgst) + pending.reduce((s, i) => s + toNum(i.sgst_amount), 0),
+        total_igst: toNum(serverSummary.total_igst) + pending.reduce((s, i) => s + toNum(i.igst_amount), 0),
+        total_tax: toNum(serverSummary.total_tax) + pending.reduce((s, i) => s + toNum(i.cgst_amount) + toNum(i.sgst_amount) + toNum(i.igst_amount), 0),
+        total_sales: toNum(serverSummary.total_sales) + pending.reduce((s, i) => s + toNum(i.total_amount), 0),
+        intrastate_count: toNum(serverSummary.intrastate_count) + pending.filter((i) => (i.supply_type || 'intrastate') === 'intrastate').length,
+        interstate_count: toNum(serverSummary.interstate_count) + pending.filter((i) => (i.supply_type || '') === 'interstate').length,
+        server_total_invoices: toNum(serverSummary.total_invoices),
+        offline_pending_invoices: pending.length,
+      };
+
+      setSummary({
+        ...sumRes.data,
+        summary: mergedSummary,
+        invoices: [...(sumRes.data?.invoices || []), ...pending.map((p) => ({ ...p, source: 'offline_pending' }))],
+      });
+      setGstr1({
+        ...gstr1Res.data,
+        rows: [...(gstr1Res.data?.rows || []), ...offlineRows],
+        total_rows: (gstr1Res.data?.rows || []).length + offlineRows.length,
+      });
       try {
         const itcRes = await api.get(`/purchases/itc/summary?start_date=${startDate}&end_date=${endDate}`);
         setItc(itcRes.data);
@@ -131,11 +196,17 @@ export default function CAPortalPage() {
 
   const exportGSTR1CSV = () => {
     if (!gstr1?.rows?.length) { toast.error('No data'); return; }
-    const headers = Object.keys(gstr1.rows[0]);
-    const csv = [headers.join(','), ...gstr1.rows.map(r => headers.map(h => r[h] ?? '').join(','))].join('\n');
+    const rows = gstr1.rows.filter((r) => {
+      if (exportMode === 'combined') return true;
+      if (exportMode === 'server_only') return (r.source || 'server') !== 'offline_pending';
+      return (r.source || '') === 'offline_pending';
+    });
+    if (!rows.length) { toast.error('No data for selected export mode'); return; }
+    const headers = Object.keys(rows[0]);
+    const csv = [headers.join(','), ...rows.map(r => headers.map(h => r[h] ?? '').join(','))].join('\n');
     const a = document.createElement('a');
     a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
-    a.download = `GSTR1_${startDate}_${endDate}.csv`;
+    a.download = `GSTR1_${exportMode}_${startDate}_${endDate}.csv`;
     a.click();
     toast.success('GSTR-1 CSV downloaded');
   };
@@ -238,6 +309,15 @@ export default function CAPortalPage() {
                   ))}
                 </div>
 
+                {s.offline_pending_invoices > 0 && (
+                  <div className="glass-card rounded-2xl p-3 border border-amber-500/20 bg-amber-500/5">
+                    <p className="text-xs text-amber-300">
+                      Included offline pending invoices: <span className="font-semibold">{s.offline_pending_invoices}</span>{' '}
+                      (server invoices: {s.server_total_invoices})
+                    </p>
+                  </div>
+                )}
+
                 <div className="grid grid-cols-3 gap-4">
                   <div className="glass-card rounded-2xl p-5">
                     <p className="text-xs text-gray-500 uppercase tracking-wider mb-2">CGST</p>
@@ -280,23 +360,41 @@ export default function CAPortalPage() {
                   <div className="glass-card rounded-2xl overflow-hidden">
                     <div className="flex items-center justify-between px-5 py-3 border-b border-white/5">
                       <p className="text-sm font-semibold text-white">Sales Register ({s.total_invoices} invoices)</p>
-                      <button onClick={() => {
-                        const rows = summary.invoices?.map(inv => ({
+                      <div className="flex items-center gap-2">
+                        <select
+                          value={exportMode}
+                          onChange={(e) => setExportMode(e.target.value)}
+                          className="input-premium text-xs h-8"
+                        >
+                          <option value="combined">Combined</option>
+                          <option value="server_only">Server only</option>
+                          <option value="offline_only">Offline pending only</option>
+                        </select>
+                        <button onClick={() => {
+                        const sourceRows = (summary.invoices || []).filter((inv) => {
+                          if (exportMode === 'combined') return true;
+                          if (exportMode === 'server_only') return (inv.source || 'server') !== 'offline_pending';
+                          return (inv.source || '') === 'offline_pending';
+                        });
+                        const rows = sourceRows?.map(inv => ({
                           'Invoice No': inv.invoice_number, 'Date': inv.issue_date,
                           'Customer': inv.client_name, 'Supply Type': inv.supply_type,
                           'Taxable': inv.subtotal, 'CGST': inv.cgst_amount,
-                          'SGST': inv.sgst_amount, 'IGST': inv.igst_amount, 'Total': inv.total_amount
+                          'SGST': inv.sgst_amount, 'IGST': inv.igst_amount, 'Total': inv.total_amount,
+                          'Source': inv.source === 'offline_pending' ? 'Offline Pending' : 'Server',
                         })) || [];
+                        if (!rows.length) { toast.error('No data for selected export mode'); return; }
                         const headers = Object.keys(rows[0] || {});
                         const csv = [headers.join(','), ...rows.map(r => headers.map(h => r[h] ?? '').join(','))].join('\n');
                         const a = document.createElement('a');
                         a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
-                        a.download = `Sales_Register_${startDate}_${endDate}.csv`;
+                        a.download = `Sales_Register_${exportMode}_${startDate}_${endDate}.csv`;
                         a.click();
                         toast.success('CSV downloaded');
                       }} className="btn-premium btn-secondary text-xs flex items-center gap-1.5 py-1.5 px-3">
                         <Download size={13} /> Export CSV
                       </button>
+                      </div>
                     </div>
                     <div className="overflow-x-auto">
                       <table className="w-full text-xs">
@@ -344,6 +442,15 @@ export default function CAPortalPage() {
                     <div className="flex items-center justify-between px-5 py-3 border-b border-white/5">
                       <p className="text-sm font-semibold text-white">GSTR-1 ({gstr1?.total_rows} line items)</p>
                       <div className="flex gap-2">
+                        <select
+                          value={exportMode}
+                          onChange={(e) => setExportMode(e.target.value)}
+                          className="input-premium text-xs h-8"
+                        >
+                          <option value="combined">Combined</option>
+                          <option value="server_only">Server only</option>
+                          <option value="offline_only">Offline pending only</option>
+                        </select>
                         <button onClick={exportGSTR1CSV} className="btn-premium btn-secondary text-xs flex items-center gap-1.5 py-1.5 px-3">
                           <Download size={13} /> CSV
                         </button>

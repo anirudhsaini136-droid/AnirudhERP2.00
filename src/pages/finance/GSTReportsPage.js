@@ -64,6 +64,7 @@ export default function GSTReportsPage() {
   const [loading, setLoading] = useState(false);
   const [itc, setItc] = useState(null);
   const [activeTab, setActiveTab] = useState('summary');
+  const [exportMode, setExportMode] = useState('combined');
 
   const [purchases, setPurchases] = useState(null);
 
@@ -217,12 +218,22 @@ export default function GSTReportsPage() {
 
   const exportGSTR1 = () => {
     if (!gstr1?.rows) return;
-    exportToCSV(gstr1.rows, `GSTR1_${startDate}_to_${endDate}.csv`);
+    const rows = gstr1.rows.filter((r) => {
+      if (exportMode === 'combined') return true;
+      if (exportMode === 'server_only') return (r.source || 'server') !== 'offline_pending';
+      return (r.source || '') === 'offline_pending';
+    });
+    exportToCSV(rows, `GSTR1_${exportMode}_${startDate}_to_${endDate}.csv`);
   };
 
   const exportSummary = () => {
     if (!summary) return;
-    const rows = summary.invoices?.map(inv => ({
+    const invoices = (summary.invoices || []).filter((inv) => {
+      if (exportMode === 'combined') return true;
+      if (exportMode === 'server_only') return (inv.source || 'server') !== 'offline_pending';
+      return (inv.source || '') === 'offline_pending';
+    });
+    const rows = invoices?.map(inv => ({
       'Invoice No': inv.invoice_number,
       'Date': inv.issue_date,
       'Customer': inv.client_name,
@@ -237,9 +248,10 @@ export default function GSTReportsPage() {
       'IGST %': inv.igst_rate,
       'IGST Amount': inv.igst_amount,
       'Total Amount': inv.total_amount,
-      'Status': inv.status
+      'Status': inv.status,
+      'Source': inv.source === 'offline_pending' ? 'Offline Pending' : 'Server'
     })) || [];
-    exportToCSV(rows, `GST_Summary_${startDate}_to_${endDate}.csv`);
+    exportToCSV(rows, `GST_Summary_${exportMode}_${startDate}_to_${endDate}.csv`);
   };
 
   const s = summary?.summary;
@@ -353,9 +365,20 @@ export default function GSTReportsPage() {
               <div className="glass-card rounded-2xl overflow-hidden">
                 <div className="flex items-center justify-between px-5 py-3 border-b border-white/5">
                   <p className="text-sm font-semibold text-white">Sales Register ({s.total_invoices} invoices)</p>
-                  <button onClick={exportSummary} className="btn-premium btn-secondary text-xs flex items-center gap-1.5 py-1.5 px-3">
-                    <Download size={13} /> Export CSV
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <select
+                      value={exportMode}
+                      onChange={(e) => setExportMode(e.target.value)}
+                      className="input-premium text-xs h-8"
+                    >
+                      <option value="combined">Combined</option>
+                      <option value="server_only">Server only</option>
+                      <option value="offline_only">Offline pending only</option>
+                    </select>
+                    <button onClick={exportSummary} className="btn-premium btn-secondary text-xs flex items-center gap-1.5 py-1.5 px-3">
+                      <Download size={13} /> Export CSV
+                    </button>
+                  </div>
                 </div>
                 <div className="overflow-x-auto">
                   <table className="w-full text-xs">
@@ -409,9 +432,20 @@ export default function GSTReportsPage() {
               <div className="glass-card rounded-2xl overflow-hidden">
                 <div className="flex items-center justify-between px-5 py-3 border-b border-white/5">
                   <p className="text-sm font-semibold text-white">GSTR-1 ({gstr1?.total_rows} line items)</p>
-                  <button onClick={exportGSTR1} className="btn-premium btn-primary text-xs flex items-center gap-1.5 py-1.5 px-3">
-                    <Download size={13} /> Export for GST Portal
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <select
+                      value={exportMode}
+                      onChange={(e) => setExportMode(e.target.value)}
+                      className="input-premium text-xs h-8"
+                    >
+                      <option value="combined">Combined</option>
+                      <option value="server_only">Server only</option>
+                      <option value="offline_only">Offline pending only</option>
+                    </select>
+                    <button onClick={exportGSTR1} className="btn-premium btn-primary text-xs flex items-center gap-1.5 py-1.5 px-3">
+                      <Download size={13} /> Export for GST Portal
+                    </button>
+                  </div>
                 </div>
                 <div className="overflow-x-auto">
                   <table className="w-full text-xs">
