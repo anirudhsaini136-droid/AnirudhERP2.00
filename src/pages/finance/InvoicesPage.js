@@ -9,6 +9,7 @@ import { Plus, Search, Eye, CheckCircle, Trash2, Bell, ChevronDown, ChevronUp } 
 import { toast } from 'sonner';
 import {
   loadLocalInvoices,
+  reconcileServerInvoiceCache,
   upsertLocalInvoices,
   createLocalInvoiceAndQueue,
   recordLocalPaymentAndQueue,
@@ -525,26 +526,28 @@ export default function InvoicesPage() {
     if (typeof navigator === 'undefined') return;
     if (!navigator.onLine) return;
 
-    const flagKey = `nexus_offline_v1:cached_all_invoices:${business.id}`;
-    if (localStorage.getItem(flagKey) === '1') return;
-
     let cancelled = false;
     const run = async () => {
       try {
         const limit = 50;
         let pageNum = 1;
+        const allServerInvoices = [];
         // Cache without search/status filters; offline UI does filtering locally.
         while (true) {
           const params = new URLSearchParams({ page: pageNum, limit });
           const res = await api.get(`/finance/invoices?${params}`, { timeout: 8000 });
           if (cancelled) return;
           const invs = res.data?.invoices || [];
+          allServerInvoices.push(...invs);
           upsertServerInvoices(business.id, invs);
           const pages = Number(res.data?.pages || 1);
           if (pageNum >= pages) break;
           pageNum += 1;
         }
-        localStorage.setItem(flagKey, '1');
+        reconcileServerInvoiceCache(
+          business.id,
+          allServerInvoices.map((x) => x?.id).filter(Boolean)
+        );
       } catch {
         // ignore: caching is best-effort for MVP
       }

@@ -82,6 +82,20 @@ export function upsertServerInvoices(businessId, serverInvoices) {
   upsertLocalInvoices(businessId, invoices);
 }
 
+// Reconciles local cache with latest full server invoice ID list.
+// Keeps local drafts/pending actions, removes stale synced invoices that no longer exist on server.
+export function reconcileServerInvoiceCache(businessId, serverInvoiceIds = []) {
+  const idSet = new Set((serverInvoiceIds || []).filter(Boolean));
+  const invoices = loadLocalInvoices(businessId);
+  const next = invoices.filter((inv) => {
+    if (!inv) return false;
+    if (inv.sync_status === "local_pending" || inv.sync_status === "local_draft") return true;
+    const serverId = inv.server_invoice_id || inv.id;
+    return idSet.has(serverId);
+  });
+  upsertLocalInvoices(businessId, next);
+}
+
 export function upsertLocalInvoiceDetail(businessId, { invoice, items, payments } = {}) {
   if (!invoice || !invoice.id) return;
   const invoices = loadLocalInvoices(businessId);
