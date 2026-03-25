@@ -42,8 +42,10 @@ export default function CustomerLedgerDetailPage() {
       const res = await api.get(`/finance/customers/${encodeURIComponent(clientName)}/ledger`);
       setData(res.data);
       setBulkForm(f => ({ ...f, amount: res.data.customer?.total_outstanding || 0 }));
-    } catch {
-      toast.error('Failed to load customer ledger');
+    } catch (e) {
+      const status = e?.response?.status;
+      const detail = e?.response?.data?.detail || e?.response?.data?.message;
+      toast.error(detail || (status ? `Failed to load customer ledger (${status})` : 'Failed to load customer ledger'));
       navigate('/finance/customers');
     }
     setLoading(false);
