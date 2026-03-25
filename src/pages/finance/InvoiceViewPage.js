@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
-import { ArrowLeft, Printer, Send, MessageCircle } from 'lucide-react';
+import { ArrowLeft, Printer, MessageCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import InvoiceRenderer from './InvoiceRenderer';
 import { getLocalInvoice, upsertLocalInvoiceDetail } from '../../lib/offlineInvoices';
@@ -17,7 +17,7 @@ export default function InvoiceViewPage() {
   const [items, setItems] = useState([]);
   const [business, setBusiness] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [sending, setSending] = useState(false);
+  // Email sending removed
 
   useEffect(() => {
     const load = async () => {
@@ -112,28 +112,7 @@ export default function InvoiceViewPage() {
 
   const handlePrint = () => window.print();
 
-  const handleSendEmail = async () => {
-    setSending(true);
-    if (typeof navigator !== 'undefined' && !navigator.onLine) {
-      toast.error('Offline: cannot send email now');
-      setSending(false);
-      return;
-    }
-    if (invoice?.sync_status === 'local_pending') {
-      toast.error('Invoice not synced yet (offline).');
-      setSending(false);
-      return;
-    }
-    try {
-      await api.post(`/finance/invoices/${id}/send`);
-      toast.success('Invoice sent via email');
-      const res = await api.get(`/finance/invoices/${id}`);
-      setInvoice(res.data.invoice);
-    } catch {
-      toast.error('Failed to send invoice');
-    }
-    setSending(false);
-  };
+  // handleSendEmail removed
 
   const handleSendWhatsApp = () => {
     if (!invoice) return;
@@ -191,15 +170,7 @@ export default function InvoiceViewPage() {
           <span className="text-sm">Back to Invoices</span>
         </button>
         <div className="flex items-center gap-2 flex-wrap">
-          {invoice.status === 'draft' && (
-            <button
-              onClick={handleSendEmail}
-              disabled={sending || invoice?.sync_status === 'local_pending' || (typeof navigator !== 'undefined' && !navigator.onLine)}
-              className="btn-premium btn-secondary text-sm flex items-center gap-2 disabled:opacity-40"
-            >
-              <Send size={15} /> {sending ? 'Sending...' : 'Send Email'}
-            </button>
-          )}
+          {/* Send Email removed */}
           <button onClick={handleSendWhatsApp}
             className="btn-premium text-sm flex items-center gap-2 px-4 py-2 rounded-xl border transition-all"
             style={{ background: 'rgba(37,211,102,0.1)', borderColor: 'rgba(37,211,102,0.3)', color: '#25d366' }}>

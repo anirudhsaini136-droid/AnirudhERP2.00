@@ -590,17 +590,7 @@ export default function InvoicesPage() {
     }
   };
 
-  const sendInvoice = async (id) => {
-    if (typeof navigator !== 'undefined' && !navigator.onLine) {
-      toast.error('Offline: cannot send email now');
-      return;
-    }
-    try {
-      await api.post(`/finance/invoices/${id}/send`);
-      toast.success('Invoice sent');
-      fetchInvoices();
-    } catch { toast.error('Failed to send invoice'); }
-  };
+  // Send email removed from invoices list
 
   const handleDeleteConfirmed = async () => {
     if (!deleteConfirm) return;
@@ -767,16 +757,7 @@ export default function InvoicesPage() {
                   <td className="text-right">
                     <div className="flex items-center justify-end gap-1">
                       <button onClick={() => navigate(`/finance/invoices/${inv.id}`)} className="p-1.5 text-gray-400 hover:text-white" title="View"><Eye size={15} /></button>
-                      {inv.status === 'draft' && (
-                        <button
-                          onClick={() => sendInvoice(inv.server_invoice_id || inv.id)}
-                          disabled={inv.sync_status === 'local_pending' || (typeof navigator !== 'undefined' && !navigator.onLine)}
-                          className="p-1.5 text-blue-400 hover:text-blue-300 disabled:opacity-40"
-                          title="Send Email"
-                        >
-                          <Send size={15} />
-                        </button>
-                      )}
+                      {/* Send Email removed */}
                       {['draft','sent','partially_paid','overdue'].includes(inv.status) && (
                         <button onClick={() => sendReminder(inv)} className="p-1.5 rounded-lg hover:bg-emerald-500/10" style={{ color: '#25d366' }} title="WhatsApp Reminder"><Bell size={15} /></button>
                       )}
