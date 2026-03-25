@@ -314,6 +314,7 @@ export default function InvoicesPage() {
   const [deleteConfirm, setDeleteConfirm] = useState(null);
   const [deleting, setDeleting] = useState(false);
   const [businessName, setBusinessName] = useState('');
+  const [whatsappApiReady, setWhatsappApiReady] = useState(false);
   const [offlineNow, setOfflineNow] = useState(typeof navigator !== 'undefined' ? !navigator.onLine : true);
   const [selectedInvoiceIds, setSelectedInvoiceIds] = useState([]);
   const [activeDraftId, setActiveDraftId] = useState(null);
@@ -561,7 +562,11 @@ export default function InvoicesPage() {
 
   useEffect(() => {
     api.get('/dashboard/settings')
-      .then(r => setBusinessName(r.data?.business?.name || ''))
+      .then(r => {
+        const b = r.data?.business || {};
+        setBusinessName(b.name || '');
+        setWhatsappApiReady(Boolean((b.wati_api_endpoint || '').trim() && (b.wati_api_token || '').trim()));
+      })
       .catch(() => {});
   }, [api]);
 
@@ -842,7 +847,16 @@ export default function InvoicesPage() {
     setPaying(false);
   };
 
-  const sendReminder = (inv) => {
+  const sendReminder = async (inv) => {
+    if (whatsappApiReady && typeof navigator !== 'undefined' && navigator.onLine && inv?.id && inv?.sync_status !== 'local_pending') {
+      try {
+        await api.post(`/finance/invoices/${inv.server_invoice_id || inv.id}/send-whatsapp-api`);
+        toast.success('WhatsApp reminder sent via API');
+        return;
+      } catch (e) {
+        toast.error(e.response?.data?.detail || 'WhatsApp API failed, opening WhatsApp Web');
+      }
+    }
     const phone = (inv.client_phone || '').replace(/[^0-9]/g, '');
     const invoiceUrl = `${window.location.origin}/invoice/${inv.id}`;
     const message = [
@@ -865,6 +879,62 @@ export default function InvoicesPage() {
       : `https://wa.me/?text=${encodeURIComponent(message)}`;
     window.open(waUrl, '_blank');
     toast.success('WhatsApp reminder opened!');
+  };
+
+  const sendAllReminders = async () => {
+    const candidates = (invoices || []).filter((inv) =>
+      ['draft', 'sent', 'partially_paid', 'overdue'].includes(inv.status) &&
+      Number(inv.balance_due || 0) > 0 &&
+      !!(inv.client_phone || '').trim()
+    );
+    if (!candidates.length) {
+      toast.error('No invoice reminders to send');
+      return;
+    }
+
+    // API mode: one backend call for all.
+    if (whatsappApiReady && typeof navigator !== 'undefined' && navigator.onLine) {
+      try {
+        const eligibleIds = candidates
+          .filter((i) => i.sync_status !== 'local_pending')
+          .map((i) => i.server_invoice_id || i.id)
+          .filter(Boolean);
+        const res = await api.post('/finance/reminders/whatsapp/send-all', { invoice_ids: eligibleIds });
+        toast.success(`WhatsApp API: sent ${res.data?.sent || 0}, failed ${res.data?.failed || 0}`);
+        return;
+      } catch (e) {
+        toast.error(e.response?.data?.detail || 'API bulk send failed, opening WhatsApp Web');
+      }
+    }
+
+    // Web fallback: open one-by-one.
+    for (let i = 0; i < candidates.length; i += 1) {
+      const inv = candidates[i];
+      const phone = (inv.client_phone || '').replace(/[^0-9]/g, '');
+      const invoiceUrl = `${window.location.origin}/invoice/${inv.id}`;
+      const message = [
+        `Hello ${inv.client_name}!`,
+        '',
+        `This is a gentle reminder from *${businessName || 'Our Store'}* regarding your pending payment.`,
+        '',
+        `Invoice No: ${inv.invoice_number}`,
+        `Amount Due: ${fmt(inv.balance_due || inv.total_amount)}`,
+        `Due Date: ${fmtDate(inv.due_date)}`,
+        '',
+        `View your invoice here:`,
+        invoiceUrl,
+      ].join('\n');
+      const waUrl = phone
+        ? `https://wa.me/${phone}?text=${encodeURIComponent(message)}`
+        : `https://wa.me/?text=${encodeURIComponent(message)}`;
+      window.open(waUrl, '_blank');
+      if (i < candidates.length - 1) {
+        // Small delay so tabs don't get blocked.
+        // eslint-disable-next-line no-await-in-loop
+        await new Promise((resolve) => setTimeout(resolve, 1200));
+      }
+    }
+    toast.success(`Opened ${candidates.length} WhatsApp reminder(s)`);
   };
 
   return (
@@ -896,6 +966,12 @@ export default function InvoicesPage() {
             <option value="partially_paid">Partially Paid</option>
             <option value="overdue">Overdue</option>
           </select>
+          <button
+            onClick={sendAllReminders}
+            className="btn-premium text-sm h-10 px-3 border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10"
+          >
+            Send All WhatsApp
+          </button>
           {selectedInvoiceIds.length > 0 && (
             <button onClick={handleBulkDelete} className="btn-premium text-sm h-10 px-3 border border-rose-500/30 text-rose-400 hover:bg-rose-500/10">
               Delete Selected ({selectedInvoiceIds.length})

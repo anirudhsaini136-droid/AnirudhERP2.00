@@ -40,6 +40,9 @@ export default function BusinessSettings() {
     terms_of_sale: '',
     upi_vpa: '',
     upi_name: '',
+    whatsapp_number: '',
+    wati_api_endpoint: '',
+    wati_api_token: '',
   });
 
   const [bankForm, setBankForm] = useState({
@@ -67,7 +70,10 @@ export default function BusinessSettings() {
         invoice_logo_url: b.invoice_logo_url || '',
         terms_of_sale: b.terms_of_sale || '',
         upi_vpa: b.upi_vpa || '',
-        upi_name: b.upi_name || ''
+        upi_name: b.upi_name || '',
+        whatsapp_number: b.whatsapp_number || '',
+        wati_api_endpoint: b.wati_api_endpoint || '',
+        wati_api_token: b.wati_api_token || '',
       });
       setBankForm({
         invoice_bank_name: b.invoice_bank_name || '',
@@ -277,6 +283,42 @@ export default function BusinessSettings() {
               </div>
               <p className="text-[10px] text-gray-600 mt-2">
                 Used to generate UPI payment QR on invoices (works offline).
+              </p>
+            </div>
+
+            <div className="p-4 rounded-xl border border-white/[0.06] bg-white/[0.02]">
+              <p className="text-xs text-blue-400 font-semibold uppercase tracking-wider mb-3">WhatsApp API (Optional)</p>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label className="text-gray-400 text-xs">Default WhatsApp Number (optional)</Label>
+                  <Input
+                    className="input-premium mt-1"
+                    placeholder="e.g. 919876543210"
+                    value={invoiceForm.whatsapp_number}
+                    onChange={e => setInvoiceForm({ ...invoiceForm, whatsapp_number: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <Label className="text-gray-400 text-xs">API Endpoint</Label>
+                  <Input
+                    className="input-premium mt-1"
+                    placeholder="https://api.provider.com/whatsapp/send"
+                    value={invoiceForm.wati_api_endpoint}
+                    onChange={e => setInvoiceForm({ ...invoiceForm, wati_api_endpoint: e.target.value })}
+                  />
+                </div>
+              </div>
+              <div className="mt-3">
+                <Label className="text-gray-400 text-xs">API Token</Label>
+                <Input
+                  className="input-premium mt-1"
+                  placeholder="Paste API token"
+                  value={invoiceForm.wati_api_token}
+                  onChange={e => setInvoiceForm({ ...invoiceForm, wati_api_token: e.target.value })}
+                />
+              </div>
+              <p className="text-[10px] text-gray-600 mt-2">
+                If endpoint + token are set, invoice reminders can be sent directly via API. Otherwise system opens WhatsApp Web.
               </p>
             </div>
             <button type="submit" disabled={savingInvoice} className="btn-premium btn-primary flex items-center gap-2">
