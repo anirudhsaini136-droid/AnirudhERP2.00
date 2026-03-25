@@ -1,9 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import DashboardLayout from '../../components/layout/DashboardLayout';
 import { FileText, Download, TrendingUp, TrendingDown, RefreshCw, Shield, BookOpen, CheckCircle, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
-import { loadLocalInvoices } from '../../lib/offlineInvoices';
+import { loadLocalInvoices, syncOfflineInvoiceQueue } from '../../lib/offlineInvoices';
 
 const fmt = (n) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 2 }).format(n || 0);
 const fmtDate = (d) => d ? new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '-';
@@ -60,6 +60,7 @@ export default function CAPortalPage() {
   const [itc, setItc] = useState(null);
   const [activeTab, setActiveTab] = useState('summary');
   const [exportMode, setExportMode] = useState('combined');
+  const [syncing, setSyncing] = useState(false);
   const [mainTab, setMainTab] = useState('gst'); // 'gst' | 'accounting'
 
   // Accounting states
@@ -112,9 +113,32 @@ export default function CAPortalPage() {
     } catch (e) { toast.error('Failed to load P&L'); }
   };
 
+  const runAutoSync = useCallback(async (showToast = false) => {
+    if (!business?.id) return false;
+    if (typeof navigator !== 'undefined' && !navigator.onLine) return false;
+    setSyncing(true);
+    try {
+      const res = await syncOfflineInvoiceQueue({ api, businessId: business.id });
+      if (showToast) {
+        const syncedCount = Number(res?.synced || 0);
+        if (syncedCount > 0) toast.success(`Synced ${syncedCount} offline invoice action(s)`);
+        else toast.success('Already up to date');
+      }
+      return true;
+    } catch {
+      if (showToast) toast.error('Sync failed');
+      return false;
+    } finally {
+      setSyncing(false);
+    }
+  }, [api, business?.id]);
+
   const fetchData = async () => {
     setLoading(true);
     try {
+      if (business?.id && typeof navigator !== 'undefined' && navigator.onLine) {
+        await runAutoSync(false);
+      }
       const [sumRes, gstr1Res] = await Promise.all([
         api.get(`/finance/gst/summary?start_date=${startDate}&end_date=${endDate}`),
         api.get(`/finance/gst/gstr1?start_date=${startDate}&end_date=${endDate}`)
@@ -193,6 +217,18 @@ export default function CAPortalPage() {
     } catch { toast.error('Failed to load GST data'); }
     setLoading(false);
   };
+
+  useEffect(() => {
+    if (!business?.id) return;
+    const onOnline = () => {
+      if (mainTab !== 'gst') return;
+      runAutoSync(false).then(() => fetchData());
+    };
+    window.addEventListener('online', onOnline);
+    return () => window.removeEventListener('online', onOnline);
+    // fetchData intentionally omitted to avoid re-subscribing listener every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [business?.id, mainTab, runAutoSync]);
 
   const exportGSTR1CSV = () => {
     if (!gstr1?.rows?.length) { toast.error('No data'); return; }
@@ -289,6 +325,11 @@ export default function CAPortalPage() {
                 className="btn-premium btn-primary flex items-center gap-2 h-9 text-sm">
                 <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
                 {loading ? 'Loading...' : 'Generate Report'}
+              </button>
+              <button onClick={() => runAutoSync(true).then(fetchData)} disabled={syncing}
+                className="btn-premium btn-secondary flex items-center gap-2 h-9 text-sm">
+                <RefreshCw size={14} className={syncing ? 'animate-spin' : ''} />
+                {syncing ? 'Syncing...' : 'Sync Now'}
               </button>
             </div>
 
