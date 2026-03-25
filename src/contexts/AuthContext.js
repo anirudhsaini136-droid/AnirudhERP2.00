@@ -1,14 +1,11 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import axios from 'axios';
+import { safeJsonParse } from '../shared-core';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || process.env.REACT_APP_API_URL || '';
 const API = `${BACKEND_URL}/api`;
 
 const AuthContext = createContext(null);
-
-function safeJsonParse(v, fallback) {
-  try { return JSON.parse(v); } catch { return fallback; }
-}
 
 export const useAuth = () => {
   const context = useContext(AuthContext);

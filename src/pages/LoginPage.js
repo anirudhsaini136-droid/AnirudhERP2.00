@@ -6,7 +6,16 @@ import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../components/ui/dialog';
 import ThemeToggle from '../components/ThemeToggle';
-import { AlertCircle, Loader2, ArrowRight, Shield, Zap, Globe, CheckCircle2, Mail } from 'lucide-react';
+import { AlertCircle, Loader2, ArrowRight, Shield, Zap, Globe, CheckCircle2, Mail, Smartphone, Download } from 'lucide-react';
+
+const BACKEND_ORIGIN =
+  process.env.REACT_APP_BACKEND_URL ||
+  process.env.REACT_APP_API_URL ||
+  '';
+const ANDROID_APK_URL =
+  (process.env.REACT_APP_ANDROID_APK_URL && String(process.env.REACT_APP_ANDROID_APK_URL).trim()) ||
+  `${typeof window !== 'undefined' ? window.location.origin : ''}/downloads/NexusERP.apk`;
+
 const LoginPage = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -193,6 +202,113 @@ const LoginPage = () => {
                 )}
               </Button>
             </form>
+
+            {/* Native Android — polished download card */}
+            <div className="mt-8 pt-8 border-t border-white/10">
+              <div
+                className={`relative overflow-hidden rounded-2xl border p-5 shadow-lg ${
+                  isLight
+                    ? 'border-slate-200/90 bg-gradient-to-br from-white via-slate-50/90 to-slate-100/50 shadow-slate-900/5'
+                    : 'border-white/10 bg-gradient-to-br from-gold-500/[0.08] via-white/[0.03] to-transparent shadow-black/25'
+                }`}
+              >
+                <div
+                  className={`pointer-events-none absolute -right-6 -top-6 h-28 w-28 rounded-full blur-2xl ${
+                    isLight ? 'bg-gold-500/15' : 'bg-gold-500/20'
+                  }`}
+                  aria-hidden
+                />
+                <div className="relative">
+                  <div className="flex flex-wrap items-center gap-2 mb-3">
+                    <span
+                      className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${
+                        isLight
+                          ? 'border-gold-600/25 bg-gold-500/10 text-amber-800'
+                          : 'border-gold-500/30 bg-gold-500/10 text-gold-400'
+                      }`}
+                    >
+                      <Smartphone className="h-3 w-3" strokeWidth={2} />
+                      Android
+                    </span>
+                    <span
+                      className={`text-[10px] font-medium uppercase tracking-wider ${
+                        isLight ? 'text-slate-500' : 'text-gray-500'
+                      }`}
+                    >
+                      Same account · One backend
+                    </span>
+                  </div>
+                  <h3 className={`font-display text-lg tracking-tight ${isLight ? 'text-slate-900' : 'text-white'}`}>
+                    Get the NexusERP app
+                  </h3>
+                  <p className={`text-sm mt-1.5 leading-relaxed ${isLight ? 'text-slate-600' : 'text-gray-400'}`}>
+                    Install on your phone for a native experience. Your login, roles, and data stay aligned with this
+                    portal—no separate signup.
+                  </p>
+                  <ul className={`mt-4 space-y-2 text-sm ${isLight ? 'text-slate-700' : 'text-gray-300'}`}>
+                    {[
+                      'Use your existing email and password',
+                      'Built for the same API as this website',
+                      'Install once—direct download (APK)',
+                    ].map((line) => (
+                      <li key={line} className="flex gap-2.5">
+                        <CheckCircle2
+                          className={`h-4 w-4 flex-shrink-0 mt-0.5 ${isLight ? 'text-amber-600' : 'text-gold-400'}`}
+                          strokeWidth={2}
+                        />
+                        <span>{line}</span>
+                      </li>
+                    ))}
+                  </ul>
+                  <a
+                    href={ANDROID_APK_URL}
+                    download="NexusERP.apk"
+                    className="mt-5 btn-premium btn-primary w-full h-14 rounded-xl inline-flex items-center justify-center gap-2.5 text-base font-semibold no-underline transition-transform hover:scale-[1.01] active:scale-[0.99]"
+                  >
+                    <Download className="h-5 w-5" strokeWidth={2} />
+                    Download for Android
+                  </a>
+                  <p className={`text-center text-[11px] mt-3 ${isLight ? 'text-slate-500' : 'text-gray-500'}`}>
+                    Direct install · Works alongside the web app · Android 8+
+                  </p>
+                  {(typeof window !== 'undefined' ? window.location.origin : '') && (
+                    <div
+                      className={`mt-4 rounded-xl border px-3 py-2.5 text-[11px] leading-relaxed ${
+                        isLight
+                          ? 'border-slate-200 bg-slate-50/80 text-slate-600'
+                          : 'border-white/10 bg-white/[0.03] text-gray-500'
+                      }`}
+                    >
+                      <span className={`font-semibold uppercase tracking-wider ${isLight ? 'text-slate-500' : 'text-gray-500'}`}>
+                        You are signing in to
+                      </span>
+                      <p className={`mt-1 font-medium break-all ${isLight ? 'text-slate-800' : 'text-gray-400'}`}>
+                        {typeof window !== 'undefined' ? window.location.origin : '—'}
+                      </p>
+                      {BACKEND_ORIGIN ? (
+                        <>
+                          <span
+                            className={`mt-2 block font-semibold uppercase tracking-wider ${isLight ? 'text-slate-500' : 'text-gray-500'}`}
+                          >
+                            API
+                          </span>
+                          <p className={`font-medium break-all ${isLight ? 'text-slate-800' : 'text-gray-400'}`}>
+                            {BACKEND_ORIGIN}/api
+                          </p>
+                        </>
+                      ) : null}
+                    </div>
+                  )}
+                  {process.env.NODE_ENV === 'development' ? (
+                    <p className="text-[10px] text-gray-600 mt-3 font-mono leading-relaxed">
+                      Dev: place <code className="text-gray-500">NexusERP.apk</code> in{' '}
+                      <code className="text-gray-500">public/downloads/</code> or set{' '}
+                      <code className="text-gray-500">REACT_APP_ANDROID_APK_URL</code>.
+                    </p>
+                  ) : null}
+                </div>
+              </div>
+            </div>
           </div>
 
           <p className="text-center text-gray-600 text-xs mt-8">

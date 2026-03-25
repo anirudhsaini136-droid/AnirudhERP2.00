@@ -1,15 +1,8 @@
 // Offline MVP storage for invoices + payments (Part 1).
 // MVP uses localStorage (simple + reliable for small data). Can be migrated to IndexedDB later.
+import { calculateGstSplit, safeJsonParse } from "../shared-core";
 
 const PREFIX = "nexus_offline_v1";
-
-function safeJsonParse(v, fallback) {
-  try {
-    return JSON.parse(v);
-  } catch {
-    return fallback;
-  }
-}
 
 function getBusinessKey(businessId) {
   return `${PREFIX}:biz:${businessId}`;
@@ -164,53 +157,7 @@ export function dedupeInvoicesForOffline(invoices) {
 }
 
 function calculateGstLocal(taxRate, subtotal, sellerState, buyerState) {
-  // Replicates backend routes/finance.py calculate_gst logic.
-  if (!taxRate || Number(taxRate) === 0) {
-    return {
-      supply_type: "intrastate",
-      cgst_rate: 0,
-      cgst_amount: 0,
-      sgst_rate: 0,
-      sgst_amount: 0,
-      igst_rate: 0,
-      igst_amount: 0,
-      tax_amount: 0,
-    };
-  }
-
-  const s1 = (sellerState || "").trim().toLowerCase();
-  const s2 = (buyerState || "").trim().toLowerCase();
-  const taxAmount = round2((Number(subtotal) * Number(taxRate)) / 100);
-
-  if (s1 && s2 && s1 === s2) {
-    const halfRate = round2(Number(taxRate) / 2);
-    const halfAmount = round2(taxAmount / 2);
-    return {
-      supply_type: "intrastate",
-      cgst_rate: halfRate,
-      cgst_amount: halfAmount,
-      sgst_rate: halfRate,
-      sgst_amount: halfAmount,
-      igst_rate: 0,
-      igst_amount: 0,
-      tax_amount: taxAmount,
-    };
-  }
-
-  return {
-    supply_type: "interstate",
-    cgst_rate: 0,
-    cgst_amount: 0,
-    sgst_rate: 0,
-    sgst_amount: 0,
-    igst_rate: Number(taxRate),
-    igst_amount: taxAmount,
-    tax_amount: taxAmount,
-  };
-}
-
-function round2(n) {
-  return Math.round(Number(n) * 100) / 100;
+  return calculateGstSplit(taxRate, subtotal, sellerState, buyerState);
 }
 
 // Builds a local invoice object shaped like backend serialize_model output (enough for InvoiceRenderer).
