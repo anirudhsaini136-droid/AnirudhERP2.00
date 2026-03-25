@@ -69,7 +69,11 @@ export default function BusinessesPage() {
       const res = await api.get(`/super-admin/businesses?${params}`);
       setBusinesses(res.data.businesses || []);
       setTotal(res.data.total || 0);
-    } catch (e) { toast.error('Failed to load businesses'); }
+    } catch (e) {
+      const status = e?.response?.status;
+      const detail = e?.response?.data?.detail || e?.response?.data?.message;
+      toast.error(detail || (status ? `Failed to load businesses (${status})` : 'Failed to load businesses'));
+    }
     setLoading(false);
   };
 
