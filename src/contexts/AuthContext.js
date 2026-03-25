@@ -6,6 +6,10 @@ const API = `${BACKEND_URL}/api`;
 
 const AuthContext = createContext(null);
 
+function safeJsonParse(v, fallback) {
+  try { return JSON.parse(v); } catch { return fallback; }
+}
+
 export const useAuth = () => {
   const context = useContext(AuthContext);
   if (!context) {
@@ -86,12 +90,28 @@ export const AuthProvider = ({ children }) => {
       setLoading(false);
       return;
     }
+    const offlineNow = typeof navigator !== "undefined" ? !navigator.onLine : false;
     try {
       const response = await api.get('/auth/me');
       setUser(response.data.user);
       setBusiness(response.data.business);
+      // Cache last known session so offline mode still works.
+      try {
+        localStorage.setItem('offline_cached_user', JSON.stringify(response.data.user));
+        localStorage.setItem('offline_cached_business', JSON.stringify(response.data.business));
+      } catch {}
       setImpersonating(response.data.impersonating || false);
     } catch (error) {
+      if (offlineNow) {
+        // Offline: keep cached session if available.
+        try {
+          const cachedUser = safeJsonParse(localStorage.getItem('offline_cached_user'), null);
+          const cachedBusiness = safeJsonParse(localStorage.getItem('offline_cached_business'), null);
+          if (cachedUser) setUser(cachedUser);
+          if (cachedBusiness) setBusiness(cachedBusiness);
+          return;
+        } catch {}
+      }
       clearTokens();
       setUser(null);
       setBusiness(null);

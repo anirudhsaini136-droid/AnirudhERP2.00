@@ -7,6 +7,12 @@ import { Input } from '../../components/ui/input';
 import { Label } from '../../components/ui/label';
 import { Plus, Search, Eye, Send, CheckCircle, Trash2, Bell, ChevronDown, ChevronUp } from 'lucide-react';
 import { toast } from 'sonner';
+import {
+  loadLocalInvoices,
+  createLocalInvoiceAndQueue,
+  recordLocalPaymentAndQueue,
+  syncOfflineInvoiceQueue,
+} from '../../lib/offlineInvoices';
 
 const fmt = (n) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(n || 0);
 const fmtDate = (d) => d ? new Date(d).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : '-';
@@ -242,7 +248,7 @@ function DateInput({ value, onChange, className, required, placeholder }) {
 }
 
 export default function InvoicesPage() {
-  const { api, user } = useAuth();
+  const { api, user, business } = useAuth();
   const navigate = useNavigate();
   const [invoices, setInvoices] = useState([]);
   const [total, setTotal] = useState(0);
@@ -286,20 +292,80 @@ export default function InvoicesPage() {
 
   const fetchInvoices = useCallback(async () => {
     setLoading(true);
+    const bizId = business?.id;
+    const offlineNow = typeof navigator !== 'undefined' ? !navigator.onLine : true;
+    const limit = 15;
+
+    const localAll = bizId ? loadLocalInvoices(bizId) : [];
+    const q = (search || '').trim().toLowerCase();
+    const matchSearch = (inv) => {
+      if (!q) return true;
+      const invNo = (inv.invoice_number || '').toString().toLowerCase();
+      const client = (inv.client_name || '').toString().toLowerCase();
+      return invNo.includes(q) || client.includes(q);
+    };
+    const matchStatus = (inv) => {
+      if (filterStatus === 'all') return true;
+      return (inv.status || '') === filterStatus;
+    };
+    const localFiltered = localAll
+      .filter(matchSearch)
+      .filter(matchStatus)
+      .sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
+
+    if (offlineNow) {
+      const start = (page - 1) * limit;
+      setInvoices(localFiltered.slice(start, start + limit));
+      setTotal(localFiltered.length);
+      setLoading(false);
+      return;
+    }
+
     try {
-      const params = new URLSearchParams({ page, limit: 15 });
+      const params = new URLSearchParams({ page, limit });
       if (search) params.set('search', search);
       if (filterStatus !== 'all') params.set('status', filterStatus);
       const res = await api.get(`/finance/invoices?${params}`);
-      setInvoices(res.data.invoices || []);
-      setTotal(res.data.total || 0);
+
+      const serverInvoices = res.data.invoices || [];
+      const serverTotal = res.data.total || 0;
+
+      // Append local pending only on page 1 to keep pagination mostly stable.
+      const localPending = localFiltered.filter((i) => i.sync_status !== 'synced');
+      const merged = page === 1 ? [...localPending, ...serverInvoices] : serverInvoices;
+      const mergedTotal = serverTotal + (page === 1 ? localPending.length : 0);
+
+      setInvoices(merged);
+      setTotal(mergedTotal);
     } catch {
-      toast.error('Failed to load invoices');
+      // Network failure fallback: show local invoices.
+      const start = (page - 1) * limit;
+      setInvoices(localFiltered.slice(start, start + limit));
+      setTotal(localFiltered.length);
     }
     setLoading(false);
-  }, [api, page, search, filterStatus]);
+  }, [api, business?.id, page, search, filterStatus]);
 
   useEffect(() => { fetchInvoices(); }, [fetchInvoices]);
+
+  useEffect(() => {
+    if (!business?.id) return;
+    if (typeof navigator === 'undefined') return;
+
+    const runSync = async () => {
+      try {
+        await syncOfflineInvoiceQueue({ api, businessId: business.id });
+      } catch {
+        // ignore for MVP
+      } finally {
+        if (navigator.onLine) fetchInvoices();
+      }
+    };
+
+    if (navigator.onLine) runSync();
+    window.addEventListener('online', runSync);
+    return () => window.removeEventListener('online', runSync);
+  }, [api, business?.id, fetchInvoices]);
 
   useEffect(() => {
     api.get('/dashboard/settings')
@@ -365,7 +431,19 @@ export default function InvoicesPage() {
     if (!form.due_date) { toast.error('Due date is required'); return; }
     if (form.items.some(i => !i.description)) { toast.error('All items need a description'); return; }
     setCreating(true);
+    const offlineNow = typeof navigator !== 'undefined' ? !navigator.onLine : true;
     try {
+      if (offlineNow) {
+        if (!business?.id) throw new Error('Business context missing');
+        const localInv = createLocalInvoiceAndQueue({ businessId: business.id, business, form });
+        toast.success('Saved offline. Will sync when online.');
+        setShowCreate(false);
+        resetForm();
+        fetchInvoices();
+        navigate(`/finance/invoices/${localInv.id}`);
+        return;
+      }
+
       const res = await api.post('/finance/invoices', {
         ...form,
         buyer_state: form.buyer_state || null,
@@ -385,12 +463,34 @@ export default function InvoicesPage() {
       fetchInvoices();
       if (res.data.id) navigate(`/finance/invoices/${res.data.id}`);
     } catch (e) {
-      toast.error(e.response?.data?.detail || 'Failed to create invoice');
+      // If we got here due to network/offline, queue locally.
+      try {
+        if (!business?.id) throw e;
+        const localInv = createLocalInvoiceAndQueue({ businessId: business.id, business, form });
+        // If we were online but the API call failed, try syncing immediately in background.
+        if (typeof navigator !== 'undefined' && navigator.onLine) {
+          syncOfflineInvoiceQueue({ api, businessId: business.id })
+            .then(() => fetchInvoices())
+            .catch(() => {});
+        }
+        toast.success('Saved offline. Will sync when online.');
+        setShowCreate(false);
+        resetForm();
+        fetchInvoices();
+        navigate(`/finance/invoices/${localInv.id}`);
+      } catch (e2) {
+        toast.error(e.response?.data?.detail || 'Failed to create invoice');
+      }
+    } finally {
+      setCreating(false);
     }
-    setCreating(false);
   };
 
   const sendInvoice = async (id) => {
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      toast.error('Offline: cannot send email now');
+      return;
+    }
     try {
       await api.post(`/finance/invoices/${id}/send`);
       toast.success('Invoice sent');
@@ -421,13 +521,55 @@ export default function InvoicesPage() {
   const handlePayment = async (e) => {
     e.preventDefault();
     setPaying(true);
+    const offlineNow = typeof navigator !== 'undefined' ? !navigator.onLine : true;
+    const isLocalPending = paymentInvoice?.sync_status === 'local_pending';
     try {
+      if (offlineNow || isLocalPending) {
+        if (!business?.id) throw new Error('Business context missing');
+        recordLocalPaymentAndQueue({
+          businessId: business.id,
+          localInvoiceId: paymentInvoice.id,
+          form: paymentForm,
+        });
+        if (typeof navigator !== 'undefined' && navigator.onLine) {
+          syncOfflineInvoiceQueue({ api, businessId: business.id })
+            .then(fetchInvoices)
+            .catch(() => {});
+        }
+        toast.success('Payment saved offline. Will sync when online.');
+        setShowPayment(false);
+        fetchInvoices();
+        return;
+      }
+
       await api.post(`/finance/invoices/${paymentInvoice.id}/payments`, paymentForm);
       toast.success('Payment recorded');
       setShowPayment(false);
       fetchInvoices();
     } catch (e) {
-      toast.error(e.response?.data?.detail || 'Failed to record payment');
+      if (!offlineNow) {
+        toast.error(e.response?.data?.detail || 'Failed to record payment');
+        return;
+      }
+      // Offline/network fallback: queue locally.
+      try {
+        if (!business?.id) throw e;
+        recordLocalPaymentAndQueue({
+          businessId: business.id,
+          localInvoiceId: paymentInvoice.id,
+          form: paymentForm,
+        });
+        if (typeof navigator !== 'undefined' && navigator.onLine) {
+          syncOfflineInvoiceQueue({ api, businessId: business.id })
+            .then(fetchInvoices)
+            .catch(() => {});
+        }
+        toast.success('Payment saved offline. Will sync when online.');
+        setShowPayment(false);
+        fetchInvoices();
+      } catch (e2) {
+        toast.error(e.response?.data?.detail || e2.message || 'Failed to record payment');
+      }
     }
     setPaying(false);
   };
@@ -521,14 +663,32 @@ export default function InvoicesPage() {
                   <td className="text-right">
                     <div className="flex items-center justify-end gap-1">
                       <button onClick={() => navigate(`/finance/invoices/${inv.id}`)} className="p-1.5 text-gray-400 hover:text-white" title="View"><Eye size={15} /></button>
-                      {inv.status === 'draft' && <button onClick={() => sendInvoice(inv.id)} className="p-1.5 text-blue-400 hover:text-blue-300" title="Send Email"><Send size={15} /></button>}
-                      {['sent','partially_paid','overdue'].includes(inv.status) && (
+                      {inv.status === 'draft' && (
+                        <button
+                          onClick={() => sendInvoice(inv.server_invoice_id || inv.id)}
+                          disabled={inv.sync_status === 'local_pending' || (typeof navigator !== 'undefined' && !navigator.onLine)}
+                          className="p-1.5 text-blue-400 hover:text-blue-300 disabled:opacity-40"
+                          title="Send Email"
+                        >
+                          <Send size={15} />
+                        </button>
+                      )}
+                      {['draft','sent','partially_paid','overdue'].includes(inv.status) && (
                         <button onClick={() => sendReminder(inv)} className="p-1.5 rounded-lg hover:bg-emerald-500/10" style={{ color: '#25d366' }} title="WhatsApp Reminder"><Bell size={15} /></button>
                       )}
-                      {['sent','partially_paid','overdue'].includes(inv.status) && (
+                      {['draft','sent','partially_paid','overdue'].includes(inv.status) && (
                         <button onClick={() => openPayment(inv)} className="p-1.5 text-emerald-400 hover:text-emerald-300" title="Record Payment"><CheckCircle size={15} /></button>
                       )}
-                      {user?.role !== "ca_admin" && <button onClick={() => setDeleteConfirm(inv)} className="p-1.5 text-rose-400/50 hover:text-rose-400" title="Delete"><Trash2 size={15} /></button>}
+                      {user?.role !== "ca_admin" && (
+                        <button
+                          onClick={() => setDeleteConfirm(inv)}
+                          disabled={inv.sync_status === 'local_pending' || (typeof navigator !== 'undefined' && !navigator.onLine)}
+                          className="p-1.5 text-rose-400/50 hover:text-rose-400 disabled:opacity-40"
+                          title="Delete"
+                        >
+                          <Trash2 size={15} />
+                        </button>
+                      )}
                     </div>
                   </td>
                 </tr>

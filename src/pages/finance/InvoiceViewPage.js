@@ -4,13 +4,14 @@ import { useAuth } from '../../contexts/AuthContext';
 import { ArrowLeft, Printer, Send, MessageCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import InvoiceRenderer from './InvoiceRenderer';
+import { getLocalInvoice } from '../../lib/offlineInvoices';
 
 const fmt = (n) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 2 }).format(n || 0);
 const fmtDate = (d) => d ? new Date(d).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' }) : '-';
 
 export default function InvoiceViewPage() {
   const { id } = useParams();
-  const { api } = useAuth();
+  const { api, business: authBusiness } = useAuth();
   const navigate = useNavigate();
   const [invoice, setInvoice] = useState(null);
   const [items, setItems] = useState([]);
@@ -28,19 +29,61 @@ export default function InvoiceViewPage() {
         setInvoice(invRes.data.invoice);
         setItems(invRes.data.items || []);
         setBusiness(settingsRes.data.business);
+        // Cache business settings for offline invoice rendering.
+        try {
+          if (authBusiness?.id && settingsRes?.data?.business) {
+            localStorage.setItem(
+              `offline_business_cache_${authBusiness.id}`,
+              JSON.stringify(settingsRes.data.business)
+            );
+          }
+        } catch {}
       } catch {
+        // Offline/local fallback for unsynced invoices.
+        try {
+          if (authBusiness?.id) {
+            const localInv = getLocalInvoice(authBusiness.id, id);
+            if (localInv) {
+              setInvoice(localInv);
+              setItems(localInv.items || []);
+              // Prefer cached business settings if available.
+              const cached = (() => {
+                try {
+                  const raw = localStorage.getItem(`offline_business_cache_${authBusiness.id}`);
+                  return raw ? JSON.parse(raw) : null;
+                } catch {
+                  return null;
+                }
+              })();
+              setBusiness(cached || authBusiness);
+              setLoading(false);
+              return;
+            }
+          }
+        } catch {}
+
         toast.error('Failed to load invoice');
         navigate('/finance/invoices');
       }
       setLoading(false);
     };
     load();
-  }, [id, api, navigate]);
+  }, [id, api, navigate, authBusiness]);
 
   const handlePrint = () => window.print();
 
   const handleSendEmail = async () => {
     setSending(true);
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      toast.error('Offline: cannot send email now');
+      setSending(false);
+      return;
+    }
+    if (invoice?.sync_status === 'local_pending') {
+      toast.error('Invoice not synced yet (offline).');
+      setSending(false);
+      return;
+    }
     try {
       await api.post(`/finance/invoices/${id}/send`);
       toast.success('Invoice sent via email');
@@ -109,7 +152,11 @@ export default function InvoiceViewPage() {
         </button>
         <div className="flex items-center gap-2 flex-wrap">
           {invoice.status === 'draft' && (
-            <button onClick={handleSendEmail} disabled={sending} className="btn-premium btn-secondary text-sm flex items-center gap-2">
+            <button
+              onClick={handleSendEmail}
+              disabled={sending || invoice?.sync_status === 'local_pending' || (typeof navigator !== 'undefined' && !navigator.onLine)}
+              className="btn-premium btn-secondary text-sm flex items-center gap-2 disabled:opacity-40"
+            >
               <Send size={15} /> {sending ? 'Sending...' : 'Send Email'}
             </button>
           )}
