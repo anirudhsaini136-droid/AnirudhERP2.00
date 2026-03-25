@@ -3,6 +3,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import DashboardLayout from '../../components/layout/DashboardLayout';
 import { FileText, Download, TrendingUp, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
+import { loadLocalInvoices } from '../../lib/offlineInvoices';
 
 const fmt = (n) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 2 }).format(n || 0);
 
@@ -49,7 +50,7 @@ function DateInput({ value, onChange, className, required, placeholder }) {
 }
 
 export default function GSTReportsPage() {
-  const { api } = useAuth();
+  const { api, business } = useAuth();
   const [startDate, setStartDate] = useState(() => {
     const now = new Date();
     return new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
@@ -66,6 +67,113 @@ export default function GSTReportsPage() {
 
   const [purchases, setPurchases] = useState(null);
 
+  const toNum = (n) => Number(n || 0);
+  const inRange = (d, start, end) => {
+    if (!d) return false;
+    return d >= start && d <= end;
+  };
+
+  const buildOfflineGst = () => {
+    const businessId = business?.id;
+    if (!businessId) return { invoices: [], rows: [], summary: null };
+    const locals = loadLocalInvoices(businessId) || [];
+    const pending = locals.filter((inv) =>
+      inv &&
+      inv.sync_status === 'local_pending' &&
+      !inv.server_invoice_id &&
+      inv.status !== 'cancelled' &&
+      inRange(inv.issue_date, startDate, endDate)
+    );
+
+    const rows = [];
+    for (const inv of pending) {
+      const items = inv.items || [];
+      for (const item of items) {
+        rows.push({
+          invoice_number: inv.invoice_number,
+          invoice_date: inv.issue_date || '',
+          customer_name: inv.client_name || '',
+          customer_gstin: '',
+          place_of_supply: inv.place_of_supply || inv.buyer_state || '',
+          supply_type: inv.supply_type || 'intrastate',
+          hsn_code: item.hsn_code || '',
+          description: item.description || '',
+          quantity: toNum(item.quantity),
+          unit_price: toNum(item.unit_price),
+          taxable_value: toNum(item.total),
+          tax_rate: toNum(inv.tax_rate),
+          cgst_rate: toNum(inv.cgst_rate),
+          cgst_amount: toNum(inv.cgst_amount),
+          sgst_rate: toNum(inv.sgst_rate),
+          sgst_amount: toNum(inv.sgst_amount),
+          igst_rate: toNum(inv.igst_rate),
+          igst_amount: toNum(inv.igst_amount),
+          invoice_value: toNum(inv.total_amount),
+          source: 'offline_pending',
+        });
+      }
+    }
+
+    const total_cgst = pending.reduce((s, i) => s + toNum(i.cgst_amount), 0);
+    const total_sgst = pending.reduce((s, i) => s + toNum(i.sgst_amount), 0);
+    const total_igst = pending.reduce((s, i) => s + toNum(i.igst_amount), 0);
+    const total_tax = total_cgst + total_sgst + total_igst;
+    const total_taxable_value = pending.reduce((s, i) => s + toNum(i.subtotal), 0);
+    const total_sales = pending.reduce((s, i) => s + toNum(i.total_amount), 0);
+    const intrastate_count = pending.filter((i) => (i.supply_type || 'intrastate') === 'intrastate').length;
+    const interstate_count = pending.filter((i) => (i.supply_type || '') === 'interstate').length;
+
+    return {
+      invoices: pending.map((x) => ({ ...x, source: 'offline_pending' })),
+      rows,
+      summary: {
+        total_invoices: pending.length,
+        total_taxable_value,
+        total_cgst,
+        total_sgst,
+        total_igst,
+        total_tax,
+        total_sales,
+        intrastate_count,
+        interstate_count,
+      },
+    };
+  };
+
+  const mergeGstData = (sumData, gstr1Data, offlineData) => {
+    const serverSummary = sumData?.summary || {};
+    const offlineSummary = offlineData?.summary || {};
+    const mergedSummary = {
+      total_invoices: toNum(serverSummary.total_invoices) + toNum(offlineSummary.total_invoices),
+      total_taxable_value: toNum(serverSummary.total_taxable_value) + toNum(offlineSummary.total_taxable_value),
+      total_cgst: toNum(serverSummary.total_cgst) + toNum(offlineSummary.total_cgst),
+      total_sgst: toNum(serverSummary.total_sgst) + toNum(offlineSummary.total_sgst),
+      total_igst: toNum(serverSummary.total_igst) + toNum(offlineSummary.total_igst),
+      total_tax: toNum(serverSummary.total_tax) + toNum(offlineSummary.total_tax),
+      total_sales: toNum(serverSummary.total_sales) + toNum(offlineSummary.total_sales),
+      intrastate_count: toNum(serverSummary.intrastate_count) + toNum(offlineSummary.intrastate_count),
+      interstate_count: toNum(serverSummary.interstate_count) + toNum(offlineSummary.interstate_count),
+      server_total_invoices: toNum(serverSummary.total_invoices),
+      offline_pending_invoices: toNum(offlineSummary.total_invoices),
+    };
+
+    const mergedInvoices = [...(sumData?.invoices || []), ...(offlineData?.invoices || [])];
+    const mergedRows = [...(gstr1Data?.rows || []), ...(offlineData?.rows || [])];
+
+    return {
+      summaryData: {
+        ...sumData,
+        summary: mergedSummary,
+        invoices: mergedInvoices,
+      },
+      gstr1Data: {
+        ...gstr1Data,
+        rows: mergedRows,
+        total_rows: mergedRows.length,
+      },
+    };
+  };
+
   const fetchData = async () => {
     setLoading(true);
     try {
@@ -73,8 +181,10 @@ export default function GSTReportsPage() {
         api.get(`/finance/gst/summary?start_date=${startDate}&end_date=${endDate}`),
         api.get(`/finance/gst/gstr1?start_date=${startDate}&end_date=${endDate}`)
       ]);
-      setSummary(sumRes.data);
-      setGstr1(gstr1Res.data);
+      const offlineData = buildOfflineGst();
+      const merged = mergeGstData(sumRes.data, gstr1Res.data, offlineData);
+      setSummary(merged.summaryData);
+      setGstr1(merged.gstr1Data);
       try {
         const itcRes = await api.get(`/purchases/itc/summary?start_date=${startDate}&end_date=${endDate}`);
         setItc(itcRes.data);
@@ -199,6 +309,15 @@ export default function GSTReportsPage() {
                 </div>
               ))}
             </div>
+
+            {s.offline_pending_invoices > 0 && (
+              <div className="glass-card rounded-2xl p-3 border border-amber-500/20 bg-amber-500/5">
+                <p className="text-xs text-amber-300">
+                  Included offline pending invoices: <span className="font-semibold">{s.offline_pending_invoices}</span>{' '}
+                  (server invoices: {s.server_total_invoices})
+                </p>
+              </div>
+            )}
 
             {/* GST Breakdown */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
