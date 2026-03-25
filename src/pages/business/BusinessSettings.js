@@ -37,7 +37,9 @@ export default function BusinessSettings() {
     invoice_pan: '',
     invoice_footer_note: '',
     invoice_logo_url: '',
-    terms_of_sale: ''
+    terms_of_sale: '',
+    upi_vpa: '',
+    upi_name: '',
   });
 
   const [bankForm, setBankForm] = useState({
@@ -63,7 +65,9 @@ export default function BusinessSettings() {
         invoice_pan: b.invoice_pan || '',
         invoice_footer_note: b.invoice_footer_note || '',
         invoice_logo_url: b.invoice_logo_url || '',
-        terms_of_sale: b.terms_of_sale || ''
+        terms_of_sale: b.terms_of_sale || '',
+        upi_vpa: b.upi_vpa || '',
+        upi_name: b.upi_name || ''
       });
       setBankForm({
         invoice_bank_name: b.invoice_bank_name || '',
@@ -246,6 +250,34 @@ export default function BusinessSettings() {
                 onChange={e => setInvoiceForm({...invoiceForm, terms_of_sale: e.target.value})}
               />
               <p className="text-[10px] text-gray-600 mt-1">Printed at the bottom of every invoice.</p>
+            </div>
+
+            {/* UPI QR Settings */}
+            <div className="p-4 rounded-xl border border-white/[0.06] bg-white/[0.02]">
+              <p className="text-xs text-gold-400 font-semibold uppercase tracking-wider mb-3">UPI QR</p>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label className="text-gray-400 text-xs">UPI VPA (receiver address)</Label>
+                  <Input
+                    className="input-premium mt-1"
+                    placeholder="e.g. merchant@upi"
+                    value={invoiceForm.upi_vpa}
+                    onChange={e => setInvoiceForm({ ...invoiceForm, upi_vpa: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <Label className="text-gray-400 text-xs">Receiver Name (optional)</Label>
+                  <Input
+                    className="input-premium mt-1"
+                    placeholder="e.g. Merchant Pvt Ltd"
+                    value={invoiceForm.upi_name}
+                    onChange={e => setInvoiceForm({ ...invoiceForm, upi_name: e.target.value })}
+                  />
+                </div>
+              </div>
+              <p className="text-[10px] text-gray-600 mt-2">
+                Used to generate UPI payment QR on invoices (works offline).
+              </p>
             </div>
             <button type="submit" disabled={savingInvoice} className="btn-premium btn-primary flex items-center gap-2">
               <Save size={15} /> {savingInvoice ? 'Saving...' : 'Save Invoice Settings'}

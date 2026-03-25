@@ -1,6 +1,7 @@
 // InvoiceRenderer.js — shared between InvoiceViewPage and PublicInvoicePage
 // Props: invoice, items, business, payments
 import React from 'react';
+import QRCode from 'qrcode';
 
 const fmt = (n) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 2 }).format(n || 0);
 const fmtDate = (d) => d ? new Date(d).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' }) : '-';
@@ -40,6 +41,41 @@ function amountInWords(total) {
 }
 
 export default function InvoiceRenderer({ invoice, items, business, payments }) {
+  const [qrDataUrl, setQrDataUrl] = React.useState(null);
+
+  React.useEffect(() => {
+    if (!invoice) return;
+    let cancelled = false;
+    async function buildQr() {
+      try {
+        const vpa = business?.upi_vpa;
+        if (!vpa) {
+          setQrDataUrl(null);
+          return;
+        }
+        const name = business?.upi_name || business?.name || '';
+        const amount = Number(invoice?.balance_due ?? invoice?.total_amount ?? 0);
+        const amt = amount > 0 ? amount.toFixed(2) : Number(invoice?.total_amount ?? 0).toFixed(2);
+        const tn = invoice?.invoice_number || '';
+
+        const params = new URLSearchParams();
+        params.set('pa', vpa);
+        if (name) params.set('pn', name);
+        params.set('am', amt);
+        params.set('cu', 'INR');
+        if (tn) params.set('tn', tn);
+        const upiPayload = `upi://pay?${params.toString()}`;
+
+        const url = await QRCode.toDataURL(upiPayload, { margin: 1, width: 180, errorCorrectionLevel: 'M' });
+        if (!cancelled) setQrDataUrl(url);
+      } catch {
+        if (!cancelled) setQrDataUrl(null);
+      }
+    }
+    buildQr();
+    return () => { cancelled = true; };
+  }, [business?.upi_vpa, business?.upi_name, business?.name, invoice?.invoice_number, invoice?.balance_due, invoice?.total_amount, invoice]);
+
   if (!invoice) return null;
 
   const statusColor = {
@@ -253,6 +289,37 @@ export default function InvoiceRenderer({ invoice, items, business, payments }) 
             {business.invoice_bank_name && <div><div style={{ fontSize: 10, color: '#9ca3af' }}>Bank</div><div style={{ fontSize: 13, fontWeight: 600, color: '#111827' }}>{business.invoice_bank_name}</div></div>}
             {business.invoice_bank_account && <div><div style={{ fontSize: 10, color: '#9ca3af' }}>Account No.</div><div style={{ fontSize: 13, fontWeight: 600, color: '#111827' }}>{business.invoice_bank_account}</div></div>}
             {business.invoice_bank_ifsc && <div><div style={{ fontSize: 10, color: '#9ca3af' }}>IFSC</div><div style={{ fontSize: 13, fontWeight: 600, color: '#111827' }}>{business.invoice_bank_ifsc}</div></div>}
+          </div>
+        </div>
+      )}
+
+      {/* ── UPI QR (optional) ── */}
+      {business?.upi_vpa && (
+        <div className="inv-upi-qr-band" style={{ padding: '16px 48px', background: '#f8f9fa', borderTop: '1px solid #e5e7eb', WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }}>
+          <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, color: '#6b7280', marginBottom: 8 }}>
+            UPI Payment QR
+          </div>
+          <div style={{ display: 'flex', gap: 28, alignItems: 'center', flexWrap: 'wrap' }}>
+            <div style={{ width: 190, height: 190, background: '#fff', borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid rgba(0,0,0,0.06)' }}>
+              {qrDataUrl ? (
+                <img src={qrDataUrl} alt="UPI QR" style={{ width: 170, height: 170, objectFit: 'contain' }} />
+              ) : (
+                <span style={{ fontSize: 12, color: '#6b7280' }}>Generating...</span>
+              )}
+            </div>
+            <div style={{ flex: 1, minWidth: 220 }}>
+              <div style={{ fontSize: 12, color: '#111827', fontWeight: 700, marginBottom: 6 }}>
+                Pay to: <span style={{ color: '#D4AF37' }}>{business?.upi_vpa}</span>
+              </div>
+              <div style={{ fontSize: 12, color: '#6b7280', lineHeight: 1.6 }}>
+                Amount: <span style={{ fontWeight: 800, color: '#111827' }}>{fmt(balance > 0 ? balance : (invoice?.total_amount || 0))}</span>
+              </div>
+              {business?.upi_name && (
+                <div style={{ fontSize: 12, color: '#6b7280', lineHeight: 1.6 }}>
+                  Receiver: <span style={{ fontWeight: 700, color: '#111827' }}>{business?.upi_name}</span>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}
