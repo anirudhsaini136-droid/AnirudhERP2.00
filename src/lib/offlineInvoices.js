@@ -57,6 +57,52 @@ export function upsertLocalInvoices(businessId, invoices) {
   localStorage.setItem(getInvoicesKey(businessId), JSON.stringify(invoices));
 }
 
+export function upsertServerInvoices(businessId, serverInvoices) {
+  if (!Array.isArray(serverInvoices) || serverInvoices.length === 0) return;
+  const invoices = loadLocalInvoices(businessId);
+
+  for (const s of serverInvoices) {
+    if (!s || !s.id) continue;
+    const existingIdx = invoices.findIndex((i) => i.id === s.id);
+    const local = {
+      ...s,
+      id: s.id,
+      local_invoice_id: s.id,
+      server_invoice_id: s.id,
+      sync_status: "synced",
+      // server list endpoint doesn't include items/payments
+      items: invoices[existingIdx]?.items || [],
+      payments: invoices[existingIdx]?.payments || [],
+      updated_at: s.updated_at || invoices[existingIdx]?.updated_at || nowIso(),
+    };
+    if (existingIdx >= 0) invoices[existingIdx] = { ...invoices[existingIdx], ...local };
+    else invoices.push(local);
+  }
+
+  upsertLocalInvoices(businessId, invoices);
+}
+
+export function upsertLocalInvoiceDetail(businessId, { invoice, items, payments } = {}) {
+  if (!invoice || !invoice.id) return;
+  const invoices = loadLocalInvoices(businessId);
+  const idx = invoices.findIndex((i) => i.id === invoice.id);
+  const base = idx >= 0 ? invoices[idx] : null;
+  const next = {
+    ...(base || {}),
+    ...invoice,
+    id: invoice.id,
+    local_invoice_id: invoice.id,
+    server_invoice_id: base?.server_invoice_id || invoice.id,
+    sync_status: base?.sync_status || "synced",
+    items: Array.isArray(items) ? items : base?.items || [],
+    payments: Array.isArray(payments) ? payments : base?.payments || [],
+    updated_at: invoice.updated_at || nowIso(),
+  };
+  if (idx >= 0) invoices[idx] = next;
+  else invoices.push(next);
+  upsertLocalInvoices(businessId, invoices);
+}
+
 export function loadLocalQueue(businessId) {
   const raw = localStorage.getItem(getQueueKey(businessId));
   const q = safeJsonParse(raw, []);
@@ -83,6 +129,24 @@ export function nextOfflineInvoiceNumber(businessId, yyyyMm) {
   const next = (Number(current) || 0) + 1;
   localStorage.setItem(counterKey, JSON.stringify(next));
   return `OFF-${yyyyMm}-${String(next).padStart(4, "0")}`;
+}
+
+export function dedupeInvoicesForOffline(invoices) {
+  // Prefer server-cached record (id === server_invoice_id) when both exist.
+  const map = new Map();
+  for (const inv of invoices || []) {
+    if (!inv) continue;
+    const serverKey = inv.server_invoice_id || inv.id;
+    const preferServer = inv.id && inv.server_invoice_id && inv.id === inv.server_invoice_id;
+    if (!map.has(serverKey)) {
+      map.set(serverKey, inv);
+      continue;
+    }
+    const existing = map.get(serverKey);
+    const existingPreferServer = existing?.id && existing?.server_invoice_id && existing?.id === existing?.server_invoice_id;
+    if (preferServer && !existingPreferServer) map.set(serverKey, inv);
+  }
+  return Array.from(map.values());
 }
 
 function calculateGstLocal(taxRate, subtotal, sellerState, buyerState) {

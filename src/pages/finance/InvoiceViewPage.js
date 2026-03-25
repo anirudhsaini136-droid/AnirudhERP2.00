@@ -4,7 +4,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { ArrowLeft, Printer, Send, MessageCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import InvoiceRenderer from './InvoiceRenderer';
-import { getLocalInvoice } from '../../lib/offlineInvoices';
+import { getLocalInvoice, upsertLocalInvoiceDetail } from '../../lib/offlineInvoices';
 
 const fmt = (n) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 2 }).format(n || 0);
 const fmtDate = (d) => d ? new Date(d).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' }) : '-';
@@ -21,10 +21,39 @@ export default function InvoiceViewPage() {
 
   useEffect(() => {
     const load = async () => {
+      const offlineNow = typeof navigator !== 'undefined' ? !navigator.onLine : true;
+
+      // Offline fast path: never block on API requests.
+      if (offlineNow) {
+        try {
+          if (authBusiness?.id) {
+            const localInv = getLocalInvoice(authBusiness.id, id);
+            if (localInv) {
+              setInvoice(localInv);
+              setItems(localInv.items || []);
+              try {
+                const raw = localStorage.getItem(`offline_business_cache_${authBusiness.id}`);
+                const cachedBiz = raw ? JSON.parse(raw) : authBusiness;
+                setBusiness(cachedBiz);
+              } catch {
+                setBusiness(authBusiness);
+              }
+              setLoading(false);
+              return;
+            }
+          }
+        } catch {}
+
+        toast.error('Offline: invoice not cached on this device');
+        navigate('/finance/invoices');
+        setLoading(false);
+        return;
+      }
+
       try {
         const [invRes, settingsRes] = await Promise.all([
-          api.get(`/finance/invoices/${id}`),
-          api.get('/dashboard/settings')
+          api.get(`/finance/invoices/${id}`, { timeout: 8000 }),
+          api.get('/dashboard/settings', { timeout: 8000 })
         ]);
         setInvoice(invRes.data.invoice);
         setItems(invRes.data.items || []);
@@ -36,6 +65,17 @@ export default function InvoiceViewPage() {
               `offline_business_cache_${authBusiness.id}`,
               JSON.stringify(settingsRes.data.business)
             );
+          }
+        } catch {}
+
+        // Cache invoice detail for offline viewing later.
+        try {
+          if (authBusiness?.id) {
+            upsertLocalInvoiceDetail(authBusiness.id, {
+              invoice: invRes.data.invoice,
+              items: invRes.data.items || [],
+              payments: invRes.data.payments || [],
+            });
           }
         } catch {}
       } catch {

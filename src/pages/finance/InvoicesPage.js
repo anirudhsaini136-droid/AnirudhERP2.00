@@ -12,6 +12,8 @@ import {
   createLocalInvoiceAndQueue,
   recordLocalPaymentAndQueue,
   syncOfflineInvoiceQueue,
+  upsertServerInvoices,
+  dedupeInvoicesForOffline,
 } from '../../lib/offlineInvoices';
 
 const fmt = (n) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(n || 0);
@@ -22,9 +24,13 @@ const STATUS_COLORS = {
 };
 const emptyItem = { description: '', hsn_code: '', quantity: 1, unit_price: 0, item_discount: 0, amount: 0 };
 
+function safeJsonParse(v, fallback) {
+  try { return JSON.parse(v); } catch { return fallback; }
+}
+
 
 // Customer autocomplete for invoice client name
-function ClientSearch({ value, onChange, onSelect, api }) {
+function ClientSearch({ value, onChange, onSelect, api, businessId, offline }) {
   const [query, setQuery] = useState(value || '');
   const [results, setResults] = useState([]);
   const [show, setShow] = useState(false);
@@ -48,12 +54,33 @@ function ClientSearch({ value, onChange, onSelect, api }) {
     if (timerRef.current) clearTimeout(timerRef.current);
     if (val.length < 2) { setResults([]); setShow(false); return; }
     timerRef.current = setTimeout(async () => {
+      // Offline autocomplete: show cached results (from previous online searches).
+      if (offline) {
+        try {
+          const q = (val || '').trim().toLowerCase();
+          const key = `nexus_offline_v1:customers_cache:${businessId}:${q}`;
+          const cached = safeJsonParse(localStorage.getItem(key), []);
+          setResults(Array.isArray(cached) ? cached : []);
+          setShow((Array.isArray(cached) ? cached : []).length > 0);
+        } catch {
+          setResults([]);
+          setShow(false);
+        }
+        setSearching(false);
+        return;
+      }
+
       setSearching(true);
       try {
         const res = await api.get(`/customers/search?q=${encodeURIComponent(val)}`);
         const list = res.data.customers || [];
         setResults(list);
         setShow(list.length > 0);
+        try {
+          const q = (val || '').trim().toLowerCase();
+          const key = `nexus_offline_v1:customers_cache:${businessId}:${q}`;
+          localStorage.setItem(key, JSON.stringify(list));
+        } catch {}
       } catch { setResults([]); }
       setSearching(false);
     }, 250);
@@ -114,7 +141,7 @@ const INDIAN_STATES = [
 ];
 
 // Product autocomplete component for invoice line items
-function ProductSearch({ value, onChange, onSelect, api }) {
+function ProductSearch({ value, onChange, onSelect, api, businessId, offline }) {
   const [query, setQuery] = useState(value || '');
   const [results, setResults] = useState([]);
   const [show, setShow] = useState(false);
@@ -138,12 +165,33 @@ function ProductSearch({ value, onChange, onSelect, api }) {
     if (timerRef.current) clearTimeout(timerRef.current);
     if (val.length < 1) { setResults([]); setShow(false); return; }
     timerRef.current = setTimeout(async () => {
+      // Offline product autocomplete: show cached results (from previous online searches).
+      if (offline) {
+        try {
+          const q = (val || '').trim().toLowerCase();
+          const key = `nexus_offline_v1:products_cache:${businessId}:${q}`;
+          const cached = safeJsonParse(localStorage.getItem(key), []);
+          setResults(Array.isArray(cached) ? cached : []);
+          setShow((Array.isArray(cached) ? cached : []).length > 0);
+        } catch {
+          setResults([]);
+          setShow(false);
+        }
+        setSearching(false);
+        return;
+      }
+
       setSearching(true);
       try {
         const res = await api.get(`/inventory/products?search=${encodeURIComponent(val)}&limit=8`);
         const products = res.data.products || [];
         setResults(products);
         setShow(products.length > 0);
+        try {
+          const q = (val || '').trim().toLowerCase();
+          const key = `nexus_offline_v1:products_cache:${businessId}:${q}`;
+          localStorage.setItem(key, JSON.stringify(products));
+        } catch {}
       } catch { setResults([]); }
       setSearching(false);
     }, 250);
@@ -264,6 +312,17 @@ export default function InvoicesPage() {
   const [deleteConfirm, setDeleteConfirm] = useState(null);
   const [deleting, setDeleting] = useState(false);
   const [businessName, setBusinessName] = useState('');
+  const [offlineNow, setOfflineNow] = useState(typeof navigator !== 'undefined' ? !navigator.onLine : true);
+
+  useEffect(() => {
+    const on = () => setOfflineNow(!navigator.onLine);
+    window.addEventListener('online', on);
+    window.addEventListener('offline', on);
+    return () => {
+      window.removeEventListener('online', on);
+      window.removeEventListener('offline', on);
+    };
+  }, []);
 
   // UI toggles — persisted in localStorage
   const getSavedPref = (key, fallback) => {
@@ -314,9 +373,10 @@ export default function InvoicesPage() {
       .sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
 
     if (offlineNow) {
+      const localUnique = dedupeInvoicesForOffline(localFiltered);
       const start = (page - 1) * limit;
-      setInvoices(localFiltered.slice(start, start + limit));
-      setTotal(localFiltered.length);
+      setInvoices(localUnique.slice(start, start + limit));
+      setTotal(localUnique.length);
       setLoading(false);
       return;
     }
@@ -325,10 +385,12 @@ export default function InvoicesPage() {
       const params = new URLSearchParams({ page, limit });
       if (search) params.set('search', search);
       if (filterStatus !== 'all') params.set('status', filterStatus);
-      const res = await api.get(`/finance/invoices?${params}`);
+      const res = await api.get(`/finance/invoices?${params}`, { timeout: 8000 });
 
       const serverInvoices = res.data.invoices || [];
       const serverTotal = res.data.total || 0;
+
+      if (bizId) upsertServerInvoices(bizId, serverInvoices);
 
       // Append local pending only on page 1 to keep pagination mostly stable.
       const localPending = localFiltered.filter((i) => i.sync_status !== 'synced');
@@ -339,9 +401,10 @@ export default function InvoicesPage() {
       setTotal(mergedTotal);
     } catch {
       // Network failure fallback: show local invoices.
+      const localUnique = dedupeInvoicesForOffline(localFiltered);
       const start = (page - 1) * limit;
-      setInvoices(localFiltered.slice(start, start + limit));
-      setTotal(localFiltered.length);
+      setInvoices(localUnique.slice(start, start + limit));
+      setTotal(localUnique.length);
     }
     setLoading(false);
   }, [api, business?.id, page, search, filterStatus]);
@@ -366,6 +429,43 @@ export default function InvoicesPage() {
     window.addEventListener('online', runSync);
     return () => window.removeEventListener('online', runSync);
   }, [api, business?.id, fetchInvoices]);
+
+  // Cache all server invoices locally (so offline invoice list works).
+  useEffect(() => {
+    if (!business?.id) return;
+    if (typeof navigator === 'undefined') return;
+    if (!navigator.onLine) return;
+
+    const flagKey = `nexus_offline_v1:cached_all_invoices:${business.id}`;
+    if (localStorage.getItem(flagKey) === '1') return;
+
+    let cancelled = false;
+    const run = async () => {
+      try {
+        const limit = 50;
+        let pageNum = 1;
+        // Cache without search/status filters; offline UI does filtering locally.
+        while (true) {
+          const params = new URLSearchParams({ page: pageNum, limit });
+          const res = await api.get(`/finance/invoices?${params}`, { timeout: 8000 });
+          if (cancelled) return;
+          const invs = res.data?.invoices || [];
+          upsertServerInvoices(business.id, invs);
+          const pages = Number(res.data?.pages || 1);
+          if (pageNum >= pages) break;
+          pageNum += 1;
+        }
+        localStorage.setItem(flagKey, '1');
+      } catch {
+        // ignore: caching is best-effort for MVP
+      }
+    };
+
+    run();
+    return () => {
+      cancelled = true;
+    };
+  }, [api, business?.id]);
 
   useEffect(() => {
     api.get('/dashboard/settings')
@@ -757,6 +857,8 @@ export default function InvoicesPage() {
                     client_address: c.address || form.client_address
                   })}
                   api={api}
+                  businessId={business?.id}
+                  offline={offlineNow}
                 />
               </div>
               <div>
@@ -894,6 +996,8 @@ export default function InvoicesPage() {
                         if (!showHSN && product.hsn_code) setShowHSN(true);
                       }}
                       api={api}
+                      businessId={business?.id}
+                      offline={offlineNow}
                     />
                     {showHSN && <Input placeholder="HSN" className="input-premium text-sm" value={item.hsn_code} onChange={e => updateItem(idx, 'hsn_code', e.target.value)} />}
                     <Input type="number" min="0" placeholder="Qty" className="input-premium text-sm" value={item.quantity} onChange={e => updateItem(idx, 'quantity', e.target.value)} />
