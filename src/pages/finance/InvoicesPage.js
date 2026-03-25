@@ -22,7 +22,7 @@ const STATUS_COLORS = {
   draft: 'badge-neutral', sent: 'badge-info', paid: 'badge-success',
   overdue: 'badge-danger', cancelled: 'badge-danger', partially_paid: 'badge-warning'
 };
-const emptyItem = { description: '', hsn_code: '', quantity: 1, unit_price: 0, item_discount: 0, amount: 0 };
+const emptyItem = { product_id: null, description: '', hsn_code: '', quantity: 1, unit_price: 0, item_discount: 0, amount: 0 };
 
 function safeJsonParse(v, fallback) {
   try { return JSON.parse(v); } catch { return fallback; }
@@ -550,6 +550,7 @@ export default function InvoicesPage() {
         place_of_supply: form.buyer_state || null,
         custom_fields: form.custom_fields.filter(f => f.label && f.value),
         items: form.items.map(i => ({
+          product_id: i.product_id || null,
           description: i.description,
           hsn_code: i.hsn_code || null,
           quantity: Number(i.quantity),
@@ -987,6 +988,7 @@ export default function InvoicesPage() {
                         const items = [...form.items];
                         items[idx] = {
                           ...items[idx],
+                          product_id: product.id,
                           description: product.name,
                           unit_price: product.unit_price,
                           hsn_code: product.hsn_code || items[idx].hsn_code || '',

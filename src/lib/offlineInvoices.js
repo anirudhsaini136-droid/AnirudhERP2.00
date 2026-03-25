@@ -211,6 +211,7 @@ export function buildLocalInvoiceFromForm({ business, form, localInvoiceId, invo
     const disc = Number(it.item_discount) || 0;
     const total = qty * unitPrice - disc;
     return {
+      product_id: it.product_id || null,
       description: it.description,
       hsn_code: it.hsn_code || null,
       quantity: qty,
@@ -332,6 +333,7 @@ export function createLocalInvoiceAndQueue({ businessId, business, form }) {
       .filter((f) => f && f.label && f.value)
       .map((f) => ({ label: f.label, value: f.value })),
     items: (form.items || []).map((i) => ({
+      product_id: i.product_id || null,
       description: i.description,
       hsn_code: i.hsn_code || null,
       quantity: Number(i.quantity),
