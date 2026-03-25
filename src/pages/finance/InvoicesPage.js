@@ -5,10 +5,11 @@ import DashboardLayout from '../../components/layout/DashboardLayout';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../../components/ui/dialog';
 import { Input } from '../../components/ui/input';
 import { Label } from '../../components/ui/label';
-import { Plus, Search, Eye, Send, CheckCircle, Trash2, Bell, ChevronDown, ChevronUp } from 'lucide-react';
+import { Plus, Search, Eye, CheckCircle, Trash2, Bell, ChevronDown, ChevronUp } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   loadLocalInvoices,
+  upsertLocalInvoices,
   createLocalInvoiceAndQueue,
   recordLocalPaymentAndQueue,
   syncOfflineInvoiceQueue,
@@ -313,6 +314,8 @@ export default function InvoicesPage() {
   const [deleting, setDeleting] = useState(false);
   const [businessName, setBusinessName] = useState('');
   const [offlineNow, setOfflineNow] = useState(typeof navigator !== 'undefined' ? !navigator.onLine : true);
+  const [selectedInvoiceIds, setSelectedInvoiceIds] = useState([]);
+  const [activeDraftId, setActiveDraftId] = useState(null);
 
   useEffect(() => {
     const on = () => setOfflineNow(!navigator.onLine);
@@ -344,6 +347,88 @@ export default function InvoicesPage() {
     items: [{ ...emptyItem }],
     custom_fields: [] // [{label: '', value: ''}]
   });
+
+  const isDraftFormDirty = useCallback((f) => {
+    if (!f) return false;
+    if ((f.client_name || '').trim()) return true;
+    if ((f.client_phone || '').trim()) return true;
+    if ((f.client_email || '').trim()) return true;
+    if ((f.client_address || '').trim()) return true;
+    if ((f.notes || '').trim()) return true;
+    if ((f.buyer_state || '').trim()) return true;
+    if (Number(f.tax_rate || 0) > 0 || Number(f.discount_amount || 0) > 0) return true;
+    if ((f.custom_fields || []).some((cf) => (cf?.label || '').trim() || (cf?.value || '').trim())) return true;
+    return (f.items || []).some((i) =>
+      (i.description || '').trim() ||
+      Number(i.quantity || 0) > 0 ||
+      Number(i.unit_price || 0) > 0 ||
+      Number(i.item_discount || 0) > 0
+    );
+  }, []);
+
+  const removeLocalInvoiceById = useCallback((localId) => {
+    if (!business?.id || !localId) return;
+    const all = loadLocalInvoices(business.id);
+    upsertLocalInvoices(business.id, all.filter((x) => x.id !== localId));
+  }, [business?.id]);
+
+  const saveDraftFromForm = useCallback(() => {
+    if (!business?.id) return false;
+    if (!isDraftFormDirty(form)) return false;
+
+    const nowIso = new Date().toISOString();
+    const subtotal = (form.items || []).reduce((s, i) => {
+      const qty = Number(i.quantity) || 0;
+      const rate = Number(i.unit_price) || 0;
+      const disc = Number(i.item_discount) || 0;
+      return s + (qty * rate - disc);
+    }, 0);
+    const taxAmount = subtotal * ((Number(form.tax_rate) || 0) / 100);
+    const totalAmount = subtotal + taxAmount - (Number(form.discount_amount) || 0);
+
+    const localId = activeDraftId || `draft-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const draftInvoice = {
+      id: localId,
+      local_invoice_id: localId,
+      server_invoice_id: null,
+      sync_status: 'local_draft',
+      status: 'draft',
+      invoice_number: `DRAFT-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-${localId.slice(-4).toUpperCase()}`,
+      client_name: form.client_name || 'Draft',
+      client_email: form.client_email || null,
+      client_address: form.client_address || null,
+      client_phone: form.client_phone || null,
+      buyer_state: form.buyer_state || null,
+      place_of_supply: form.buyer_state || null,
+      issue_date: form.issue_date || today,
+      due_date: form.due_date || null,
+      subtotal,
+      tax_rate: Number(form.tax_rate) || 0,
+      tax_amount: taxAmount,
+      discount_amount: Number(form.discount_amount) || 0,
+      total_amount: totalAmount,
+      amount_paid: 0,
+      balance_due: totalAmount,
+      items: (form.items || []).map((i) => ({
+        product_id: i.product_id || null,
+        description: i.description,
+        hsn_code: i.hsn_code || null,
+        quantity: Number(i.quantity) || 0,
+        unit_price: Number(i.unit_price) || 0,
+        item_discount: Number(i.item_discount) || 0,
+        total: (Number(i.quantity) || 0) * (Number(i.unit_price) || 0) - (Number(i.item_discount) || 0),
+      })),
+      created_at: nowIso,
+      updated_at: nowIso,
+    };
+
+    const all = loadLocalInvoices(business.id);
+    const idx = all.findIndex((x) => x.id === localId);
+    if (idx >= 0) all[idx] = { ...all[idx], ...draftInvoice };
+    else all.unshift(draftInvoice);
+    upsertLocalInvoices(business.id, all);
+    return true;
+  }, [activeDraftId, business?.id, form, isDraftFormDirty, today]);
 
   const [paymentForm, setPaymentForm] = useState({
     amount: 0, payment_date: today, payment_method: 'cash', reference: '', notes: ''
@@ -408,6 +493,10 @@ export default function InvoicesPage() {
     }
     setLoading(false);
   }, [api, business?.id, page, search, filterStatus]);
+
+  useEffect(() => {
+    setSelectedInvoiceIds((prev) => prev.filter((id) => invoices.some((inv) => inv.id === id)));
+  }, [invoices]);
 
   useEffect(() => { fetchInvoices(); }, [fetchInvoices]);
 
@@ -538,9 +627,11 @@ export default function InvoicesPage() {
     try {
       if (offlineNow) {
         if (!business?.id) throw new Error('Business context missing');
+        if (activeDraftId) removeLocalInvoiceById(activeDraftId);
         const localInv = createLocalInvoiceAndQueue({ businessId: business.id, business, form });
         toast.success('Saved offline. Will sync when online.');
         setShowCreate(false);
+        setActiveDraftId(null);
         resetForm();
         fetchInvoices();
         navigate(`/finance/invoices/${localInv.id}`);
@@ -562,7 +653,9 @@ export default function InvoicesPage() {
         }))
       });
       toast.success('Invoice created');
+      if (activeDraftId) removeLocalInvoiceById(activeDraftId);
       setShowCreate(false);
+      setActiveDraftId(null);
       resetForm();
       fetchInvoices();
       if (res.data.id) navigate(`/finance/invoices/${res.data.id}`);
@@ -570,6 +663,7 @@ export default function InvoicesPage() {
       // If we got here due to network/offline, queue locally.
       try {
         if (!business?.id) throw e;
+        if (activeDraftId) removeLocalInvoiceById(activeDraftId);
         const localInv = createLocalInvoiceAndQueue({ businessId: business.id, business, form });
         // If we were online but the API call failed, try syncing immediately in background.
         if (typeof navigator !== 'undefined' && navigator.onLine) {
@@ -579,6 +673,7 @@ export default function InvoicesPage() {
         }
         toast.success('Saved offline. Will sync when online.');
         setShowCreate(false);
+        setActiveDraftId(null);
         resetForm();
         fetchInvoices();
         navigate(`/finance/invoices/${localInv.id}`);
@@ -596,7 +691,11 @@ export default function InvoicesPage() {
     if (!deleteConfirm) return;
     setDeleting(true);
     try {
-      await api.delete(`/finance/invoices/${deleteConfirm.id}`);
+      if (deleteConfirm.sync_status === 'local_draft') {
+        removeLocalInvoiceById(deleteConfirm.id);
+      } else {
+        await api.delete(`/finance/invoices/${deleteConfirm.id}`);
+      }
       toast.success('Invoice deleted');
       setDeleteConfirm(null);
       fetchInvoices();
@@ -604,6 +703,78 @@ export default function InvoicesPage() {
       toast.error(e.response?.data?.detail || 'Failed to delete invoice');
     }
     setDeleting(false);
+  };
+
+  const handleCreateDialogOpenChange = (open) => {
+    if (open) {
+      setShowCreate(true);
+      return;
+    }
+    if (!creating && saveDraftFromForm()) {
+      toast.success('Draft saved');
+    }
+    setShowCreate(false);
+    setActiveDraftId(null);
+    resetForm();
+  };
+
+  const openDraftForEdit = (inv) => {
+    setActiveDraftId(inv.id);
+    setForm({
+      client_name: inv.client_name || '',
+      client_email: inv.client_email || '',
+      client_address: inv.client_address || '',
+      client_phone: inv.client_phone || '',
+      issue_date: inv.issue_date || today,
+      due_date: inv.due_date || '',
+      tax_rate: Number(inv.tax_rate) || 0,
+      discount_amount: Number(inv.discount_amount) || 0,
+      notes: inv.notes || '',
+      currency: inv.currency || 'INR',
+      buyer_state: inv.buyer_state || '',
+      items: (inv.items || []).length ? inv.items.map((i) => ({
+        ...emptyItem,
+        ...i,
+        amount: Number(i.total) || ((Number(i.quantity) || 0) * (Number(i.unit_price) || 0) - (Number(i.item_discount) || 0)),
+      })) : [{ ...emptyItem }],
+      custom_fields: Array.isArray(inv.custom_fields) ? inv.custom_fields : [],
+    });
+    setShowCreate(true);
+  };
+
+  const toggleSelectAll = (checked) => {
+    if (!checked) {
+      setSelectedInvoiceIds([]);
+      return;
+    }
+    setSelectedInvoiceIds(invoices.map((inv) => inv.id));
+  };
+
+  const toggleSelectInvoice = (id, checked) => {
+    setSelectedInvoiceIds((prev) => checked ? [...new Set([...prev, id])] : prev.filter((x) => x !== id));
+  };
+
+  const handleBulkDelete = async () => {
+    if (!selectedInvoiceIds.length) return;
+    if (!window.confirm(`Delete ${selectedInvoiceIds.length} selected invoice(s)?`)) return;
+    let deleted = 0;
+    for (const id of selectedInvoiceIds) {
+      const inv = invoices.find((x) => x.id === id);
+      if (!inv) continue;
+      try {
+        if (inv.sync_status === 'local_draft') {
+          removeLocalInvoiceById(id);
+        } else if (inv.sync_status !== 'local_pending') {
+          await api.delete(`/finance/invoices/${id}`);
+        }
+        deleted += 1;
+      } catch {
+        // Continue with remaining invoices
+      }
+    }
+    setSelectedInvoiceIds([]);
+    fetchInvoices();
+    toast.success(`${deleted} invoice(s) deleted`);
   };
 
   const openPayment = (inv) => {
@@ -701,7 +872,7 @@ export default function InvoicesPage() {
             <h1 className="font-display text-2xl text-white">Invoices</h1>
             <p className="text-sm text-gray-500 font-sans">{total} invoices</p>
           </div>
-          {user?.role !== "ca_admin" && <button onClick={() => { resetForm(); setShowCreate(true); }} className="btn-premium btn-primary">
+          {user?.role !== "ca_admin" && <button onClick={() => { setActiveDraftId(null); resetForm(); setShowCreate(true); }} className="btn-premium btn-primary">
             <Plus size={16} /> Create Invoice
           </button>}
         </div>
@@ -722,23 +893,42 @@ export default function InvoicesPage() {
             <option value="partially_paid">Partially Paid</option>
             <option value="overdue">Overdue</option>
           </select>
+          {selectedInvoiceIds.length > 0 && (
+            <button onClick={handleBulkDelete} className="btn-premium text-sm h-10 px-3 border border-rose-500/30 text-rose-400 hover:bg-rose-500/10">
+              Delete Selected ({selectedInvoiceIds.length})
+            </button>
+          )}
         </div>
 
         <div className="glass-card rounded-2xl overflow-hidden">
           <table className="table-premium w-full">
             <thead>
               <tr>
+                <th>
+                  <input
+                    type="checkbox"
+                    checked={invoices.length > 0 && selectedInvoiceIds.length === invoices.length}
+                    onChange={(e) => toggleSelectAll(e.target.checked)}
+                  />
+                </th>
                 <th>Invoice #</th><th>Client</th><th>Amount</th>
                 <th>Due Date</th><th>Status</th><th className="text-right">Actions</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={6} className="text-center text-gray-500 py-8">Loading...</td></tr>
+                <tr><td colSpan={7} className="text-center text-gray-500 py-8">Loading...</td></tr>
               ) : invoices.length === 0 ? (
-                <tr><td colSpan={6} className="text-center text-gray-500 py-12">No invoices yet</td></tr>
+                <tr><td colSpan={7} className="text-center text-gray-500 py-12">No invoices yet</td></tr>
               ) : invoices.map(inv => (
                 <tr key={inv.id}>
+                  <td>
+                    <input
+                      type="checkbox"
+                      checked={selectedInvoiceIds.includes(inv.id)}
+                      onChange={(e) => toggleSelectInvoice(inv.id, e.target.checked)}
+                    />
+                  </td>
                   <td className="text-white text-sm font-medium font-mono">{inv.invoice_number}</td>
                   <td>
                     <p className="text-sm text-white">{inv.client_name}</p>
@@ -756,7 +946,13 @@ export default function InvoicesPage() {
                   <td><span className={`badge-premium ${STATUS_COLORS[inv.status] || 'badge-neutral'}`}>{inv.status?.replace('_', ' ')}</span></td>
                   <td className="text-right">
                     <div className="flex items-center justify-end gap-1">
-                      <button onClick={() => navigate(`/finance/invoices/${inv.id}`)} className="p-1.5 text-gray-400 hover:text-white" title="View"><Eye size={15} /></button>
+                      <button
+                        onClick={() => inv.sync_status === 'local_draft' ? openDraftForEdit(inv) : navigate(`/finance/invoices/${inv.id}`)}
+                        className="p-1.5 text-gray-400 hover:text-white"
+                        title={inv.sync_status === 'local_draft' ? 'Edit Draft' : 'View'}
+                      >
+                        <Eye size={15} />
+                      </button>
                       {/* Send Email removed */}
                       {['draft','sent','partially_paid','overdue'].includes(inv.status) && (
                         <button onClick={() => sendReminder(inv)} className="p-1.5 rounded-lg hover:bg-emerald-500/10" style={{ color: '#25d366' }} title="WhatsApp Reminder"><Bell size={15} /></button>
@@ -767,7 +963,7 @@ export default function InvoicesPage() {
                       {user?.role !== "ca_admin" && (
                         <button
                           onClick={() => setDeleteConfirm(inv)}
-                          disabled={inv.sync_status === 'local_pending' || (typeof navigator !== 'undefined' && !navigator.onLine)}
+                          disabled={(inv.sync_status !== 'local_draft' && inv.sync_status === 'local_pending') || (inv.sync_status !== 'local_draft' && (typeof navigator !== 'undefined' && !navigator.onLine))}
                           className="p-1.5 text-rose-400/50 hover:text-rose-400 disabled:opacity-40"
                           title="Delete"
                         >
@@ -821,7 +1017,7 @@ export default function InvoicesPage() {
       </Dialog>
 
       {/* Create Invoice Dialog */}
-      <Dialog open={showCreate} onOpenChange={setShowCreate}>
+      <Dialog open={showCreate} onOpenChange={handleCreateDialogOpenChange}>
         <DialogContent className="bg-void border-white/10 max-w-3xl max-h-[92vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="font-display text-white">Create Invoice</DialogTitle>
@@ -1018,7 +1214,7 @@ export default function InvoicesPage() {
             </div>
 
             <DialogFooter>
-              <button type="button" onClick={() => setShowCreate(false)} className="btn-premium btn-secondary">Cancel</button>
+              <button type="button" onClick={() => handleCreateDialogOpenChange(false)} className="btn-premium btn-secondary">Cancel</button>
               <button type="submit" disabled={creating} className="btn-premium btn-primary">{creating ? 'Creating...' : 'Create Invoice'}</button>
             </DialogFooter>
           </form>
