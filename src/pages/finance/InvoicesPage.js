@@ -22,7 +22,7 @@ const STATUS_COLORS = {
   draft: 'badge-neutral', sent: 'badge-info', paid: 'badge-success',
   overdue: 'badge-danger', cancelled: 'badge-danger', partially_paid: 'badge-warning'
 };
-const emptyItem = { product_id: null, description: '', hsn_code: '', quantity: 1, unit_price: 0, item_discount: 0, amount: 0 };
+const emptyItem = { product_id: null, available_stock: null, minimum_stock: null, description: '', hsn_code: '', quantity: 1, unit_price: 0, item_discount: 0, amount: 0 };
 
 function safeJsonParse(v, fallback) {
   try { return JSON.parse(v); } catch { return fallback; }
@@ -498,6 +498,9 @@ export default function InvoicesPage() {
     const price = Number(items[idx].unit_price) || 0;
     const disc = Number(items[idx].item_discount) || 0;
     items[idx].amount = qty * price - disc;
+    if (field === 'quantity' && items[idx].available_stock !== null && qty > Number(items[idx].available_stock)) {
+      toast.error(`Insufficient stock. Available: ${items[idx].available_stock}`);
+    }
     setForm({ ...form, items });
   };
 
@@ -989,6 +992,8 @@ export default function InvoicesPage() {
                         items[idx] = {
                           ...items[idx],
                           product_id: product.id,
+                          available_stock: typeof product.current_stock === 'number' ? product.current_stock : Number(product.current_stock ?? 0),
+                          minimum_stock: typeof product.minimum_stock === 'number' ? product.minimum_stock : Number(product.minimum_stock ?? 0),
                           description: product.name,
                           unit_price: product.unit_price,
                           hsn_code: product.hsn_code || items[idx].hsn_code || '',
