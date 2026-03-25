@@ -42,6 +42,7 @@ function amountInWords(total) {
 
 export default function InvoiceRenderer({ invoice, items, business, payments }) {
   const [qrDataUrl, setQrDataUrl] = React.useState(null);
+  const [upiLink, setUpiLink] = React.useState(null);
 
   React.useEffect(() => {
     if (!invoice) return;
@@ -51,6 +52,7 @@ export default function InvoiceRenderer({ invoice, items, business, payments }) 
         const vpa = business?.upi_vpa;
         if (!vpa) {
           setQrDataUrl(null);
+          setUpiLink(null);
           return;
         }
         const name = business?.upi_name || business?.name || '';
@@ -66,10 +68,12 @@ export default function InvoiceRenderer({ invoice, items, business, payments }) 
         if (tn) params.set('tn', tn);
         const upiPayload = `upi://pay?${params.toString()}`;
 
+        if (!cancelled) setUpiLink(upiPayload);
         const url = await QRCode.toDataURL(upiPayload, { margin: 1, width: 180, errorCorrectionLevel: 'M' });
         if (!cancelled) setQrDataUrl(url);
       } catch {
         if (!cancelled) setQrDataUrl(null);
+        if (!cancelled) setUpiLink(null);
       }
     }
     buildQr();
@@ -294,7 +298,7 @@ export default function InvoiceRenderer({ invoice, items, business, payments }) 
       )}
 
       {/* ── UPI QR (optional) ── */}
-      {business?.upi_vpa && (
+      {business?.upi_vpa && balance > 0 && invoice?.status !== 'paid' && invoice?.status !== 'cancelled' && (
         <div className="inv-upi-qr-band" style={{ padding: '16px 48px', background: '#f8f9fa', borderTop: '1px solid #e5e7eb', WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }}>
           <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, color: '#6b7280', marginBottom: 8 }}>
             UPI Payment QR
@@ -317,6 +321,32 @@ export default function InvoiceRenderer({ invoice, items, business, payments }) 
               {business?.upi_name && (
                 <div style={{ fontSize: 12, color: '#6b7280', lineHeight: 1.6 }}>
                   Receiver: <span style={{ fontWeight: 700, color: '#111827' }}>{business?.upi_name}</span>
+                </div>
+              )}
+              {upiLink && (
+                <div style={{ marginTop: 12 }}>
+                  <a
+                    href={upiLink}
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: 8,
+                      padding: '10px 14px',
+                      borderRadius: 10,
+                      background: 'linear-gradient(135deg, #10b981, #34d399)',
+                      color: '#04110b',
+                      fontSize: 13,
+                      fontWeight: 800,
+                      textDecoration: 'none',
+                      border: '1px solid rgba(16,185,129,0.35)'
+                    }}
+                  >
+                    Pay via UPI
+                  </a>
+                  <div style={{ fontSize: 10, color: '#6b7280', marginTop: 6 }}>
+                    Opens GPay / PhonePe / Paytm on mobile.
+                  </div>
                 </div>
               )}
             </div>

@@ -14,9 +14,10 @@ export default function PublicInvoicePage() {
 
   useEffect(() => {
     if (!invoiceId) { setError('Invalid invoice link.'); setLoading(false); return; }
+    let timer = null;
     const load = async () => {
       try {
-        const res = await fetch(`${API_BASE}/api/finance/invoices/${invoiceId}/public`);
+        const res = await fetch(`${API_BASE}/api/finance/invoices/${invoiceId}/public`, { cache: 'no-store' });
         if (!res.ok) throw new Error('Not found');
         const data = await res.json();
         setInvoice(data);
@@ -29,6 +30,11 @@ export default function PublicInvoicePage() {
       }
     };
     load();
+    // Auto-refresh status so QR/button vanish after payment is recorded.
+    timer = setInterval(() => {
+      load();
+    }, 15000);
+    return () => { if (timer) clearInterval(timer); };
   }, [invoiceId]);
 
   if (loading) return (
