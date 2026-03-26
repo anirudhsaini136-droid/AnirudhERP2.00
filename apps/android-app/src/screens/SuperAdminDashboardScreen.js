@@ -14,6 +14,7 @@ import {
 import { useFocusEffect } from "@react-navigation/native";
 import { getSuperAdminDashboard } from "../api";
 import { HeroBand, KpiTile, PageHeader } from "../components/NexusUi";
+import AmbientAnimatedBackground from "../components/AmbientAnimatedBackground";
 import * as T from "../theme/tokens";
 import { S } from "../theme/screenStyles";
 import { chunkPairs, fmtInr } from "../utils/format";
@@ -93,25 +94,27 @@ export default function SuperAdminDashboardScreen({ navigation }) {
   const soon = (warnings.within_14_days || []).filter((b) => (b.days_remaining ?? 0) > 3);
 
   return (
-    <ScrollView
-      style={styles.scroll}
-      contentContainerStyle={styles.scrollInner}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={load} tintColor={T.gold} />}
-    >
-      <Animated.View
-        style={{
-          opacity: heroAnim,
-          transform: [{ translateY: heroAnim.interpolate({ inputRange: [0, 1], outputRange: [14, 0] }) }],
-        }}
+    <View style={styles.screen}>
+      <AmbientAnimatedBackground />
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={styles.scrollInner}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={load} tintColor={T.gold} />}
       >
-        <HeroBand eyebrow="SUPER ADMIN">
-          <PageHeader
-            title="Platform Overview"
-            subtitle="Monitor all businesses and subscriptions"
-            footnote="MRR sums active accounts from your pricing; trials count only when amount > 0."
-          />
-        </HeroBand>
-      </Animated.View>
+        <Animated.View
+          style={{
+            opacity: heroAnim,
+            transform: [{ translateY: heroAnim.interpolate({ inputRange: [0, 1], outputRange: [14, 0] }) }],
+          }}
+        >
+          <HeroBand eyebrow="SUPER ADMIN">
+            <PageHeader
+              title="Platform Overview"
+              subtitle="Monitor all businesses and subscriptions"
+              footnote="MRR sums active accounts from your pricing; trials count only when amount > 0."
+            />
+          </HeroBand>
+        </Animated.View>
 
       <Text style={S.sectionTitle}>Key metrics</Text>
       {kpiRows.map((pair, ri) => (
@@ -231,14 +234,16 @@ export default function SuperAdminDashboardScreen({ navigation }) {
         </>
       ) : null}
 
-      <View style={{ height: 24 }} />
-    </ScrollView>
+        <View style={{ height: 24 }} />
+      </ScrollView>
+    </View>
   );
 }
 
 function makeStyles() {
   return StyleSheet.create({
-    scroll: { flex: 1, backgroundColor: T.screenBg },
+    screen: { flex: 1, backgroundColor: T.screenBg },
+    scroll: { flex: 1, backgroundColor: "transparent" },
     scrollInner: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 32 },
     center: { flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: T.screenBg },
     centerSub: { color: T.textMuted, marginTop: 12, fontSize: 13 },
