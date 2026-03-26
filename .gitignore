@@ -3,3 +3,11 @@ build
 .env
 .env.local
 .DS_Store
+apps/windows-app/dist/
+apps/windows-app/*.exe
+apps/windows-app/*.blockmap
+apps/android-app/.expo/
+apps/android-app/.idea/
+apps/android-app/android/.gradle/
+apps/android-app/android/app/build/
+apps/android-app/android/local.properties
