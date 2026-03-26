@@ -12,7 +12,7 @@ const BACKEND_ORIGIN =
   process.env.REACT_APP_BACKEND_URL ||
   process.env.REACT_APP_API_URL ||
   '';
-const DEFAULT_EAS_APK_URL = 'https://expo.dev/artifacts/eas/b2bS577A81FgW61s6N5k2d.apk';
+const DEFAULT_EAS_APK_URL = 'https://expo.dev/artifacts/eas/mJ7s84HyKPGxvNG8rux8Mr.apk';
 const LOCAL_APK_FALLBACK = `${typeof window !== 'undefined' ? window.location.origin : ''}/downloads/NexusERP.apk`;
 const ANDROID_APK_URL =
   (process.env.REACT_APP_ANDROID_APK_URL && String(process.env.REACT_APP_ANDROID_APK_URL).trim()) ||
