@@ -102,7 +102,7 @@ export default function InvoiceDetailScreen({ route, navigation }) {
     const amount = Number(inv.balance_due || 0).toFixed(2);
     const params = new URLSearchParams({
       pa: business.upi_vpa,
-      pn: business.upi_name || business.name || "NexusERP",
+      pn: business.upi_name || business.name || "NexaERP",
       am: amount,
       cu: "INR",
       tn: `Invoice ${inv.invoice_number || invoiceId}`,

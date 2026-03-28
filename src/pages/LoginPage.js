@@ -13,7 +13,7 @@ const BACKEND_ORIGIN =
   process.env.REACT_APP_API_URL ||
   '';
 const DEFAULT_EAS_APK_URL = 'https://expo.dev/artifacts/eas/mJ7s84HyKPGxvNG8rux8Mr.apk';
-const LOCAL_APK_FALLBACK = `${typeof window !== 'undefined' ? window.location.origin : ''}/downloads/NexusERP.apk`;
+const LOCAL_APK_FALLBACK = `${typeof window !== 'undefined' ? window.location.origin : ''}/downloads/NexaERP.apk`;
 const ANDROID_APK_URL =
   (process.env.REACT_APP_ANDROID_APK_URL && String(process.env.REACT_APP_ANDROID_APK_URL).trim()) ||
   DEFAULT_EAS_APK_URL ||
@@ -98,7 +98,7 @@ const LoginPage = () => {
         <div className="relative z-10 flex flex-col justify-between p-12 w-full">
           <div>
             <h1 className={`font-display text-4xl tracking-tight ${isLight ? 'text-slate-900' : 'text-white'}`}>
-              Nexus<span className="text-gold">ERP</span>
+              Nexa<span className="text-gold">ERP</span>
             </h1>
           </div>
           <div className="max-w-xl">
@@ -143,7 +143,7 @@ const LoginPage = () => {
         <div className="w-full max-w-md">
           <div className="lg:hidden text-center mb-10">
             <h1 className={`font-display text-3xl ${isLight ? 'text-slate-900' : 'text-white'}`}>
-              Nexus<span className="text-gold">ERP</span>
+              Nexa<span className="text-gold">ERP</span>
             </h1>
           </div>
 
@@ -242,7 +242,7 @@ const LoginPage = () => {
                     </span>
                   </div>
                   <h3 className={`font-display text-lg tracking-tight ${isLight ? 'text-slate-900' : 'text-white'}`}>
-                    Get the NexusERP app
+                    Get the NexaERP app
                   </h3>
                   <p className={`text-sm mt-1.5 leading-relaxed ${isLight ? 'text-slate-600' : 'text-gray-400'}`}>
                     Install on your phone for a native experience. Your login, roles, and data stay aligned with this
@@ -265,7 +265,7 @@ const LoginPage = () => {
                   </ul>
                   <a
                     href={ANDROID_APK_URL}
-                    download="NexusERP.apk"
+                    download="NexaERP.apk"
                     className="mt-5 btn-premium btn-primary w-full h-14 rounded-xl inline-flex items-center justify-center gap-2.5 text-base font-semibold no-underline transition-transform hover:scale-[1.01] active:scale-[0.99]"
                   >
                     <Download className="h-5 w-5" strokeWidth={2} />
@@ -304,7 +304,7 @@ const LoginPage = () => {
                   )}
                   {process.env.NODE_ENV === 'development' ? (
                     <p className="text-[10px] text-gray-600 mt-3 font-mono leading-relaxed">
-                      Dev: place <code className="text-gray-500">NexusERP.apk</code> in{' '}
+                      Dev: place <code className="text-gray-500">NexaERP.apk</code> in{' '}
                       <code className="text-gray-500">public/downloads/</code> or set{' '}
                       <code className="text-gray-500">REACT_APP_ANDROID_APK_URL</code>.
                     </p>

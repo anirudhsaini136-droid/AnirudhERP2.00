@@ -29,7 +29,7 @@ export default function BusinessDashboard() {
   const yearlySavings = monthlyTotalYearlyEquivalent - (399 * 12);
   const yearlySavingsPct = Math.round((yearlySavings / monthlyTotalYearlyEquivalent) * 100);
   const planLabel = billingCycle === 'yearly' ? 'Yearly (399x12)' : 'Monthly (499)';
-  const paymentNote = `NexusERP ${planLabel} - ${business?.name || 'Business'} - ${business?.id || ''}`;
+  const paymentNote = `NexaERP ${planLabel} - ${business?.name || 'Business'} - ${business?.id || ''}`;
   const upiUrl = `upi://pay?pa=${encodeURIComponent(upiId)}&pn=${encodeURIComponent(upiName)}&am=${amount}&cu=INR&tn=${encodeURIComponent(paymentNote)}`;
   const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(upiUrl)}`;
 

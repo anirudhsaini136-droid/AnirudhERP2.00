@@ -50,7 +50,7 @@ export default function PlatformSettingsScreen() {
       ListHeaderComponent={
         <View style={{ marginBottom: 6 }}>
           <HeroBand eyebrow="PLATFORM">
-            <PageHeader title="Platform settings" subtitle="Global NexusERP keys" />
+            <PageHeader title="Platform settings" subtitle="Global NexaERP keys" />
           </HeroBand>
         </View>
       }

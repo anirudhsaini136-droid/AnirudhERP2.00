@@ -1,5 +1,5 @@
 {
-  "name": "nexuserp-windows-app",
+  "name": "nexaerp-windows-app",
   "version": "0.1.0",
   "private": true,
   "erpWebOrigin": "https://erp.thenextwebsolution.com",
@@ -18,7 +18,7 @@
   },
   "build": {
     "appId": "com.nexuserp.desktop",
-    "productName": "NexusERP",
+    "productName": "NexaERP",
     "files": [
       "**/*"
     ],

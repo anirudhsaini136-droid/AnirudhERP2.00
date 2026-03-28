@@ -19,7 +19,7 @@ export default function DataMigrationPage() {
       const url = window.URL.createObjectURL(new Blob([res.data]));
       const a = document.createElement('a');
       a.href = url;
-      a.download = 'nexuserp_migration_templates.zip';
+      a.download = 'nexaerp_migration_templates.zip';
       a.click();
       window.URL.revokeObjectURL(url);
     } catch (e) {

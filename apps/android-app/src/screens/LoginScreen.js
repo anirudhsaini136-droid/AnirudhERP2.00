@@ -48,7 +48,7 @@ export default function LoginScreen() {
             <Text style={styles.logoLetter}>N</Text>
           </View>
           <View>
-            <Text style={styles.brand}>NexusERP</Text>
+            <Text style={styles.brand}>NexaERP</Text>
             <Text style={styles.tag}>Enterprise · Android</Text>
           </View>
         </View>

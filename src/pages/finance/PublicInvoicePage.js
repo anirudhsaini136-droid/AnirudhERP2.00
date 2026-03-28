@@ -94,7 +94,7 @@ export default function PublicInvoicePage() {
       <div className="pub-toolbar">
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#D4AF37', fontWeight: 600, fontSize: 15 }}>
           <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#D4AF37' }} />
-          NexusERP
+          NexaERP
         </div>
         <button className="pub-print-btn" onClick={() => window.print()}>
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">

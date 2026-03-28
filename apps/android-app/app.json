@@ -1,22 +1,20 @@
 {
   "expo": {
-    "name": "NexusERP",
+    "name": "NexaERP",
     "slug": "nexuserp-android",
     "scheme": "nexuserp",
     "version": "0.1.0",
-    "runtimeVersion": {
-      "policy": "appVersion"
-    },
+    "runtimeVersion": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "updates": {
       "enabled": true,
       "checkAutomatically": "NEVER",
-      "fallbackToCacheTimeout": 0
+      "fallbackToCacheTimeout": 0,
+      "url": "https://u.expo.dev/d19d365a-312f-492b-9cb0-9fae22063de1"
     },
     "android": {
       "package": "com.nexuserp.app",
-      "versionCode": 1,
       "usesCleartextTraffic": true,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
@@ -24,7 +22,11 @@
       }
     },
     "extra": {
-      "apiUrl": "https://anirudherp-backend-production.up.railway.app/api"
-    }
+      "apiUrl": "https://anirudherp-backend-production.up.railway.app/api",
+      "eas": {
+        "projectId": "d19d365a-312f-492b-9cb0-9fae22063de1"
+      }
+    },
+    "ios": {}
   }
 }

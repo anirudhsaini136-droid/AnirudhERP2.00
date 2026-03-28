@@ -2,7 +2,7 @@
 // Lightweight offline support for CRA build (MVP).
 // Caches GET requests to same-origin URLs so the UI can load offline after first visit.
 
-const CACHE_NAME = "nexuserp-ui-v1";
+const CACHE_NAME = "nexaerp-ui-v1";
 
 self.addEventListener("install", (event) => {
   event.waitUntil(

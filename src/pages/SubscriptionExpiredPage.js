@@ -20,7 +20,7 @@ const SubscriptionExpiredPage = () => {
           </h1>
           
           <p className="text-gray-400 mb-8">
-            Your NexusERP subscription has expired. Please contact your administrator 
+            Your NexaERP subscription has expired. Please contact your administrator 
             or our support team to renew your access.
           </p>
 

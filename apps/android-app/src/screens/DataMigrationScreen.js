@@ -18,7 +18,7 @@ export default function DataMigrationScreen() {
       </HeroBand>
       <View style={S.card}>
         <Text style={{ color: T.textSecondary, lineHeight: 22 }}>
-          Full data import (ZIP templates, validation, and progress) matches the web app. Use NexusERP in your browser for
+          Full data import (ZIP templates, validation, and progress) matches the web app. Use NexaERP in your browser for
           imports, then continue day-to-day work in this app — same backend.
         </Text>
         <TouchableOpacity style={S.btnPrimary} onPress={openWeb}>

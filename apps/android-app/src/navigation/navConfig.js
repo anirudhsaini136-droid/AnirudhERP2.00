@@ -176,5 +176,5 @@ export function screenTitleForRoute(name) {
     PlatformSettings: "Platform Settings",
     Profile: "Account",
   };
-  return map[name] || "NexusERP";
+  return map[name] || "NexaERP";
 }

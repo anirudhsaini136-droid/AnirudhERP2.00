@@ -192,7 +192,7 @@ export default function DashboardLayout({ children }) {
             <div className="w-8 h-8 bg-gradient-gold rounded-lg flex items-center justify-center">
               <span className="text-black font-bold text-sm font-sans">N</span>
             </div>
-            <span className="font-display text-lg text-white tracking-tight">NexusERP</span>
+            <span className="font-display text-lg text-white tracking-tight">NexaERP</span>
           </Link>
           <button className="lg:hidden ml-auto text-gray-400 hover:text-white" onClick={() => setSidebarOpen(false)}>
             <X size={20} />

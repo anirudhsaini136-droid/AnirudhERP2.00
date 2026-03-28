@@ -7,7 +7,7 @@
 
 export let mode = "dark";
 
-/** NexusERP web palette (tailwind / DashboardLayout) → React Native */
+/** NexaERP web palette (tailwind / DashboardLayout) → React Native */
 export let obsidian = "#030306";
 export let voidBg = "#08090E";
 export let abyss = "#0D1017";

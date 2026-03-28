@@ -96,7 +96,7 @@ export default function WebSidebar() {
             <View style={styles.logoBadge}>
               <Text style={styles.logoLetter}>N</Text>
             </View>
-            <Text style={styles.logoText}>NexusERP</Text>
+            <Text style={styles.logoText}>NexaERP</Text>
           </View>
 
           <View style={styles.roleBadge}>
