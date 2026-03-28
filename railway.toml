@@ -1,9 +1,9 @@
 [build]
 builder = "nixpacks"
-buildCommand = "yarn install && yarn build"
+buildCommand = "yarn install && yarn build && npm install express --legacy-peer-deps"
 
 [deploy]
-startCommand = "npx serve -s build -l 3000"
+startCommand = "node -e \"const e=require('express'),p=require('path'),a=e(),P=process.env.PORT||3000;a.use(e.static(p.join(__dirname,'build')));a.get('*path',(q,r)=>r.sendFile(p.join(__dirname,'build','index.html')));a.listen(P,()=>console.log('Port:'+P))\""
 
 [build.nixpacksPlan.phases.setup]
 nixPkgs = ["nodejs_20"]
