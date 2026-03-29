@@ -2,6 +2,8 @@
  * Mirrors web DashboardLayout.js — path, label, screen (React Navigation), optional NEW badge.
  */
 
+import { shouldApplyTrialModuleLock, isTrialPathUnlockedForPath } from "../utils/trialAccess";
+
 /** Same ids as web `DashboardLayout` / Super Admin Modules. */
 const GRANULAR_FINANCE_ADDON_IDS = ["recurring_invoices", "eway_bill", "einvoice"];
 
@@ -139,6 +141,15 @@ export function parseEnabledModules(business) {
   }
 }
 
+function navPatternMatches(pattern, userPath) {
+  if (!pattern || !userPath) return false;
+  if (pattern.includes(":")) {
+    const base = pattern.split("/:")[0];
+    return userPath === base || userPath.startsWith(`${base}/`);
+  }
+  return pattern === userPath;
+}
+
 export function isPathAllowed(role, business, path) {
   if (role === "super_admin") return true;
   if (["/dashboard", "/dashboard/settings"].includes(path)) return true;
@@ -149,13 +160,20 @@ export function isPathAllowed(role, business, path) {
   for (const id of GRANULAR_FINANCE_ADDON_IDS) {
     if (effectiveModuleEnabled(enabledModules, id)) moduleKeys.add(id);
   }
-  return [...moduleKeys].some((mod) => (MODULE_NAV_MAP[mod] || []).includes(path));
+  return [...moduleKeys].some((mod) =>
+    (MODULE_NAV_MAP[mod] || []).some((p) => navPatternMatches(p, path)),
+  );
 }
 
 export function getNavForUser(user, business) {
   const role = user?.role || "staff";
   const raw = RAW_NAV_CONFIG[role] || RAW_NAV_CONFIG.staff;
-  const items = raw.items.filter((item) => isPathAllowed(role, business, item.path));
+  const items = raw.items
+    .filter((item) => isPathAllowed(role, business, item.path))
+    .map((item) => ({
+      ...item,
+      trialLocked: shouldApplyTrialModuleLock(business, role) && !isTrialPathUnlockedForPath(item.path),
+    }));
   return { title: raw.title, items };
 }
 

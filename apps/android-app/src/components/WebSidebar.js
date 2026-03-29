@@ -12,6 +12,7 @@ import {
   View,
 } from "react-native";
 import { CommonActions, useNavigation, useNavigationState } from "@react-navigation/native";
+import { TRIAL_UPGRADE_MESSAGE } from "../utils/trialAccess";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "../context/AuthContext";
 import { useShell } from "../context/ShellContext";
@@ -121,12 +122,22 @@ export default function WebSidebar() {
               return (
                 <TouchableOpacity
                   key={item.path}
-                  style={[styles.navRow, active && styles.navRowActive]}
-                  onPress={() => go(item.screen)}
+                  style={[styles.navRow, active && styles.navRowActive, item.trialLocked && { opacity: 0.65 }]}
+                  onPress={() => {
+                    if (item.trialLocked) {
+                      closeDrawer();
+                      Alert.alert("Trial limit", TRIAL_UPGRADE_MESSAGE);
+                      return;
+                    }
+                    go(item.screen);
+                  }}
                   activeOpacity={0.85}
                 >
                   <Text style={[styles.navLabel, active && styles.navLabelActive]}>{item.label}</Text>
-                  {item.newBadge && !active ? (
+                  {item.trialLocked ? (
+                    <Text style={{ color: "#f59e0b", fontSize: 11, fontWeight: "700" }}>LOCK</Text>
+                  ) : null}
+                  {!item.trialLocked && item.newBadge && !active ? (
                     <View style={styles.newPill}>
                       <Text style={styles.newPillText}>NEW</Text>
                     </View>

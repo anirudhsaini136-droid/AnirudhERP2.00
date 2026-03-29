@@ -10,10 +10,11 @@ import {
 } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
 import { getMe } from "../api";
-import { HeroBand, PageHeader } from "../components/NexusUi";
+import { HeroBand, PageHeader } from "../components/NexaUi";
 import * as T from "../theme/tokens";
 import { S } from "../theme/screenStyles";
 import { getLauncherItems } from "../utils/menu";
+import { TRIAL_UPGRADE_MESSAGE } from "../utils/trialAccess";
 
 export default function ModuleLauncherScreen({ navigation }) {
   const [user, setUser] = useState(null);
@@ -40,7 +41,7 @@ export default function ModuleLauncherScreen({ navigation }) {
   );
 
   const role = user?.role || "staff";
-  const items = getLauncherItems(role);
+  const items = getLauncherItems(role, biz);
 
   return (
     <View style={{ flex: 1, backgroundColor: T.screenBg }}>
@@ -52,7 +53,7 @@ export default function ModuleLauncherScreen({ navigation }) {
         columnWrapperStyle={styles.row}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={load} tintColor={T.gold} />}
         ListHeaderComponent={
-          <HeroBand eyebrow="NEXUS">
+          <HeroBand eyebrow="NEXA">
             <PageHeader
               title={`Hello, ${user?.first_name || "there"}`}
               subtitle={biz?.name ? `${biz.name} · ${String(role).replace(/_/g, " ")}` : String(role).replace(/_/g, " ")}
@@ -61,11 +62,18 @@ export default function ModuleLauncherScreen({ navigation }) {
         }
         renderItem={({ item }) => (
           <TouchableOpacity
-            style={styles.tile}
+            style={[styles.tile, item.trialLocked && styles.tileLocked]}
             activeOpacity={0.88}
-            onPress={() => navigation.navigate(item.screen)}
+            onPress={() => {
+              if (item.trialLocked) {
+                Alert.alert("Trial limit", TRIAL_UPGRADE_MESSAGE);
+                return;
+              }
+              navigation.navigate(item.screen);
+            }}
           >
             <Text style={styles.tileLabel}>{item.label}</Text>
+            {item.trialLocked ? <Text style={styles.lockHint}>Locked · trial</Text> : null}
           </TouchableOpacity>
         )}
       />
@@ -86,4 +94,6 @@ const styles = StyleSheet.create({
     borderColor: T.border,
   },
   tileLabel: { color: T.textPrimary, fontWeight: "700", fontSize: 14 },
+  tileLocked: { opacity: 0.72, borderColor: "rgba(245,158,11,0.35)" },
+  lockHint: { color: "#f59e0b", fontSize: 11, fontWeight: "700", marginTop: 6 },
 });

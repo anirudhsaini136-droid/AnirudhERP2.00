@@ -6,10 +6,12 @@ import {
   Receipt, BarChart3, Package, ShoppingCart, Settings, Bell, Truck, 
   LogOut, ChevronDown, Menu, X, Clock, Briefcase, CreditCard,
   Shield, Home,   FileSpreadsheet, UserCircle, ArrowLeftRight, BookUser,
-  IndianRupee, BookOpen, HardDriveDownload, Repeat
+  IndianRupee, BookOpen, HardDriveDownload, Repeat, Lock
 } from 'lucide-react';
 import ThemeToggle from '../ThemeToggle';
 import { parseEnabledModules, effectiveModuleEnabled, GRANULAR_FINANCE_ADDON_IDS } from '../../shared-core/modules';
+import { shouldApplyTrialModuleLock, isTrialPathUnlocked, TRIAL_UPGRADE_MESSAGE } from '../../shared-core/trialAccess';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../ui/dialog';
 
 const NAV_CONFIG = {
   super_admin: {
@@ -137,11 +139,26 @@ export default function DashboardLayout({ children }) {
     'ca_portal': ['/ca'],
   };
 
+  const navPatternMatches = (pattern, userPath) => {
+    if (!pattern || !userPath) return false;
+    if (pattern.includes(':')) {
+      const base = pattern.split('/:')[0];
+      return userPath === base || userPath.startsWith(`${base}/`);
+    }
+    return pattern === userPath;
+  };
+
   const isPathAllowed = (path) => {
     // Super admin always has full access
     if (role === 'super_admin') return true;
     // Always allow dashboard and settings regardless of modules
     if (['/dashboard', '/dashboard/settings'].includes(path)) return true;
+    if (
+      path === '/trial-upgrade' &&
+      ['business_owner', 'finance_admin', 'hr_admin', 'inventory_admin', 'ca_admin'].includes(role)
+    ) {
+      return true;
+    }
     // Legacy: no modules field → allow all nav items
     if (enabledModules === null) return true;
     // Empty modules → only dashboard/settings
@@ -150,12 +167,22 @@ export default function DashboardLayout({ children }) {
     for (const id of GRANULAR_FINANCE_ADDON_IDS) {
       if (effectiveModuleEnabled(enabledModules, id)) moduleKeys.add(id);
     }
-    return [...moduleKeys].some((mod) => (MODULE_NAV_MAP[mod] || []).includes(path));
+    return [...moduleKeys].some((mod) =>
+      (MODULE_NAV_MAP[mod] || []).some((p) => navPatternMatches(p, path)),
+    );
   };
+
+  const [trialOpen, setTrialOpen] = React.useState(false);
 
   const navConfig = {
     ...rawNav,
-    items: rawNav.items.filter(item => isPathAllowed(item.path))
+    items: rawNav.items
+      .filter((item) => isPathAllowed(item.path))
+      .map((item) => ({
+        ...item,
+        trialLocked:
+          shouldApplyTrialModuleLock(business, role) && !isTrialPathUnlocked(item.path),
+      })),
   };
 
   const lastSessionRefreshRef = React.useRef(0);
@@ -237,19 +264,36 @@ export default function DashboardLayout({ children }) {
           {navConfig.items.map((item) => {
             const isActive = location.pathname === item.path;
             const Icon = item.icon;
-            // Highlight GST Reports with a subtle badge
             const isGST = item.path === '/finance/gst';
             const isPurchases = item.path === '/purchases';
+            const rowClass = `flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 ${
+              isActive
+                ? 'bg-gradient-to-r from-[#D4AF37]/15 to-transparent text-gold-400 border-l-2 border-gold-500'
+                : 'text-gray-400 hover:text-white hover:bg-white/[0.04]'
+            } ${item.trialLocked ? 'opacity-70 cursor-pointer' : ''}`;
+            if (item.trialLocked) {
+              return (
+                <button
+                  type="button"
+                  key={item.path}
+                  className={`w-full text-left ${rowClass}`}
+                  onClick={() => {
+                    setSidebarOpen(false);
+                    setTrialOpen(true);
+                  }}
+                >
+                  <Icon size={18} className={isActive ? 'text-gold-400' : 'text-gray-500'} />
+                  <span className="flex-1">{item.label}</span>
+                  <Lock size={15} className="shrink-0 text-amber-400/90" />
+                </button>
+              );
+            }
             return (
               <Link
                 key={item.path}
                 to={item.path}
                 onClick={() => setSidebarOpen(false)}
-                className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 ${
-                  isActive
-                    ? 'bg-gradient-to-r from-[#D4AF37]/15 to-transparent text-gold-400 border-l-2 border-gold-500'
-                    : 'text-gray-400 hover:text-white hover:bg-white/[0.04]'
-                }`}
+                className={rowClass}
               >
                 <Icon size={18} className={isActive ? 'text-gold-400' : ''} />
                 <span>{item.label}</span>
@@ -262,6 +306,15 @@ export default function DashboardLayout({ children }) {
             );
           })}
         </nav>
+
+        <Dialog open={trialOpen} onOpenChange={setTrialOpen}>
+          <DialogContent className="sm:max-w-md border-white/10 bg-void">
+            <DialogHeader>
+              <DialogTitle className="text-white">Trial limit</DialogTitle>
+            </DialogHeader>
+            <p className="text-sm text-gray-400 leading-relaxed">{TRIAL_UPGRADE_MESSAGE}</p>
+          </DialogContent>
+        </Dialog>
 
         {/* Business info */}
         {business && (

@@ -6,7 +6,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Input } from '../../components/ui/input';
 import { Label } from '../../components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../components/ui/tabs';
-import { ArrowLeft, CreditCard, Ban, ChevronUp, LogIn, Eye, EyeOff } from 'lucide-react';
+import { ArrowLeft, CreditCard, Ban, ChevronUp, LogIn, Eye, EyeOff, FlaskConical, Unlock } from 'lucide-react';
 import { toast } from 'sonner';
 
 const fmt = (n) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(n || 0);
@@ -145,6 +145,7 @@ export default function BusinessDetailPage() {
   const [resetPwdUser, setResetPwdUser] = useState(null);
   const [resetPwdValue, setResetPwdValue] = useState('');
   const [resetting, setResetting] = useState(false);
+  const [trialSaving, setTrialSaving] = useState(false);
 
   const fetchData = async () => {
     try {
@@ -197,6 +198,18 @@ export default function BusinessDetailPage() {
       toast.success('Business deleted');
       navigate('/super-admin/businesses');
     } catch(e) { toast.error(e.response?.data?.detail || 'Failed to delete'); }
+  };
+
+  const setTrialRestrictedFlag = async (next) => {
+    setTrialSaving(true);
+    try {
+      await api.put(`/super-admin/businesses/${id}`, { trial_restricted: next });
+      toast.success(next ? 'Trial module restrictions enabled for this business.' : 'Full module access restored.');
+      fetchData();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to update trial mode');
+    }
+    setTrialSaving(false);
   };
 
   const handleChangePlan = async () => {
@@ -288,10 +301,30 @@ export default function BusinessDetailPage() {
               <div className="flex items-center gap-2 mt-2">
                 <span className={`badge-premium ${PLAN_COLORS[b.plan] || 'badge-neutral'}`}>{b.plan}</span>
                 <span className={`badge-premium ${STATUS_COLORS[b.status] || 'badge-neutral'}`}>{b.status}</span>
+                {b.trial_restricted ? (
+                  <span className="badge-premium badge-warning text-[10px]">Trial module lock</span>
+                ) : null}
               </div>
             </div>
           </div>
           <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              disabled={trialSaving}
+              onClick={() => setTrialRestrictedFlag(true)}
+              className="btn-premium btn-secondary text-sm flex items-center gap-1.5"
+              title="Only invoices, purchases, and inventory remain usable until you lift this or record a paid extension."
+            >
+              <FlaskConical size={15} /> Activate trial period
+            </button>
+            <button
+              type="button"
+              disabled={trialSaving || !b.trial_restricted}
+              onClick={() => setTrialRestrictedFlag(false)}
+              className="btn-premium btn-secondary text-sm flex items-center gap-1.5 disabled:opacity-40"
+            >
+              <Unlock size={15} /> Lift trial lock
+            </button>
             <button onClick={() => setShowExtend(true)} className="btn-premium btn-primary text-sm">
               <CreditCard size={15} /> Adjust subscription
             </button>

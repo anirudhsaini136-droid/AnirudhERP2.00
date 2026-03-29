@@ -1,6 +1,12 @@
 import React from "react";
 import { Alert, AppState, Pressable, Text, View, ActivityIndicator } from "react-native";
-import { NavigationContainer, DarkTheme, DefaultTheme } from "@react-navigation/native";
+import {
+  NavigationContainer,
+  DarkTheme,
+  DefaultTheme,
+  createNavigationContainerRef,
+  CommonActions,
+} from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
@@ -8,7 +14,13 @@ import * as Updates from "expo-updates";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import { ShellProvider, useShell } from "./context/ShellContext";
 import WebSidebar from "./components/WebSidebar";
-import { ROLE_INITIAL_SCREEN, screenTitleForRoute } from "./navigation/navConfig";
+import { screenTitleForRoute } from "./navigation/navConfig";
+import {
+  getTrialAwareInitialScreen,
+  shouldApplyTrialModuleLock,
+  TRIAL_UNLOCKED_SCREENS,
+  TRIAL_UPGRADE_MESSAGE,
+} from "./utils/trialAccess";
 import { THEME_PREFS, ThemeProvider, useTheme } from "./theme/ThemeProvider";
 
 import LoginScreen from "./screens/LoginScreen";
@@ -47,8 +59,11 @@ import StaffProfileScreen from "./screens/StaffProfileScreen";
 import UserManagementScreen from "./screens/UserManagementScreen";
 import BusinessSettingsScreen from "./screens/BusinessSettingsScreen";
 import PlatformSettingsScreen from "./screens/PlatformSettingsScreen";
+import TrialUpgradeScreen from "./screens/TrialUpgradeScreen";
 
 const Stack = createNativeStackNavigator();
+
+export const navigationRef = createNavigationContainerRef();
 
 function AppHeaderLeft(props) {
   const { openDrawer } = useShell();
@@ -81,9 +96,9 @@ function AppHeaderRight() {
 }
 
 function AuthedStack() {
-  const { user } = useAuth();
+  const { user, business } = useAuth();
   const { tokens: T } = useTheme();
-  const initial = ROLE_INITIAL_SCREEN[user?.role] || "StaffHome";
+  const initial = getTrialAwareInitialScreen(user?.role, business);
 
   const screenOptions = {
     headerStyle: { backgroundColor: T.cardBg },
@@ -103,6 +118,7 @@ function AuthedStack() {
           title: screenTitleForRoute(route.name),
         })}
       >
+        <Stack.Screen name="TrialUpgrade" component={TrialUpgradeScreen} />
         <Stack.Screen name="BusinessDashboard" component={BusinessOverviewScreen} />
         <Stack.Screen name="UserManagement" component={UserManagementScreen} />
         <Stack.Screen name="BusinessSettings" component={BusinessSettingsScreen} />
@@ -204,7 +220,24 @@ export default function App() {
 
 function ThemedNavigation() {
   const { tokens: T, effectiveMode } = useTheme();
+  const { user, business } = useAuth();
   const checkingRef = React.useRef(false);
+  const trialNavGen = React.useRef(0);
+
+  const onTrialNavStateChange = React.useCallback(() => {
+    if (!navigationRef.isReady()) return;
+    const role = user?.role;
+    const name = navigationRef.getCurrentRoute()?.name;
+    if (!name || !shouldApplyTrialModuleLock(business, role)) return;
+    if (TRIAL_UNLOCKED_SCREENS.has(name)) return;
+    const my = ++trialNavGen.current;
+    requestAnimationFrame(() => {
+      if (my !== trialNavGen.current) return;
+      const safe = getTrialAwareInitialScreen(role, business);
+      navigationRef.dispatch(CommonActions.reset({ index: 0, routes: [{ name: safe }] }));
+      Alert.alert("Trial limit", TRIAL_UPGRADE_MESSAGE);
+    });
+  }, [user, business]);
 
   const checkForOtaUpdate = React.useCallback(async () => {
     if (__DEV__ || checkingRef.current) return;
@@ -258,7 +291,12 @@ function ThemedNavigation() {
     },
   };
   return (
-    <NavigationContainer key={`nav-${effectiveMode}`} theme={navTheme}>
+    <NavigationContainer
+      ref={navigationRef}
+      key={`nav-${effectiveMode}`}
+      theme={navTheme}
+      onStateChange={onTrialNavStateChange}
+    >
       <RootNavigator />
     </NavigationContainer>
   );
