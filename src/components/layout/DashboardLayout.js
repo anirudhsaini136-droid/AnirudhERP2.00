@@ -151,6 +151,8 @@ export default function DashboardLayout({ children }) {
   const isPathAllowed = (path) => {
     // Super admin always has full access
     if (role === 'super_admin') return true;
+    // Staff portal items are not gated by Super Admin module chips (same business record)
+    if (role === 'staff') return true;
     // Always allow dashboard and settings regardless of modules
     if (['/dashboard', '/dashboard/settings'].includes(path)) return true;
     if (
@@ -159,8 +161,8 @@ export default function DashboardLayout({ children }) {
     ) {
       return true;
     }
-    // Legacy: no modules field → allow all nav items
-    if (enabledModules === null) return true;
+    // No business context or still loading — do not show full module list
+    if (enabledModules === null) return false;
     // Empty modules → only dashboard/settings
     if (enabledModules.length === 0) return false;
     const moduleKeys = new Set(enabledModules);

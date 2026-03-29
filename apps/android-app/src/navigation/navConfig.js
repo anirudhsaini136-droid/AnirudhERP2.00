@@ -131,14 +131,27 @@ export const ROLE_INITIAL_SCREEN = {
   staff: "StaffHome",
 };
 
-/** @returns {string[]|null} null = no modules field (legacy → allow all paths). */
+/** @returns {string[]|null} null = no business in context */
 export function parseEnabledModules(business) {
-  if (business?.modules === undefined || business?.modules === null) return null;
-  try {
-    return JSON.parse(business.modules || "[]");
-  } catch {
+  if (!business) return null;
+  const raw = business.modules;
+  if (raw === undefined || raw === null) {
     return [];
   }
+  if (Array.isArray(raw)) {
+    return raw.filter((x) => typeof x === "string");
+  }
+  if (typeof raw === "string") {
+    const s = raw.trim();
+    if (!s) return [];
+    try {
+      const parsed = JSON.parse(s);
+      return Array.isArray(parsed) ? parsed.filter((x) => typeof x === "string") : [];
+    } catch {
+      return [];
+    }
+  }
+  return [];
 }
 
 function navPatternMatches(pattern, userPath) {
@@ -152,9 +165,10 @@ function navPatternMatches(pattern, userPath) {
 
 export function isPathAllowed(role, business, path) {
   if (role === "super_admin") return true;
+  if (role === "staff") return true;
   if (["/dashboard", "/dashboard/settings"].includes(path)) return true;
   const enabledModules = parseEnabledModules(business);
-  if (enabledModules === null) return true;
+  if (enabledModules === null) return false;
   if (enabledModules.length === 0) return false;
   const moduleKeys = new Set(enabledModules);
   for (const id of GRANULAR_FINANCE_ADDON_IDS) {

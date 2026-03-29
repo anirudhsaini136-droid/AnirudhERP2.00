@@ -2,15 +2,28 @@
 export const GRANULAR_FINANCE_ADDON_IDS = ['recurring_invoices', 'eway_bill', 'einvoice'];
 
 /**
- * @returns {string[]|null} null = legacy business (no modules field) → all modules allowed in UI
+ * @returns {string[]|null} null = no business in context (do not treat as "allow all")
  */
 export function parseEnabledModules(business) {
-  if (business?.modules === undefined || business?.modules === null) return null;
-  try {
-    return JSON.parse(business.modules || '[]');
-  } catch {
+  if (!business) return null;
+  const raw = business.modules;
+  if (raw === undefined || raw === null) {
     return [];
   }
+  if (Array.isArray(raw)) {
+    return raw.filter((x) => typeof x === 'string');
+  }
+  if (typeof raw === 'string') {
+    const s = raw.trim();
+    if (!s) return [];
+    try {
+      const parsed = JSON.parse(s);
+      return Array.isArray(parsed) ? parsed.filter((x) => typeof x === 'string') : [];
+    } catch {
+      return [];
+    }
+  }
+  return [];
 }
 
 /**
