@@ -44,7 +44,7 @@ const LoginPage = () => {
   const [otpResendLoading, setOtpResendLoading] = useState(false);
   const [rememberDevice, setRememberDevice] = useState(true);
 
-  const { login, verifyLoginOtp, verifyLoginTrustedDevice } = useAuth();
+  const { login, verifyLoginOtp } = useAuth();
   const { isLight } = useTheme();
   const navigate = useNavigate();
   const location = useLocation();
@@ -112,21 +112,15 @@ const LoginPage = () => {
     setError('');
     setLoading(true);
     try {
-      const r = await login(email, password);
+      const em = String(email).trim().toLowerCase();
+      const rec = readTrustedDeviceRecord(em);
+      const tdTok =
+        rec?.token && new Date(rec.expiresAt) > new Date() ? rec.token : undefined;
+      const r = await login(email, password, tdTok ? { trustedDeviceToken: tdTok } : {});
       if (r?.otpRequired) {
-        const em = r.email || String(email).trim().toLowerCase();
-        const rec = readTrustedDeviceRecord(em);
-        if (rec?.token && new Date(rec.expiresAt) > new Date()) {
-          try {
-            const td = await verifyLoginTrustedDevice(em, rec.token);
-            navigateAfterLogin(td.user);
-            return;
-          } catch {
-            clearTrustedDeviceRecord(em);
-          }
-        }
+        if (tdTok) clearTrustedDeviceRecord(em);
         setAuthStep('otp');
-        setOtpEmail(em);
+        setOtpEmail(r.email || em);
         setLoginOtp('');
         setRememberDevice(true);
         return;
@@ -166,7 +160,11 @@ const LoginPage = () => {
     setError('');
     setOtpResendLoading(true);
     try {
-      const r = await login(otpEmail, password);
+      const em = String(otpEmail).trim().toLowerCase();
+      const rec = readTrustedDeviceRecord(em);
+      const tdTok =
+        rec?.token && new Date(rec.expiresAt) > new Date() ? rec.token : undefined;
+      const r = await login(otpEmail, password, tdTok ? { trustedDeviceToken: tdTok } : {});
       if (r?.otpRequired) return;
       navigateAfterLogin(r.user);
     } catch (err) {

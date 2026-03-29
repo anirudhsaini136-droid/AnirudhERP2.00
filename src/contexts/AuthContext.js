@@ -121,8 +121,11 @@ export const AuthProvider = ({ children }) => {
     fetchUser();
   }, [fetchUser]);
 
-  const login = async (email, password) => {
-    const response = await api.post('/auth/login', { email, password });
+  const login = async (email, password, opts = {}) => {
+    const body = { email, password };
+    const td = String(opts.trustedDeviceToken || '').trim();
+    if (td) body.trusted_device_token = td;
+    const response = await api.post('/auth/login', body);
     const d = response.data;
     if (d.otp_required === true) {
       const em = String(d.email || email || '')
@@ -154,30 +157,6 @@ export const AuthProvider = ({ children }) => {
     const response = await axios.post(`${API}/auth/verify-otp`, body, {
       headers: { 'Content-Type': 'application/json' },
     });
-    const { access_token, refresh_token, user: userData } = response.data;
-    if (!access_token || !refresh_token) {
-      throw new Error('Unexpected verification response. Please try again.');
-    }
-    setTokens(access_token, refresh_token);
-    setUser(userData);
-    await fetchUser();
-    return { user: userData };
-  };
-
-  /** Skip OTP when this browser was previously remembered (server validates token). */
-  const verifyLoginTrustedDevice = async (email, trustedToken) => {
-    const response = await axios.post(
-      `${API}/auth/verify-otp`,
-      {
-        email: String(email || '')
-          .trim()
-          .toLowerCase(),
-        trusted_device_token: String(trustedToken || '').trim(),
-      },
-      {
-        headers: { 'Content-Type': 'application/json' },
-      },
-    );
     const { access_token, refresh_token, user: userData } = response.data;
     if (!access_token || !refresh_token) {
       throw new Error('Unexpected verification response. Please try again.');
@@ -241,7 +220,6 @@ export const AuthProvider = ({ children }) => {
     api,
     login,
     verifyLoginOtp,
-    verifyLoginTrustedDevice,
     logout,
     checkSubscription,
     startImpersonation,

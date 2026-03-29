@@ -5,16 +5,27 @@ import {
   Easing,
   KeyboardAvoidingView,
   Platform,
+  Pressable,
   ScrollView,
   StyleSheet,
+  Switch,
   Text,
   TextInput,
   useWindowDimensions,
   View,
 } from "react-native";
-import { API_BASE, login } from "../api";
+import {
+  API_BASE,
+  clearTrustedDeviceRecord,
+  createTrustedDeviceUuid,
+  login,
+  readTrustedDeviceRecord,
+  trustedDeviceExpiresAtIso,
+  verifyLoginOtp,
+  writeTrustedDeviceRecord,
+} from "../api";
 import { useAuth } from "../context/AuthContext";
-import { PrimaryButton } from "../components/NexusUi";
+import { PrimaryButton, SecondaryButton } from "../components/NexaUi";
 import * as T from "../theme/tokens";
 
 export default function LoginScreen() {
@@ -22,16 +33,105 @@ export default function LoginScreen() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [step, setStep] = useState("credentials");
+  const [otpEmail, setOtpEmail] = useState("");
+  const [otpCode, setOtpCode] = useState("");
+  const [resendCooldown, setResendCooldown] = useState(0);
+  const [rememberDevice, setRememberDevice] = useState(true);
+  const otpInputRef = useRef(null);
   const styles = React.useMemo(() => makeStyles(), [T.mode, T.border, T.cardBg, T.voidBg]);
   const isDark = T.mode !== "light";
+
+  React.useEffect(() => {
+    if (resendCooldown <= 0) return undefined;
+    const id = setTimeout(() => setResendCooldown((c) => Math.max(0, c - 1)), 1000);
+    return () => clearTimeout(id);
+  }, [resendCooldown]);
+
+  React.useEffect(() => {
+    if (step === "otp") {
+      setOtpCode("");
+      const t = setTimeout(() => otpInputRef.current?.focus?.(), 300);
+      return () => clearTimeout(t);
+    }
+  }, [step]);
+
+  function backToCredentials() {
+    setStep("credentials");
+    setOtpCode("");
+    setOtpEmail("");
+    setResendCooldown(0);
+    setRememberDevice(true);
+  }
 
   async function handleLogin() {
     try {
       setLoading(true);
-      const data = await login(email.trim(), password);
+      const em = email.trim().toLowerCase();
+      const rec = await readTrustedDeviceRecord(em);
+      const tdTok =
+        rec?.token && new Date(rec.expiresAt) > new Date() ? rec.token : undefined;
+      const data = await login(email.trim(), password, tdTok ? { trustedDeviceToken: tdTok } : {});
+      if (data.otp_required) {
+        if (tdTok) await clearTrustedDeviceRecord(em);
+        setOtpEmail(String(data.email || email).trim().toLowerCase());
+        setStep("otp");
+        setResendCooldown(60);
+        return;
+      }
       await signIn(data.access_token, data.refresh_token);
     } catch (e) {
       Alert.alert("Login failed", e.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleVerifyOtp() {
+    const code = otpCode.replace(/\D/g, "").slice(0, 6);
+    if (code.length !== 6) {
+      Alert.alert("OTP", "Enter the 6-digit code from your email.");
+      return;
+    }
+    try {
+      setLoading(true);
+      const newToken = rememberDevice ? createTrustedDeviceUuid() : null;
+      const data = await verifyLoginOtp(otpEmail, code, {
+        rememberDevice,
+        newTrustedDeviceToken: newToken || undefined,
+      });
+      if (rememberDevice && newToken) {
+        await writeTrustedDeviceRecord(otpEmail, newToken, trustedDeviceExpiresAtIso());
+      } else {
+        await clearTrustedDeviceRecord(otpEmail);
+      }
+      await signIn(data.access_token, data.refresh_token);
+    } catch (e) {
+      Alert.alert("Verification failed", e.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleResendOtp() {
+    if (resendCooldown > 0 || !password) return;
+    try {
+      setLoading(true);
+      const em = email.trim().toLowerCase();
+      const rec = await readTrustedDeviceRecord(em);
+      const tdTok =
+        rec?.token && new Date(rec.expiresAt) > new Date() ? rec.token : undefined;
+      const data = await login(email.trim(), password, tdTok ? { trustedDeviceToken: tdTok } : {});
+      if (data.otp_required) {
+        setOtpEmail((data.email || email).trim().toLowerCase());
+        setResendCooldown(60);
+        setOtpCode("");
+        Alert.alert("OTP sent", "A new code was sent to your email.");
+      } else if (data.access_token) {
+        await signIn(data.access_token, data.refresh_token);
+      }
+    } catch (e) {
+      Alert.alert("Resend failed", e.message);
     } finally {
       setLoading(false);
     }
@@ -54,28 +154,85 @@ export default function LoginScreen() {
         </View>
 
           <View style={styles.card}>
-          <Text style={styles.cardTitle}>Welcome back</Text>
-          <Text style={styles.cardHint}>Sign in with your web portal credentials.</Text>
-          <Text style={styles.label}>Email</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="you@company.com"
-            placeholderTextColor={T.textMuted}
-            autoCapitalize="none"
-            keyboardType="email-address"
-            value={email}
-            onChangeText={setEmail}
-          />
-          <Text style={styles.label}>Password</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="••••••••"
-            placeholderTextColor={T.textMuted}
-            secureTextEntry
-            value={password}
-            onChangeText={setPassword}
-          />
-          <PrimaryButton title={loading ? "Signing in…" : "Sign in"} onPress={handleLogin} disabled={loading} />
+          {step === "credentials" ? (
+            <>
+              <Text style={styles.cardTitle}>Welcome back</Text>
+              <Text style={styles.cardHint}>Sign in with your web portal credentials.</Text>
+              <Text style={styles.label}>Email</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="you@company.com"
+                placeholderTextColor={T.textMuted}
+                autoCapitalize="none"
+                keyboardType="email-address"
+                value={email}
+                onChangeText={setEmail}
+              />
+              <Text style={styles.label}>Password</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="••••••••"
+                placeholderTextColor={T.textMuted}
+                secureTextEntry
+                value={password}
+                onChangeText={setPassword}
+              />
+              <PrimaryButton title={loading ? "Signing in…" : "Sign in"} onPress={handleLogin} disabled={loading} />
+            </>
+          ) : (
+            <>
+              <Text style={styles.cardTitle}>Check your email</Text>
+              <Text style={styles.cardHint}>
+                We sent a 6-digit code to{" "}
+                <Text style={styles.emailEmphasis}>{otpEmail || email}</Text>
+                {"\n"}Super admin and business owner accounts require this extra step.
+              </Text>
+              <Text style={styles.label}>One-time code</Text>
+              <TextInput
+                ref={otpInputRef}
+                style={styles.otpInput}
+                placeholder="000000"
+                placeholderTextColor={T.textMuted}
+                keyboardType="number-pad"
+                inputMode="numeric"
+                maxLength={6}
+                value={otpCode}
+                onChangeText={(t) => setOtpCode(t.replace(/\D/g, "").slice(0, 6))}
+                autoCorrect={false}
+              />
+              <PrimaryButton
+                title={loading ? "Verifying…" : "Verify & sign in"}
+                onPress={handleVerifyOtp}
+                disabled={loading || otpCode.replace(/\D/g, "").length !== 6}
+              />
+              <View style={styles.rememberRow}>
+                <Switch
+                  value={rememberDevice}
+                  onValueChange={setRememberDevice}
+                  disabled={loading}
+                  trackColor={{ false: T.border, true: "rgba(212,175,55,0.45)" }}
+                  thumbColor={rememberDevice ? T.gold : T.textMuted}
+                />
+                <Pressable
+                  style={styles.rememberLabelWrap}
+                  onPress={() => !loading && setRememberDevice((v) => !v)}
+                  disabled={loading}
+                >
+                  <Text style={styles.rememberLabel}>Remember this device for 30 days</Text>
+                </Pressable>
+              </View>
+              <View style={styles.otpActions}>
+                <Pressable onPress={backToCredentials} disabled={loading} hitSlop={8}>
+                  <Text style={styles.linkMuted}>← Change email</Text>
+                </Pressable>
+              </View>
+              {resendCooldown > 0 ? (
+                <Text style={styles.cooldownText}>Resend code in {resendCooldown}s</Text>
+              ) : (
+                <SecondaryButton title="Resend OTP" onPress={handleResendOtp} disabled={loading} />
+              )}
+            </>
+          )}
         </View>
 
           <Text style={styles.apiFoot} numberOfLines={2}>
@@ -391,6 +548,37 @@ function makeStyles() {
       color: T.textPrimary,
       fontSize: 15,
       marginBottom: 14,
+    },
+    otpInput: {
+      backgroundColor: T.mode === "light" ? "#FFFFFF" : T.abyss,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: T.border,
+      padding: 15,
+      color: T.textPrimary,
+      fontSize: 24,
+      fontWeight: "700",
+      letterSpacing: 8,
+      textAlign: "center",
+      marginBottom: 14,
+    },
+    emailEmphasis: { color: T.gold, fontWeight: "700" },
+    rememberRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      marginTop: 4,
+      marginBottom: 6,
+      gap: 10,
+    },
+    rememberLabelWrap: { flex: 1, paddingVertical: 4 },
+    rememberLabel: { color: T.textSecondary, fontSize: 14, lineHeight: 20 },
+    otpActions: { marginTop: 12, marginBottom: 10 },
+    linkMuted: { color: T.textSecondary, fontSize: 14 },
+    cooldownText: {
+      color: T.textMuted,
+      fontSize: 13,
+      textAlign: "center",
+      marginTop: 8,
     },
     apiFoot: { color: T.textMuted, fontSize: 11, textAlign: "center", marginTop: 24, opacity: 0.8 },
   });

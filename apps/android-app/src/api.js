@@ -11,6 +11,57 @@ export const API_BASE = (fromEnv || fromExtra || "http://10.0.2.2:8000/api").rep
 const KEY_ACCESS = "access_token";
 const KEY_REFRESH = "refresh_token";
 
+/** 30-day trusted device window (must match server). */
+export const TRUSTED_DEVICE_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+
+function normEmail(email) {
+  return String(email || "").trim().toLowerCase();
+}
+
+export function trustedDeviceStorageKey(email) {
+  return `trusted_device_${normEmail(email)}`;
+}
+
+/** UUID v4 for trusted device token (client-generated). */
+export function createTrustedDeviceUuid() {
+  const bytes = new Uint8Array(16);
+  const c = globalThis.crypto;
+  if (c && typeof c.getRandomValues === "function") c.getRandomValues(bytes);
+  else for (let i = 0; i < 16; i++) bytes[i] = (Math.random() * 256) | 0;
+  bytes[6] = (bytes[6] & 0x0f) | 0x40;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  const hex = Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
+
+export async function readTrustedDeviceRecord(email) {
+  const raw = await AsyncStorage.getItem(trustedDeviceStorageKey(email));
+  if (!raw) return null;
+  try {
+    const o = JSON.parse(raw);
+    if (!o || typeof o.token !== "string" || !o.expiresAt) return null;
+    return { token: o.token, expiresAt: o.expiresAt, email: o.email || normEmail(email) };
+  } catch {
+    return null;
+  }
+}
+
+export async function writeTrustedDeviceRecord(email, token, expiresAtIso) {
+  const em = normEmail(email);
+  await AsyncStorage.setItem(
+    trustedDeviceStorageKey(em),
+    JSON.stringify({ token, expiresAt: expiresAtIso, email: em }),
+  );
+}
+
+export async function clearTrustedDeviceRecord(email) {
+  await AsyncStorage.removeItem(trustedDeviceStorageKey(email));
+}
+
+export function trustedDeviceExpiresAtIso() {
+  return new Date(Date.now() + TRUSTED_DEVICE_TTL_MS).toISOString();
+}
+
 export async function readToken() {
   return AsyncStorage.getItem(KEY_ACCESS);
 }
@@ -74,18 +125,82 @@ export async function request(path, options = {}, _retried = false) {
   return data;
 }
 
-/** Login must not attach a stale access token (would break after session expiry). */
-export async function login(email, password) {
+/**
+ * Login must not attach a stale access token (would break after session expiry).
+ * @param {{ trustedDeviceToken?: string }} [opts] — if valid, server skips OTP email and returns tokens.
+ */
+export async function login(email, password, opts = {}) {
+  const body = { email: normEmail(email), password };
+  const t = String(opts.trustedDeviceToken || "").trim();
+  if (t) body.trusted_device_token = t;
   const res = await fetch(`${API_BASE}/auth/login`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email, password }),
+    body: JSON.stringify(body),
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
     throw new Error(formatApiError(data, `Login failed (${res.status})`));
   }
+  if (data.otp_required) {
+    return { otp_required: true, email: data.email || email };
+  }
+  if (!data.access_token) {
+    throw new Error("Login response missing tokens");
+  }
   return data;
+}
+
+/**
+ * After login returns otp_required — exchange email + 6-digit OTP for tokens (super_admin / business_owner).
+ * @param {{ rememberDevice?: boolean, newTrustedDeviceToken?: string }} [opts]
+ */
+export async function verifyLoginOtp(email, otp, opts = {}) {
+  const body = {
+    email: normEmail(email),
+    otp: String(otp || "").trim(),
+  };
+  if (opts.rememberDevice && opts.newTrustedDeviceToken) {
+    body.remember_device = true;
+    body.new_trusted_device_token = String(opts.newTrustedDeviceToken).trim();
+  }
+  const res = await fetch(`${API_BASE}/auth/verify-otp`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(formatApiError(data, `Verification failed (${res.status})`));
+  }
+  if (!data.access_token) {
+    throw new Error("Verification response missing tokens");
+  }
+  return data;
+}
+
+/** Skip OTP when this device was previously remembered (server validates token). */
+export async function verifyLoginTrustedDevice(email, trustedToken) {
+  const res = await fetch(`${API_BASE}/auth/verify-otp`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      email: normEmail(email),
+      trusted_device_token: String(trustedToken || "").trim(),
+    }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(formatApiError(data, `Verification failed (${res.status})`));
+  }
+  if (!data.access_token) {
+    throw new Error("Verification response missing tokens");
+  }
+  return data;
+}
+
+export function revokeTrustedDevices() {
+  return request("/auth/revoke-trusted-devices", { method: "POST", body: JSON.stringify({}) });
 }
 
 export function getMe() {

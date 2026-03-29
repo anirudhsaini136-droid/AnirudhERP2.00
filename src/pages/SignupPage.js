@@ -14,7 +14,7 @@ import {
 } from '../lib/trustedDevice';
 
 export default function SignupPage() {
-  const { api, login, verifyLoginOtp, verifyLoginTrustedDevice } = useAuth();
+  const { api, login, verifyLoginOtp } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [loading, setLoading] = useState(false);
@@ -96,19 +96,13 @@ export default function SignupPage() {
     try {
       await api.post('/auth/signup/verify-otp', { email: form.email, otp });
       setOtp('');
-      const r = await login(form.email, form.password);
+      const em = String(form.email).trim().toLowerCase();
+      const rec = readTrustedDeviceRecord(em);
+      const tdTok =
+        rec?.token && new Date(rec.expiresAt) > new Date() ? rec.token : undefined;
+      const r = await login(form.email, form.password, tdTok ? { trustedDeviceToken: tdTok } : {});
       if (r?.otpRequired) {
-        const em = r.email || String(form.email).trim().toLowerCase();
-        const rec = readTrustedDeviceRecord(em);
-        if (rec?.token && new Date(rec.expiresAt) > new Date()) {
-          try {
-            const td = await verifyLoginTrustedDevice(em, rec.token);
-            navigateAfterLogin(td.user);
-            return;
-          } catch {
-            clearTrustedDeviceRecord(em);
-          }
-        }
+        if (tdTok) clearTrustedDeviceRecord(em);
         setSignInOtpStep(true);
         setSignInOtp('');
         setRememberSignInDevice(true);
@@ -149,7 +143,11 @@ export default function SignupPage() {
     setError('');
     setSignInOtpResendLoading(true);
     try {
-      const r = await login(form.email, form.password);
+      const em = String(form.email).trim().toLowerCase();
+      const rec = readTrustedDeviceRecord(em);
+      const tdTok =
+        rec?.token && new Date(rec.expiresAt) > new Date() ? rec.token : undefined;
+      const r = await login(form.email, form.password, tdTok ? { trustedDeviceToken: tdTok } : {});
       if (r?.otpRequired) return;
       navigateAfterLogin(r.user);
     } catch (err) {
