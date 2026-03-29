@@ -1,16 +1,14 @@
 /* eslint-disable no-restricted-globals */
-// Lightweight offline support for CRA build (MVP).
-// Caches GET requests to same-origin URLs so the UI can load offline after first visit.
+// Offline-friendly caching for CRA builds. Avoid cache-first for the app shell and
+// JS chunks so deploys are picked up after logout / hard navigation.
 
-const CACHE_NAME = "nexaerp-ui-v1";
+const CACHE_NAME = "nexaerp-ui-v2";
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
     (async () => {
       const cache = await caches.open(CACHE_NAME);
-      // Cache shell basics; other assets will be cached on-demand.
       await cache.addAll(["/", "/index.html", "/manifest.json"]);
-      // Best-effort: don't fail install if some assets are missing.
     })().catch(() => {})
   );
   self.skipWaiting();
@@ -34,11 +32,27 @@ function shouldHandle(request) {
   if (request.method !== "GET") return false;
   const url = new URL(request.url);
   if (url.origin !== location.origin) return false;
-  // Don't cache API responses.
   if (url.pathname.startsWith("/api/") || url.pathname.includes("/api/")) return false;
   return true;
 }
 
+/** Prefer network so new builds load; fall back to cache when offline. */
+async function networkFirst(request) {
+  const cache = await caches.open(CACHE_NAME);
+  try {
+    const response = await fetch(request);
+    if (response && response.ok) {
+      cache.put(request, response.clone()).catch(() => {});
+    }
+    return response;
+  } catch {
+    const cached = await cache.match(request);
+    if (cached) return cached;
+    throw new Error("offline");
+  }
+}
+
+/** Legacy cache-then-network for small static assets only (not HTML / main bundles). */
 async function cacheThenNetwork(request) {
   const cache = await caches.open(CACHE_NAME);
   const cached = await cache.match(request);
@@ -46,7 +60,6 @@ async function cacheThenNetwork(request) {
 
   const response = await fetch(request);
   if (response && response.ok) {
-    // Clone because response body can be consumed only once.
     cache.put(request, response.clone()).catch(() => {});
   }
   return response;
@@ -54,6 +67,20 @@ async function cacheThenNetwork(request) {
 
 self.addEventListener("fetch", (event) => {
   if (!shouldHandle(event.request)) return;
-  event.respondWith(cacheThenNetwork(event.request).catch(() => caches.match(event.request)));
-});
 
+  const path = new URL(event.request.url).pathname;
+  const isNavigate = event.request.mode === "navigate";
+  const isShell =
+    isNavigate ||
+    path === "/" ||
+    path === "/index.html" ||
+    path === "/login" ||
+    path.endsWith(".html") ||
+    path.startsWith("/static/");
+
+  if (isShell) {
+    event.respondWith(networkFirst(event.request).catch(() => caches.match(event.request)));
+  } else {
+    event.respondWith(cacheThenNetwork(event.request).catch(() => caches.match(event.request)));
+  }
+});
