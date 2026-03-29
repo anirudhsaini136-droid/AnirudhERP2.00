@@ -41,6 +41,7 @@ import StaffAttendance from './pages/staff/StaffAttendance';
 import StaffLeave from './pages/staff/StaffLeave';
 import StaffPayslips from './pages/staff/StaffPayslips';
 import StaffProfile from './pages/staff/StaffProfile';
+import { parseEnabledModules, effectiveModuleEnabled } from './shared-core/modules';
 
 const ROLE_HOMES = {
   super_admin: '/super-admin',
@@ -73,18 +74,13 @@ function RequireModule({ children, modules }) {
   const { user, business, loading } = useAuth();
   if (loading) return <Spinner />;
   if (user?.role === 'super_admin') return children;
-  if (business?.modules === undefined || business?.modules === null) return children;
-  let enabled = [];
-  try {
-    enabled = JSON.parse(business.modules || '[]');
-  } catch {
-    enabled = [];
-  }
+  const enabled = parseEnabledModules(business);
+  if (enabled === null) return children;
   const required = Array.isArray(modules) ? modules : [modules];
   if (enabled.length === 0) {
     return <Navigate to={ROLE_HOMES[user?.role] || '/dashboard'} replace />;
   }
-  const ok = required.every((m) => enabled.includes(m));
+  const ok = required.every((m) => effectiveModuleEnabled(enabled, m));
   if (!ok) {
     return <Navigate to={ROLE_HOMES[user?.role] || '/dashboard'} replace />;
   }

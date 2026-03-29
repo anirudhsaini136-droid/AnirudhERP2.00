@@ -9,6 +9,7 @@ import {
   IndianRupee, BookOpen, HardDriveDownload, Repeat
 } from 'lucide-react';
 import ThemeToggle from '../ThemeToggle';
+import { parseEnabledModules, effectiveModuleEnabled, GRANULAR_FINANCE_ADDON_IDS } from '../../shared-core/modules';
 
 const NAV_CONFIG = {
   super_admin: {
@@ -119,9 +120,7 @@ export default function DashboardLayout({ children }) {
   const rawNav = NAV_CONFIG[role] || NAV_CONFIG.staff;
 
   // Filter nav items based on business modules
-  const enabledModules = React.useMemo(() => {
-    try { return JSON.parse(business?.modules || '[]'); } catch { return []; }
-  }, [business]);
+  const enabledModules = React.useMemo(() => parseEnabledModules(business), [business]);
 
   const MODULE_NAV_MAP = {
     'manage_users': ['/dashboard/users'],
@@ -143,12 +142,15 @@ export default function DashboardLayout({ children }) {
     if (role === 'super_admin') return true;
     // Always allow dashboard and settings regardless of modules
     if (['/dashboard', '/dashboard/settings'].includes(path)) return true;
-    // If modules field doesn't exist yet (old business before feature), allow all
-    if (business?.modules === undefined || business?.modules === null) return true;
-    // If modules is empty array '[]', only show dashboard/settings (already handled above)
+    // Legacy: no modules field → allow all nav items
+    if (enabledModules === null) return true;
+    // Empty modules → only dashboard/settings
     if (enabledModules.length === 0) return false;
-    // Check if path is covered by any enabled module
-    return enabledModules.some(mod => (MODULE_NAV_MAP[mod] || []).includes(path));
+    const moduleKeys = new Set(enabledModules);
+    for (const id of GRANULAR_FINANCE_ADDON_IDS) {
+      if (effectiveModuleEnabled(enabledModules, id)) moduleKeys.add(id);
+    }
+    return [...moduleKeys].some((mod) => (MODULE_NAV_MAP[mod] || []).includes(path));
   };
 
   const navConfig = {

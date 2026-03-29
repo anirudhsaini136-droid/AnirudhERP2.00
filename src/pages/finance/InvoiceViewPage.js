@@ -7,6 +7,7 @@ import { Button } from '../../components/ui/button';
 import { toast } from 'sonner';
 import InvoiceRenderer from './InvoiceRenderer';
 import { getLocalInvoice, upsertLocalInvoiceDetail } from '../../lib/offlineInvoices';
+import { parseEnabledModules, effectiveModuleEnabled } from '../../shared-core/modules';
 
 const fmt = (n) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 2 }).format(n || 0);
 const fmtDate = (d) => d ? new Date(d).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' }) : '-';
@@ -17,18 +18,13 @@ export default function InvoiceViewPage() {
   const navigate = useNavigate();
 
   const { allowEinvoice, allowEway } = useMemo(() => {
-    if (authBusiness?.modules === undefined || authBusiness?.modules === null) {
+    const enabled = parseEnabledModules(authBusiness);
+    if (enabled === null) {
       return { allowEinvoice: true, allowEway: true };
     }
-    let enabled = [];
-    try {
-      enabled = JSON.parse(authBusiness.modules || '[]');
-    } catch {
-      enabled = [];
-    }
     return {
-      allowEinvoice: enabled.includes('einvoice'),
-      allowEway: enabled.includes('eway_bill'),
+      allowEinvoice: effectiveModuleEnabled(enabled, 'einvoice'),
+      allowEway: effectiveModuleEnabled(enabled, 'eway_bill'),
     };
   }, [authBusiness]);
   const [invoice, setInvoice] = useState(null);
