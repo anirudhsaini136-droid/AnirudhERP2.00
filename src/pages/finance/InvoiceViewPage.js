@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { ArrowLeft, Printer, MessageCircle, ShieldCheck, Truck, X } from 'lucide-react';
@@ -15,6 +15,22 @@ export default function InvoiceViewPage() {
   const { id } = useParams();
   const { api, business: authBusiness } = useAuth();
   const navigate = useNavigate();
+
+  const { allowEinvoice, allowEway } = useMemo(() => {
+    if (authBusiness?.modules === undefined || authBusiness?.modules === null) {
+      return { allowEinvoice: true, allowEway: true };
+    }
+    let enabled = [];
+    try {
+      enabled = JSON.parse(authBusiness.modules || '[]');
+    } catch {
+      enabled = [];
+    }
+    return {
+      allowEinvoice: enabled.includes('einvoice'),
+      allowEway: enabled.includes('eway_bill'),
+    };
+  }, [authBusiness]);
   const [invoice, setInvoice] = useState(null);
   const [items, setItems] = useState([]);
   const [payments, setPayments] = useState([]);
@@ -242,7 +258,7 @@ export default function InvoiceViewPage() {
           <span className="text-sm">Back to Invoices</span>
         </button>
         <div className="flex items-center gap-2 flex-wrap">
-          {!hasIrn && invoice?.status !== 'cancelled' && (
+          {allowEinvoice && !hasIrn && invoice?.status !== 'cancelled' && (
             <Button
               type="button"
               disabled={gstBusy}
@@ -252,7 +268,7 @@ export default function InvoiceViewPage() {
               <ShieldCheck size={16} /> E-Invoice (IRN)
             </Button>
           )}
-          {hasIrn && (
+          {allowEinvoice && hasIrn && (
             <Button
               type="button"
               disabled={gstBusy}
@@ -264,16 +280,18 @@ export default function InvoiceViewPage() {
               Clear e-invoice
             </Button>
           )}
-          <Button
-            type="button"
-            disabled={gstBusy}
-            variant="outline"
-            size="sm"
-            onClick={() => setShowEway(true)}
-            className="gap-1 text-amber-200 border-amber-500/30"
-          >
-            <Truck size={15} /> E-Way Bill
-          </Button>
+          {allowEway && (
+            <Button
+              type="button"
+              disabled={gstBusy}
+              variant="outline"
+              size="sm"
+              onClick={() => setShowEway(true)}
+              className="gap-1 text-amber-200 border-amber-500/30"
+            >
+              <Truck size={15} /> E-Way Bill
+            </Button>
+          )}
           <button onClick={handleSendWhatsApp}
             className="btn-premium text-sm flex items-center gap-2 px-4 py-2 rounded-xl border transition-all"
             style={{ background: 'rgba(37,211,102,0.1)', borderColor: 'rgba(37,211,102,0.3)', color: '#25d366' }}>

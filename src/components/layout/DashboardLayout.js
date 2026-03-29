@@ -126,7 +126,9 @@ export default function DashboardLayout({ children }) {
   const MODULE_NAV_MAP = {
     'manage_users': ['/dashboard/users'],
     'hr_payroll': ['/hr', '/hr/employees', '/hr/attendance', '/hr/leave', '/hr/payroll'],
-    'invoices_finance': ['/finance', '/finance/invoices', '/finance/invoices/:id', '/finance/reports', '/finance/migration', '/finance/recurring-invoices', '/finance/eway-bills'],
+    'invoices_finance': ['/finance', '/finance/invoices', '/finance/invoices/:id', '/finance/reports', '/finance/migration'],
+    'recurring_invoices': ['/finance/recurring-invoices'],
+    'eway_bill': ['/finance/eway-bills'],
     'inventory_billing': ['/inventory', '/inventory/billing'],
     'purchases_itc': ['/purchases'],
     'gst_reports': ['/finance/gst', '/ca'],

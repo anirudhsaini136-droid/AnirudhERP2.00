@@ -68,6 +68,29 @@ function RequireAuth({ children, allowedRoles }) {
   return children;
 }
 
+/** All listed modules must be enabled on the business (same rules as DashboardLayout). */
+function RequireModule({ children, modules }) {
+  const { user, business, loading } = useAuth();
+  if (loading) return <Spinner />;
+  if (user?.role === 'super_admin') return children;
+  if (business?.modules === undefined || business?.modules === null) return children;
+  let enabled = [];
+  try {
+    enabled = JSON.parse(business.modules || '[]');
+  } catch {
+    enabled = [];
+  }
+  const required = Array.isArray(modules) ? modules : [modules];
+  if (enabled.length === 0) {
+    return <Navigate to={ROLE_HOMES[user?.role] || '/dashboard'} replace />;
+  }
+  const ok = required.every((m) => enabled.includes(m));
+  if (!ok) {
+    return <Navigate to={ROLE_HOMES[user?.role] || '/dashboard'} replace />;
+  }
+  return children;
+}
+
 function RedirectAuth({ children }) {
   const { user, loading } = useAuth();
   if (loading) return <Spinner />;
@@ -105,7 +128,7 @@ function AppRoutes() {
       {/* Finance */}
       <Route path="/finance" element={<RequireAuth allowedRoles={['finance_admin', 'business_owner', 'ca_admin']}><FinanceDashboard /></RequireAuth>} />
       <Route path="/finance/invoices" element={<RequireAuth allowedRoles={['finance_admin', 'business_owner', 'ca_admin']}><InvoicesPage /></RequireAuth>} />
-      <Route path="/finance/invoices/:id" element={<RequireAuth allowedRoles={['finance_admin', 'business_owner', 'ca_admin']}><InvoiceViewPage /></RequireAuth>} />
+      <Route path="/finance/invoices/:id" element={<RequireAuth allowedRoles={['finance_admin', 'business_owner', 'ca_admin']}><RequireModule modules={['invoices_finance']}><InvoiceViewPage /></RequireModule></RequireAuth>} />
       <Route path="/finance/expenses" element={<RequireAuth allowedRoles={['finance_admin', 'business_owner']}><ExpensesPage /></RequireAuth>} />
       <Route path="/finance/reports" element={<RequireAuth allowedRoles={['finance_admin', 'business_owner']}><ReportsPage /></RequireAuth>} />
       <Route path="/finance/gst" element={<RequireAuth allowedRoles={['finance_admin', 'business_owner', 'ca_admin']}><GSTReportsPage /></RequireAuth>} />
@@ -115,8 +138,8 @@ function AppRoutes() {
       <Route path="/finance/customers" element={<RequireAuth allowedRoles={['finance_admin', 'business_owner']}><CustomersLedgerPage /></RequireAuth>} />
       <Route path="/finance/customers/:clientName" element={<RequireAuth allowedRoles={['finance_admin', 'business_owner']}><CustomerLedgerDetailPage /></RequireAuth>} />
       <Route path="/finance/migration" element={<RequireAuth allowedRoles={['finance_admin', 'business_owner']}><DataMigrationPage /></RequireAuth>} />
-      <Route path="/finance/recurring-invoices" element={<RequireAuth allowedRoles={['finance_admin', 'business_owner']}><RecurringInvoicesPage /></RequireAuth>} />
-      <Route path="/finance/eway-bills" element={<RequireAuth allowedRoles={['finance_admin', 'business_owner']}><EwayBillsPage /></RequireAuth>} />
+      <Route path="/finance/recurring-invoices" element={<RequireAuth allowedRoles={['finance_admin', 'business_owner']}><RequireModule modules={['recurring_invoices']}><RecurringInvoicesPage /></RequireModule></RequireAuth>} />
+      <Route path="/finance/eway-bills" element={<RequireAuth allowedRoles={['finance_admin', 'business_owner']}><RequireModule modules={['eway_bill']}><EwayBillsPage /></RequireModule></RequireAuth>} />
 
       {/* Inventory */}
       <Route path="/inventory" element={<RequireAuth allowedRoles={['inventory_admin', 'business_owner']}><InventoryPage /></RequireAuth>} />
