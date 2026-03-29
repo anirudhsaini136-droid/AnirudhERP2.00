@@ -7,6 +7,7 @@ import { Label } from '../../components/ui/label';
 import { toast } from 'sonner';
 import { RefreshCw, Play, Pause, Trash2, Repeat } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { formatApiError } from '../../shared-core';
 
 const emptyLine = () => ({
   description: '',
@@ -46,8 +47,8 @@ export default function RecurringInvoicesPage() {
     try {
       const r = await api.get('/finance/recurring-invoices');
       setSchedules(r.data.schedules || []);
-    } catch {
-      toast.error('Failed to load schedules');
+    } catch (e) {
+      toast.error(formatApiError(e, 'Schedules'));
     } finally {
       setLoading(false);
     }

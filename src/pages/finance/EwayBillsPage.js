@@ -5,6 +5,7 @@ import { Button } from '../../components/ui/button';
 import { toast } from 'sonner';
 import { RefreshCw, Truck } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { formatApiError } from '../../shared-core';
 
 export default function EwayBillsPage() {
   const { api } = useAuth();
@@ -17,8 +18,8 @@ export default function EwayBillsPage() {
     try {
       const r = await api.get('/finance/eway-bills');
       setRows(r.data.eway_bills || []);
-    } catch {
-      toast.error('Failed to load e-way bills');
+    } catch (e) {
+      toast.error(formatApiError(e, 'E-way bills'));
     } finally {
       setLoading(false);
     }
