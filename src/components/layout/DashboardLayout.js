@@ -107,7 +107,7 @@ const NAV_CONFIG = {
 };
 
 export default function DashboardLayout({ children }) {
-  const { user, business, logout, impersonating, endImpersonation, api } = useAuth();
+  const { user, business, logout, impersonating, endImpersonation, api, refreshUser } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -157,6 +157,23 @@ export default function DashboardLayout({ children }) {
     ...rawNav,
     items: rawNav.items.filter(item => isPathAllowed(item.path))
   };
+
+  const lastSessionRefreshRef = React.useRef(0);
+  useEffect(() => {
+    const refreshSessionIfVisible = () => {
+      if (typeof document === 'undefined' || document.visibilityState !== 'visible') return;
+      const now = Date.now();
+      if (now - lastSessionRefreshRef.current < 4000) return;
+      lastSessionRefreshRef.current = now;
+      refreshUser();
+    };
+    window.addEventListener('focus', refreshSessionIfVisible);
+    document.addEventListener('visibilitychange', refreshSessionIfVisible);
+    return () => {
+      window.removeEventListener('focus', refreshSessionIfVisible);
+      document.removeEventListener('visibilitychange', refreshSessionIfVisible);
+    };
+  }, [refreshUser]);
 
   useEffect(() => {
     const fetchNotifications = async () => {

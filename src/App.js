@@ -128,7 +128,7 @@ function AppRoutes() {
       <Route path="/finance/expenses" element={<RequireAuth allowedRoles={['finance_admin', 'business_owner']}><ExpensesPage /></RequireAuth>} />
       <Route path="/finance/reports" element={<RequireAuth allowedRoles={['finance_admin', 'business_owner']}><ReportsPage /></RequireAuth>} />
       <Route path="/finance/gst" element={<RequireAuth allowedRoles={['finance_admin', 'business_owner', 'ca_admin']}><GSTReportsPage /></RequireAuth>} />
-      <Route path="/purchases" element={<RequireAuth allowedRoles={['finance_admin', 'business_owner', 'inventory_admin', 'ca_admin']}><PurchasesPage /></RequireAuth>} />
+      <Route path="/purchases" element={<RequireAuth allowedRoles={['finance_admin', 'business_owner', 'inventory_admin', 'ca_admin']}><RequireModule modules={['purchases_itc']}><PurchasesPage /></RequireModule></RequireAuth>} />
       <Route path="/ca" element={<RequireAuth allowedRoles={['ca_admin', 'business_owner', 'finance_admin']}><CAPortalPage /></RequireAuth>} />
       <Route path="/accounting" element={<RequireAuth allowedRoles={['finance_admin', 'business_owner', 'ca_admin']}><AccountingPage /></RequireAuth>} />
       <Route path="/finance/customers" element={<RequireAuth allowedRoles={['finance_admin', 'business_owner']}><CustomersLedgerPage /></RequireAuth>} />
