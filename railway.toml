@@ -7,3 +7,10 @@ startCommand = "npx serve -s build -l 3000"
 
 [build.nixpacksPlan.phases.setup]
 nixPkgs = ["nodejs_20"]
+
+# Registry blips (502) during yarn install are common on CI; retry with a long timeout.
+[build.nixpacksPlan.phases.install]
+cmds = [
+  "npm install -g corepack@0.24.1 && corepack enable",
+  "yarn install --frozen-lockfile --network-timeout 300000 || (sleep 20 && yarn install --frozen-lockfile --network-timeout 300000) || (sleep 20 && yarn install --frozen-lockfile --network-timeout 300000)"
+]
