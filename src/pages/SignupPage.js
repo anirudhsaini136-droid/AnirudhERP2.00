@@ -77,7 +77,7 @@ export default function SignupPage() {
     <div className="min-h-screen bg-obsidian flex items-center justify-center p-6 relative overflow-hidden">
       <div className="absolute inset-0 bg-gradient-mesh pointer-events-none" />
       <div className="absolute top-5 right-5 z-20">
-        <ThemeToggle />
+        <ThemeToggle compact />
       </div>
 
       <div className="w-full max-w-2xl glass-card rounded-3xl p-8 lg:p-10">
