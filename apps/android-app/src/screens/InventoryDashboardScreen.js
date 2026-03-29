@@ -2,7 +2,7 @@ import React, { useCallback, useMemo, useState } from "react";
 import { Alert, RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
 import { getInventoryDashboard } from "../api";
-import { HeroBand, KpiTile, ListRowCard, PageHeader } from "../components/NexusUi";
+import { HeroBand, KpiTile, ListRowCard, PageHeader } from "../components/NexaUi";
 import * as T from "../theme/tokens";
 import { S } from "../theme/screenStyles";
 import { chunkPairs, fmtInr } from "../utils/format";

@@ -2,7 +2,7 @@
 // MVP uses localStorage (simple + reliable for small data). Can be migrated to IndexedDB later.
 import { calculateGstSplit, safeJsonParse } from "../shared-core";
 
-const PREFIX = "nexus_offline_v1";
+const PREFIX = "nexa_offline_v1";
 
 function getBusinessKey(businessId) {
   return `${PREFIX}:biz:${businessId}`;

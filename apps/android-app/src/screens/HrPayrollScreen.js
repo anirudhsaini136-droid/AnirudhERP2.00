@@ -2,7 +2,7 @@ import React, { useCallback, useState } from "react";
 import { Alert, FlatList, RefreshControl, StyleSheet, Text, View } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
 import { getHrPayroll } from "../api";
-import { HeroBand, PageHeader } from "../components/NexusUi";
+import { HeroBand, PageHeader } from "../components/NexaUi";
 import * as T from "../theme/tokens";
 import { S } from "../theme/screenStyles";
 

@@ -2,36 +2,13 @@
  * Mirrors web DashboardLayout.js — path, label, screen (React Navigation), optional NEW badge.
  */
 
+import {
+  parseEnabledModules,
+  isNavPathAllowedForModules,
+} from "../../../../src/shared-core/modules";
 import { shouldApplyTrialModuleLock, isTrialPathUnlockedForPath } from "../utils/trialAccess";
 
-/** Same ids as web `DashboardLayout` / Super Admin Modules. */
-const GRANULAR_FINANCE_ADDON_IDS = ["recurring_invoices", "eway_bill", "einvoice"];
-
-export const MODULE_NAV_MAP = {
-  manage_users: ["/dashboard/users"],
-  hr_payroll: ["/hr", "/hr/employees", "/hr/attendance", "/hr/leave", "/hr/payroll"],
-  invoices_finance: ["/finance", "/finance/invoices", "/finance/invoices/:id", "/finance/reports", "/finance/migration"],
-  recurring_invoices: ["/finance/recurring-invoices"],
-  eway_bill: ["/finance/eway-bills"],
-  inventory_billing: ["/inventory", "/inventory/billing"],
-  purchases_itc: ["/purchases"],
-  gst_reports: ["/finance/gst", "/ca"],
-  accounting: ["/accounting"],
-  customer_ledger: ["/finance/customers", "/finance/customers/:id"],
-  expenses: ["/finance/expenses"],
-  ca_portal: ["/ca"],
-};
-
-function effectiveModuleEnabled(enabled, moduleId) {
-  if (!Array.isArray(enabled)) return true;
-  if (enabled.includes(moduleId)) return true;
-  if (GRANULAR_FINANCE_ADDON_IDS.includes(moduleId)) {
-    const siblingOn = GRANULAR_FINANCE_ADDON_IDS.some((id) => id !== moduleId && enabled.includes(id));
-    if (siblingOn) return false;
-    return enabled.includes("invoices_finance");
-  }
-  return false;
-}
+export { parseEnabledModules };
 
 const RAW_NAV_CONFIG = {
   super_admin: {
@@ -131,52 +108,23 @@ export const ROLE_INITIAL_SCREEN = {
   staff: "StaffHome",
 };
 
-/** @returns {string[]|null} null = no business in context */
-export function parseEnabledModules(business) {
-  if (!business) return null;
-  const raw = business.modules;
-  if (raw === undefined || raw === null) {
-    return [];
-  }
-  if (Array.isArray(raw)) {
-    return raw.filter((x) => typeof x === "string");
-  }
-  if (typeof raw === "string") {
-    const s = raw.trim();
-    if (!s) return [];
-    try {
-      const parsed = JSON.parse(s);
-      return Array.isArray(parsed) ? parsed.filter((x) => typeof x === "string") : [];
-    } catch {
-      return [];
-    }
-  }
-  return [];
-}
-
-function navPatternMatches(pattern, userPath) {
-  if (!pattern || !userPath) return false;
-  if (pattern.includes(":")) {
-    const base = pattern.split("/:")[0];
-    return userPath === base || userPath.startsWith(`${base}/`);
-  }
-  return pattern === userPath;
-}
+const TRIAL_ALLOWED_ROLES = new Set([
+  "business_owner",
+  "finance_admin",
+  "hr_admin",
+  "inventory_admin",
+  "ca_admin",
+]);
 
 export function isPathAllowed(role, business, path) {
   if (role === "super_admin") return true;
   if (role === "staff") return true;
   if (["/dashboard", "/dashboard/settings"].includes(path)) return true;
+  if (path === "/trial-upgrade" && TRIAL_ALLOWED_ROLES.has(role)) return true;
   const enabledModules = parseEnabledModules(business);
   if (enabledModules === null) return false;
   if (enabledModules.length === 0) return false;
-  const moduleKeys = new Set(enabledModules);
-  for (const id of GRANULAR_FINANCE_ADDON_IDS) {
-    if (effectiveModuleEnabled(enabledModules, id)) moduleKeys.add(id);
-  }
-  return [...moduleKeys].some((mod) =>
-    (MODULE_NAV_MAP[mod] || []).some((p) => navPatternMatches(p, path)),
-  );
+  return isNavPathAllowedForModules(path, enabledModules);
 }
 
 export function getNavForUser(user, business) {

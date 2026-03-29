@@ -60,7 +60,7 @@ function ClientSearch({ value, onChange, onSelect, api, businessId, offline }) {
       if (offline) {
         try {
           const q = (val || '').trim().toLowerCase();
-          const key = `nexus_offline_v1:customers_cache:${businessId}:${q}`;
+          const key = `nexa_offline_v1:customers_cache:${businessId}:${q}`;
           const cached = safeJsonParse(localStorage.getItem(key), []);
           setResults(Array.isArray(cached) ? cached : []);
           setShow((Array.isArray(cached) ? cached : []).length > 0);
@@ -80,7 +80,7 @@ function ClientSearch({ value, onChange, onSelect, api, businessId, offline }) {
         setShow(list.length > 0);
         try {
           const q = (val || '').trim().toLowerCase();
-          const key = `nexus_offline_v1:customers_cache:${businessId}:${q}`;
+          const key = `nexa_offline_v1:customers_cache:${businessId}:${q}`;
           localStorage.setItem(key, JSON.stringify(list));
         } catch {}
       } catch { setResults([]); }
@@ -171,7 +171,7 @@ function ProductSearch({ value, onChange, onSelect, api, businessId, offline }) 
       if (offline) {
         try {
           const q = (val || '').trim().toLowerCase();
-          const key = `nexus_offline_v1:products_cache:${businessId}:${q}`;
+          const key = `nexa_offline_v1:products_cache:${businessId}:${q}`;
           const cached = safeJsonParse(localStorage.getItem(key), []);
           setResults(Array.isArray(cached) ? cached : []);
           setShow((Array.isArray(cached) ? cached : []).length > 0);
@@ -191,7 +191,7 @@ function ProductSearch({ value, onChange, onSelect, api, businessId, offline }) 
         setShow(products.length > 0);
         try {
           const q = (val || '').trim().toLowerCase();
-          const key = `nexus_offline_v1:products_cache:${businessId}:${q}`;
+          const key = `nexa_offline_v1:products_cache:${businessId}:${q}`;
           localStorage.setItem(key, JSON.stringify(products));
         } catch {}
       } catch { setResults([]); }

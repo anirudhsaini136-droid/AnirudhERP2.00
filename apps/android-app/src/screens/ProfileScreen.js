@@ -1,8 +1,8 @@
 import React, { useCallback, useMemo, useState } from "react";
 import { Alert, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { CommonActions, useFocusEffect, useNavigation } from "@react-navigation/native";
-import { API_BASE, getMe } from "../api";
-import { ContentPanel, HeroBand, PageHeader, PrimaryButton, SecondaryButton } from "../components/NexusUi";
+import { API_BASE, clearTrustedDeviceRecord, getMe, revokeTrustedDevices } from "../api";
+import { ContentPanel, HeroBand, PageHeader, PrimaryButton, SecondaryButton } from "../components/NexaUi";
 import { useAuth } from "../context/AuthContext";
 import { THEME_PREFS, useTheme } from "../theme/ThemeProvider";
 import { useScreenStyles } from "../theme/screenStyles";
@@ -133,6 +133,45 @@ export default function ProfileScreen() {
         </Text>
       </View>
       <SecondaryButton title="Refresh profile" onPress={load} />
+      <TouchableOpacity
+        style={styles.trustedOut}
+        onPress={() => {
+          Alert.alert(
+            "Remove trusted device",
+            "This signs you out on all devices that used “remember this device” for OTP, and clears the saved device on this phone. You will need email OTP again on next sign-in.",
+            [
+              { text: "Cancel", style: "cancel" },
+              {
+                text: "Continue",
+                style: "destructive",
+                async onPress() {
+                  let serverOk = true;
+                  try {
+                    await revokeTrustedDevices();
+                  } catch {
+                    serverOk = false;
+                  }
+                  try {
+                    if (u?.email) await clearTrustedDeviceRecord(u.email);
+                    Alert.alert(
+                      "Done",
+                      serverOk
+                        ? "Trusted devices removed on the server and on this phone. Sign in again when you are ready."
+                        : "Cleared on this phone. Sign in when online and use this action again to revoke trusted devices on the server."
+                    );
+                    await signOut();
+                  } catch (e) {
+                    Alert.alert("Error", e?.message || "Something went wrong");
+                  }
+                },
+              },
+            ]
+          );
+        }}
+        activeOpacity={0.9}
+      >
+        <Text style={styles.trustedOutTx}>Remove trusted device / Sign out all devices</Text>
+      </TouchableOpacity>
       <TouchableOpacity style={styles.logout} onPress={() => signOut()} activeOpacity={0.9}>
         <Text style={styles.logoutTx}>Log out</Text>
       </TouchableOpacity>
@@ -182,6 +221,16 @@ function makeStyles(T) {
     bizLabel: { color: T.textMuted, fontSize: 12, fontWeight: "600" },
     bizName: { color: T.textPrimary, fontSize: 18, fontWeight: "800", marginTop: 8 },
     mono: { color: T.textSecondary, fontSize: 12, marginTop: 8, lineHeight: 18 },
+    trustedOut: {
+      marginTop: 12,
+      paddingVertical: 15,
+      borderRadius: 14,
+      alignItems: "center",
+      borderWidth: 1,
+      borderColor: "rgba(251,191,36,0.35)",
+      backgroundColor: "rgba(251,191,36,0.08)",
+    },
+    trustedOutTx: { color: T.gold, fontWeight: "800", fontSize: 14, textAlign: "center", paddingHorizontal: 12 },
     logout: {
       marginTop: 16,
       paddingVertical: 15,

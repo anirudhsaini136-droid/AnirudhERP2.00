@@ -229,10 +229,15 @@ export function PrimaryButton({ title, onPress, disabled }) {
   );
 }
 
-export function SecondaryButton({ title, onPress }) {
+export function SecondaryButton({ title, onPress, disabled }) {
   const S = useScreenStyles();
   return (
-    <TouchableOpacity style={S.btnSecondary} onPress={onPress} activeOpacity={0.9}>
+    <TouchableOpacity
+      style={[S.btnSecondary, disabled && { opacity: 0.5 }]}
+      onPress={onPress}
+      disabled={disabled}
+      activeOpacity={0.9}
+    >
       <Text style={S.btnSecondaryText}>{title}</Text>
     </TouchableOpacity>
   );

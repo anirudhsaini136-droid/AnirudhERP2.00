@@ -9,7 +9,7 @@ import {
 } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
 import { deleteDashboardUser, getDashboardUsers, putDashboardUserStatus } from "../api";
-import { EmptyState, HeroBand, PageHeader } from "../components/NexusUi";
+import { EmptyState, HeroBand, PageHeader } from "../components/NexaUi";
 import * as T from "../theme/tokens";
 import { S } from "../theme/screenStyles";
 

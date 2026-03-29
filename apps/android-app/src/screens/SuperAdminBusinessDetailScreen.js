@@ -30,7 +30,7 @@ import {
   PrimaryButton,
   SecondaryButton,
   StatusPill,
-} from "../components/NexusUi";
+} from "../components/NexaUi";
 import { useAuth } from "../context/AuthContext";
 import * as T from "../theme/tokens";
 import { S } from "../theme/screenStyles";

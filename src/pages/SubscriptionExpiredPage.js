@@ -56,7 +56,7 @@ const SubscriptionExpiredPage = () => {
           </div>
 
           <p className="text-gray-500 text-sm mt-6">
-            Need help? Email support@nexuserp.com
+            Need help? Email support@nexaerp.in
           </p>
         </div>
       </div>

@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Alert, Modal, ScrollView, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { getCustomers, getProducts, postInvoice } from "../api";
-import { ContentPanel, HeroBand, PageHeader, PrimaryButton, SecondaryButton } from "../components/NexusUi";
+import { ContentPanel, HeroBand, PageHeader, PrimaryButton, SecondaryButton } from "../components/NexaUi";
 import * as T from "../theme/tokens";
 import { S } from "../theme/screenStyles";
 

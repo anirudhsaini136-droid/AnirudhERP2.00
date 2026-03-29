@@ -13,7 +13,7 @@ import {
 } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
 import { getCustomerLedger, getDashboardSettings, postCustomerBulkPayment } from "../api";
-import { ContentPanel, HeroBand, ListRowCard, PageHeader, PrimaryButton, SecondaryButton } from "../components/NexusUi";
+import { ContentPanel, HeroBand, ListRowCard, PageHeader, PrimaryButton, SecondaryButton } from "../components/NexaUi";
 import * as T from "../theme/tokens";
 import { S } from "../theme/screenStyles";
 import { fmtInr } from "../utils/format";

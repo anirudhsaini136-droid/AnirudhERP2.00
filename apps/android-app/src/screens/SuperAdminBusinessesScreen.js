@@ -2,7 +2,7 @@ import React, { useCallback, useState } from "react";
 import { Alert, FlatList, RefreshControl, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
 import { getSuperAdminBusinesses, postSuperAdminBusiness } from "../api";
-import { EmptyState, HeroBand, ListRowCard, LoadingCenter, PageHeader } from "../components/NexusUi";
+import { EmptyState, HeroBand, ListRowCard, LoadingCenter, PageHeader } from "../components/NexaUi";
 import * as T from "../theme/tokens";
 import { S } from "../theme/screenStyles";
 

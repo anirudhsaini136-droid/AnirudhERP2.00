@@ -1,6 +1,6 @@
 import { safeJsonParse } from "./json";
 
-const PREFIX = "nexus_offline_v2";
+const PREFIX = "nexa_offline_v2";
 
 function businessPrefix(businessId) {
   return `${PREFIX}:biz:${businessId}`;

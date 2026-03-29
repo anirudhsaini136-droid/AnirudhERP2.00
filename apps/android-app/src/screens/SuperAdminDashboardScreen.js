@@ -13,7 +13,7 @@ import {
 } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
 import { getSuperAdminDashboard } from "../api";
-import { HeroBand, KpiTile, PageHeader } from "../components/NexusUi";
+import { HeroBand, KpiTile, PageHeader } from "../components/NexaUi";
 import AmbientAnimatedBackground from "../components/AmbientAnimatedBackground";
 import * as T from "../theme/tokens";
 import { S } from "../theme/screenStyles";

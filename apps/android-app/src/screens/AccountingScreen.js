@@ -10,7 +10,7 @@ import {
   LoadingCenter,
   PageHeader,
   StatusPill,
-} from "../components/NexusUi";
+} from "../components/NexaUi";
 import * as T from "../theme/tokens";
 import { S } from "../theme/screenStyles";
 import { fmtInr } from "../utils/format";

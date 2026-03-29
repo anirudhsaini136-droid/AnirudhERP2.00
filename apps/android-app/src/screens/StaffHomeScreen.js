@@ -11,7 +11,7 @@ import {
 import { useFocusEffect } from "@react-navigation/native";
 import { getStaffHome, postStaffClockIn, postStaffClockOut } from "../api";
 import { useAuth } from "../context/AuthContext";
-import { HeroBand, PageHeader, StatCard } from "../components/NexusUi";
+import { HeroBand, PageHeader, StatCard } from "../components/NexaUi";
 import * as T from "../theme/tokens";
 import { S } from "../theme/screenStyles";
 

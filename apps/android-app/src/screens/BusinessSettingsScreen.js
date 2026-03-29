@@ -11,7 +11,7 @@ import {
 } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
 import { getDashboardSettings, putDashboardInvoiceSettings, putDashboardSettings } from "../api";
-import { HeroBand, PageHeader, PrimaryButton, SecondaryButton } from "../components/NexusUi";
+import { HeroBand, PageHeader, PrimaryButton, SecondaryButton } from "../components/NexaUi";
 import * as T from "../theme/tokens";
 import { S } from "../theme/screenStyles";
 

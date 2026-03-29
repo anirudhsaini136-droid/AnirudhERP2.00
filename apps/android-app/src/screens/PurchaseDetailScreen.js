@@ -2,7 +2,7 @@ import React, { useCallback, useState } from "react";
 import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
 import { getPurchaseBill } from "../api";
-import { ContentPanel, HeroBand, PageHeader } from "../components/NexusUi";
+import { ContentPanel, HeroBand, PageHeader } from "../components/NexaUi";
 import * as T from "../theme/tokens";
 import { S } from "../theme/screenStyles";
 import { fmtInr } from "../utils/format";

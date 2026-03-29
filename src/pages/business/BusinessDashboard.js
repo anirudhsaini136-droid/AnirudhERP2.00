@@ -1,11 +1,35 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { Link } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import DashboardLayout from '../../components/layout/DashboardLayout';
-import { IndianRupee, Users, FileText, TrendingUp, AlertTriangle, Sparkles, Copy, QrCode, Smartphone, ShieldCheck, Headphones, Clock3, CheckCircle2 } from 'lucide-react';
+import { parseEnabledModules, isNavPathAllowedForModules } from '../../shared-core/modules';
+import {
+  IndianRupee, Users, FileText, TrendingUp, AlertTriangle, Sparkles, Copy, QrCode, Smartphone,
+  ShieldCheck, Headphones, Clock3, CheckCircle2, UserCheck, BarChart3, FileSpreadsheet, Repeat,
+  Truck, BookUser, HardDriveDownload, Receipt, BookOpen, Package, ShoppingCart, ClipboardList,
+} from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../../components/ui/dialog';
 import { toast } from 'sonner';
 
 const fmt = (n) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(n || 0);
+
+const QUICK_ACCESS = [
+  { path: '/dashboard/users', label: 'Manage Users', icon: Users },
+  { path: '/hr', label: 'HR Dashboard', icon: UserCheck },
+  { path: '/finance', label: 'Finance Dashboard', icon: BarChart3 },
+  { path: '/finance/invoices', label: 'Invoices', icon: FileSpreadsheet },
+  { path: '/finance/recurring-invoices', label: 'Recurring Invoices', icon: Repeat },
+  { path: '/finance/eway-bills', label: 'E-Way Bills', icon: Truck },
+  { path: '/finance/customers', label: 'Customer Ledger', icon: BookUser },
+  { path: '/finance/migration', label: 'Import data', icon: HardDriveDownload },
+  { path: '/finance/expenses', label: 'Expenses', icon: Receipt },
+  { path: '/finance/reports', label: 'Reports', icon: BarChart3 },
+  { path: '/finance/gst', label: 'GST Reports', icon: IndianRupee },
+  { path: '/accounting', label: 'Accounting', icon: BookOpen },
+  { path: '/purchases', label: 'Purchases', icon: ClipboardList },
+  { path: '/inventory', label: 'Inventory', icon: Package },
+  { path: '/inventory/billing', label: 'Quick Bill', icon: ShoppingCart },
+];
 
 export default function BusinessDashboard() {
   const { api, business } = useAuth();
@@ -13,6 +37,12 @@ export default function BusinessDashboard() {
   const [loading, setLoading] = useState(true);
   const [billingCycle, setBillingCycle] = useState('yearly');
   const [showUpgrade, setShowUpgrade] = useState(false);
+
+  const enabledModules = useMemo(() => parseEnabledModules(business), [business]);
+  const canNav = (path) =>
+    Array.isArray(enabledModules) &&
+    enabledModules.length > 0 &&
+    isNavPathAllowedForModules(path, enabledModules);
 
   useEffect(() => {
     api.get('/dashboard').then(r => setData(r.data)).catch(() => {}).finally(() => setLoading(false));
@@ -51,11 +81,19 @@ export default function BusinessDashboard() {
   };
 
   const statCards = [
-    { label: 'Monthly Revenue', value: fmt(s.monthly_revenue), icon: IndianRupee, color: 'text-gold-400', bg: 'from-gold-500/10' },
-    { label: 'Employees', value: s.total_employees || 0, sub: `${s.new_employees || 0} new`, icon: Users, color: 'text-blue-400', bg: 'from-blue-500/10' },
-    { label: 'Outstanding', value: fmt(s.outstanding_invoices), sub: `${s.overdue_count || 0} overdue`, icon: FileText, color: 'text-amber-400', bg: 'from-amber-500/10' },
-    { label: 'Net Profit', value: fmt(s.net_profit), icon: TrendingUp, color: s.net_profit >= 0 ? 'text-emerald-400' : 'text-rose-400', bg: s.net_profit >= 0 ? 'from-emerald-500/10' : 'from-rose-500/10' },
-  ];
+    canNav('/finance') && {
+      label: 'Monthly Revenue', value: fmt(s.monthly_revenue), icon: IndianRupee, color: 'text-gold-400', bg: 'from-gold-500/10',
+    },
+    canNav('/hr') && {
+      label: 'Employees', value: s.total_employees || 0, sub: `${s.new_employees || 0} new`, icon: Users, color: 'text-blue-400', bg: 'from-blue-500/10',
+    },
+    canNav('/finance/invoices') && {
+      label: 'Outstanding', value: fmt(s.outstanding_invoices), sub: `${s.overdue_count || 0} overdue`, icon: FileText, color: 'text-amber-400', bg: 'from-amber-500/10',
+    },
+    (canNav('/accounting') || canNav('/finance')) && {
+      label: 'Net Profit', value: fmt(s.net_profit), icon: TrendingUp, color: s.net_profit >= 0 ? 'text-emerald-400' : 'text-rose-400', bg: s.net_profit >= 0 ? 'from-emerald-500/10' : 'from-rose-500/10',
+    },
+  ].filter(Boolean);
 
   return (
     <DashboardLayout>
@@ -88,10 +126,29 @@ export default function BusinessDashboard() {
           <p className="text-sm text-gray-500 font-sans mt-1">Business overview and key metrics</p>
         </div>
 
-        {/* Stats */}
+        {QUICK_ACCESS.some((q) => canNav(q.path)) && (
+          <div>
+            <h2 className="font-display text-sm text-gray-400 uppercase tracking-wide mb-3">Quick access</h2>
+            <div className="flex flex-wrap gap-2">
+              {QUICK_ACCESS.filter((q) => canNav(q.path)).map((q) => (
+                <Link
+                  key={q.path}
+                  to={q.path}
+                  className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-white/[0.04] border border-white/[0.08] text-sm text-gray-200 hover:bg-white/[0.08] hover:border-gold-500/30 transition-colors"
+                >
+                  <q.icon size={16} className="text-gold-400 shrink-0" />
+                  {q.label}
+                </Link>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Stats — one card per enabled module area */}
+        {statCards.length > 0 && (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          {statCards.map((c, i) => (
-            <div key={i} className="stat-card" data-testid={`stat-${c.label.toLowerCase().replace(/\s+/g, '-')}`}>
+          {statCards.map((c) => (
+            <div key={c.label} className="stat-card" data-testid={`stat-${c.label.toLowerCase().replace(/\s+/g, '-')}`}>
               <div className={`w-9 h-9 rounded-xl bg-gradient-to-br ${c.bg} to-transparent flex items-center justify-center mb-3`}>
                 <c.icon size={17} className={c.color} />
               </div>
@@ -101,8 +158,10 @@ export default function BusinessDashboard() {
             </div>
           ))}
         </div>
+        )}
 
         <div className="grid lg:grid-cols-2 gap-5">
+          {canNav('/finance') && (
           <div className="glass-card rounded-2xl p-5">
             <h3 className="font-display text-lg text-white mb-4">Revenue Trend</h3>
             {data?.chart_data?.length > 0 ? (
@@ -119,6 +178,7 @@ export default function BusinessDashboard() {
               </div>
             ) : <p className="text-gray-500 text-sm text-center py-8">No revenue data yet</p>}
           </div>
+          )}
 
           <div className="glass-card rounded-2xl p-5">
             <h3 className="font-display text-lg text-white mb-4">Recent Activity</h3>

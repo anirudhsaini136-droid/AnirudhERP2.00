@@ -9,7 +9,7 @@ import {
   IndianRupee, BookOpen, HardDriveDownload, Repeat, Lock
 } from 'lucide-react';
 import ThemeToggle from '../ThemeToggle';
-import { parseEnabledModules, effectiveModuleEnabled, GRANULAR_FINANCE_ADDON_IDS } from '../../shared-core/modules';
+import { parseEnabledModules, isNavPathAllowedForModules } from '../../shared-core/modules';
 import { shouldApplyTrialModuleLock, isTrialPathUnlocked, TRIAL_UPGRADE_MESSAGE } from '../../shared-core/trialAccess';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../ui/dialog';
 
@@ -124,30 +124,6 @@ export default function DashboardLayout({ children }) {
   // Filter nav items based on business modules
   const enabledModules = React.useMemo(() => parseEnabledModules(business), [business]);
 
-  const MODULE_NAV_MAP = {
-    'manage_users': ['/dashboard/users'],
-    'hr_payroll': ['/hr', '/hr/employees', '/hr/attendance', '/hr/leave', '/hr/payroll'],
-    'invoices_finance': ['/finance', '/finance/invoices', '/finance/invoices/:id', '/finance/reports', '/finance/migration'],
-    'recurring_invoices': ['/finance/recurring-invoices'],
-    'eway_bill': ['/finance/eway-bills'],
-    'inventory_billing': ['/inventory', '/inventory/billing'],
-    'purchases_itc': ['/purchases'],
-    'gst_reports': ['/finance/gst', '/ca'],
-    'accounting': ['/accounting'],
-    'customer_ledger': ['/finance/customers', '/finance/customers/:id'],
-    'expenses': ['/finance/expenses'],
-    'ca_portal': ['/ca'],
-  };
-
-  const navPatternMatches = (pattern, userPath) => {
-    if (!pattern || !userPath) return false;
-    if (pattern.includes(':')) {
-      const base = pattern.split('/:')[0];
-      return userPath === base || userPath.startsWith(`${base}/`);
-    }
-    return pattern === userPath;
-  };
-
   const isPathAllowed = (path) => {
     // Super admin always has full access
     if (role === 'super_admin') return true;
@@ -165,13 +141,7 @@ export default function DashboardLayout({ children }) {
     if (enabledModules === null) return false;
     // Empty modules → only dashboard/settings
     if (enabledModules.length === 0) return false;
-    const moduleKeys = new Set(enabledModules);
-    for (const id of GRANULAR_FINANCE_ADDON_IDS) {
-      if (effectiveModuleEnabled(enabledModules, id)) moduleKeys.add(id);
-    }
-    return [...moduleKeys].some((mod) =>
-      (MODULE_NAV_MAP[mod] || []).some((p) => navPatternMatches(p, path)),
-    );
+    return isNavPathAllowedForModules(path, enabledModules);
   };
 
   const [trialOpen, setTrialOpen] = React.useState(false);

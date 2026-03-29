@@ -1,6 +1,6 @@
 import React from "react";
 import { Linking, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
-import { HeroBand, PageHeader } from "../components/NexusUi";
+import { HeroBand, PageHeader } from "../components/NexaUi";
 import { API_BASE } from "../api";
 import * as T from "../theme/tokens";
 import { S } from "../theme/screenStyles";

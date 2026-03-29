@@ -197,7 +197,7 @@ function AppRoutes() {
       <Route
         path="/ca"
         element={
-          <BizRoute allowedRoles={['ca_admin', 'business_owner', 'finance_admin']} modules={['gst_reports', 'ca_portal']} modulesAny>
+          <BizRoute allowedRoles={['ca_admin', 'business_owner', 'finance_admin']} modules={['ca_portal']}>
             <CAPortalPage />
           </BizRoute>
         }

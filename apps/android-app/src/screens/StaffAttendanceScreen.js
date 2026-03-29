@@ -9,7 +9,7 @@ import {
 } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
 import { getStaffAttendance } from "../api";
-import { HeroBand, PageHeader } from "../components/NexusUi";
+import { HeroBand, PageHeader } from "../components/NexaUi";
 import * as T from "../theme/tokens";
 import { S } from "../theme/screenStyles";
 
