@@ -12,12 +12,11 @@ const BACKEND_ORIGIN =
   process.env.REACT_APP_BACKEND_URL ||
   process.env.REACT_APP_API_URL ||
   '';
-const DEFAULT_EAS_APK_URL = 'https://expo.dev/artifacts/eas/mJ7s84HyKPGxvNG8rux8Mr.apk';
+const ENV_ANDROID_APK =
+  (process.env.REACT_APP_ANDROID_APK_URL && String(process.env.REACT_APP_ANDROID_APK_URL).trim()) || '';
+const DEFAULT_EAS_APK_URL = 'https://expo.dev/artifacts/eas/gPAyW3tGd8dxHEYnhLn4d8.apk';
 const LOCAL_APK_FALLBACK = `${typeof window !== 'undefined' ? window.location.origin : ''}/downloads/NexaERP.apk`;
-const ANDROID_APK_URL =
-  (process.env.REACT_APP_ANDROID_APK_URL && String(process.env.REACT_APP_ANDROID_APK_URL).trim()) ||
-  DEFAULT_EAS_APK_URL ||
-  LOCAL_APK_FALLBACK;
+const ANDROID_STATIC_FALLBACK = ENV_ANDROID_APK || DEFAULT_EAS_APK_URL || LOCAL_APK_FALLBACK;
 
 const LoginPage = () => {
   const [email, setEmail] = useState('');
@@ -28,6 +27,9 @@ const LoginPage = () => {
   const [forgotEmail, setForgotEmail] = useState('');
   const [forgotLoading, setForgotLoading] = useState(false);
   const [forgotMsg, setForgotMsg] = useState('');
+  const [androidApkHref, setAndroidApkHref] = useState(ANDROID_STATIC_FALLBACK);
+  const [androidApkVersion, setAndroidApkVersion] = useState('');
+  const [apkInfoLoading, setApkInfoLoading] = useState(true);
 
   const { login } = useAuth();
   const { isLight } = useTheme();
@@ -42,9 +44,40 @@ const LoginPage = () => {
     if (urlPassword) setPassword(urlPassword);
     if (urlEmail && urlPassword) {
       setTimeout(() => {
-        document.getElementById('nexus-login-btn')?.click();
+        document.getElementById('nexa-login-btn')?.click();
       }, 500);
     }
+  }, []);
+
+  useEffect(() => {
+    if (ENV_ANDROID_APK) {
+      setApkInfoLoading(false);
+      return undefined;
+    }
+    const base = (BACKEND_ORIGIN || '').replace(/\/$/, '');
+    if (!base) {
+      setApkInfoLoading(false);
+      return undefined;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const r = await fetch(`${base}/api/app/latest-apk`);
+        if (!r.ok) throw new Error(String(r.status));
+        const j = await r.json();
+        if (cancelled) return;
+        if (j?.url) setAndroidApkHref(j.url);
+        const v = j?.version;
+        if (v != null && String(v).trim() !== '') setAndroidApkVersion(String(v).trim());
+      } catch {
+        /* keep fallback href */
+      } finally {
+        if (!cancelled) setApkInfoLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const navigateAfterLogin = (user) => {
@@ -193,7 +226,7 @@ const LoginPage = () => {
                 </div>
               </div>
               <Button
-                id="nexus-login-btn"
+                id="nexa-login-btn"
                 type="submit"
                 disabled={loading}
                 className="btn-premium btn-primary w-full h-14 text-base rounded-xl"
@@ -263,14 +296,30 @@ const LoginPage = () => {
                       </li>
                     ))}
                   </ul>
-                  <a
-                    href={ANDROID_APK_URL}
-                    download="NexaERP.apk"
-                    className="mt-5 btn-premium btn-primary w-full h-14 rounded-xl inline-flex items-center justify-center gap-2.5 text-base font-semibold no-underline transition-transform hover:scale-[1.01] active:scale-[0.99]"
-                  >
-                    <Download className="h-5 w-5" strokeWidth={2} />
-                    Download for Android
-                  </a>
+                  <div className="mt-5 flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
+                    <a
+                      href={androidApkHref}
+                      download="NexaERP.apk"
+                      className="btn-premium btn-primary w-full sm:flex-1 h-14 rounded-xl inline-flex items-center justify-center gap-2.5 text-base font-semibold no-underline transition-transform hover:scale-[1.01] active:scale-[0.99]"
+                    >
+                      <Download className="h-5 w-5" strokeWidth={2} />
+                      Download for Android
+                    </a>
+                    <div className="flex justify-center sm:justify-end sm:min-w-[5.5rem] shrink-0">
+                      {apkInfoLoading ? (
+                        <span className={`text-[11px] ${isLight ? 'text-slate-500' : 'text-gray-500'}`}>…</span>
+                      ) : androidApkVersion ? (
+                        <span
+                          className={`text-[11px] font-semibold tabular-nums px-2.5 py-1 rounded-full border whitespace-nowrap ${
+                            isLight ? 'border-slate-200 bg-slate-50 text-slate-700' : 'border-white/15 bg-white/5 text-gray-400'
+                          }`}
+                          title="App version from latest EAS build"
+                        >
+                          v{androidApkVersion}
+                        </span>
+                      ) : null}
+                    </div>
+                  </div>
                   <p className={`text-center text-[11px] mt-3 ${isLight ? 'text-slate-500' : 'text-gray-500'}`}>
                     Direct install · Works alongside the web app · Android 8+
                   </p>
