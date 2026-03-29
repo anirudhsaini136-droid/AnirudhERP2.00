@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -7,13 +7,18 @@ import ThemeToggle from '../components/ThemeToggle';
 import { AlertCircle, ArrowRight, Loader2, RefreshCw } from 'lucide-react';
 
 export default function SignupPage() {
-  const { api, login } = useAuth();
+  const { api, login, verifyLoginOtp } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [otp, setOtp] = useState('');
   const [otpSent, setOtpSent] = useState(false);
   const [verifying, setVerifying] = useState(false);
+  const [signInOtpStep, setSignInOtpStep] = useState(false);
+  const [signInOtp, setSignInOtp] = useState('');
+  const [signInOtpVerifying, setSignInOtpVerifying] = useState(false);
+  const [signInOtpResendLoading, setSignInOtpResendLoading] = useState(false);
   const [form, setForm] = useState({
     business_name: '',
     owner_name: '',
@@ -26,6 +31,36 @@ export default function SignupPage() {
   });
 
   const setField = (key, value) => setForm((s) => ({ ...s, [key]: value }));
+
+  const navigateAfterLogin = (user) => {
+    const from = location.state?.from?.pathname;
+    if (from) {
+      navigate(from);
+      return;
+    }
+    switch (user.role) {
+      case 'super_admin':
+        navigate('/super-admin');
+        break;
+      case 'business_owner':
+        navigate('/dashboard');
+        break;
+      case 'hr_admin':
+        navigate('/hr');
+        break;
+      case 'finance_admin':
+        navigate('/finance');
+        break;
+      case 'ca_admin':
+        navigate('/ca');
+        break;
+      case 'staff':
+        navigate('/staff');
+        break;
+      default:
+        navigate('/dashboard');
+    }
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -52,12 +87,46 @@ export default function SignupPage() {
     setVerifying(true);
     try {
       await api.post('/auth/signup/verify-otp', { email: form.email, otp });
-      await login(form.email, form.password);
-      navigate('/dashboard');
+      setOtp('');
+      const r = await login(form.email, form.password);
+      if (r?.otpRequired) {
+        setSignInOtpStep(true);
+        setSignInOtp('');
+        return;
+      }
+      navigateAfterLogin(r.user);
     } catch (err) {
       setError(err.response?.data?.detail || 'OTP verification failed');
     } finally {
       setVerifying(false);
+    }
+  };
+
+  const handleVerifySignInOtp = async (e) => {
+    e.preventDefault();
+    setError('');
+    setSignInOtpVerifying(true);
+    try {
+      const r = await verifyLoginOtp(form.email, signInOtp);
+      navigateAfterLogin(r.user);
+    } catch (err) {
+      setError(err.response?.data?.detail || err.message || 'Invalid or expired code');
+    } finally {
+      setSignInOtpVerifying(false);
+    }
+  };
+
+  const handleResendSignInOtp = async () => {
+    setError('');
+    setSignInOtpResendLoading(true);
+    try {
+      const r = await login(form.email, form.password);
+      if (r?.otpRequired) return;
+      navigateAfterLogin(r.user);
+    } catch (err) {
+      setError(err.response?.data?.detail || err.message || 'Could not resend code');
+    } finally {
+      setSignInOtpResendLoading(false);
     }
   };
 
@@ -109,6 +178,42 @@ export default function SignupPage() {
             <Button type="submit" disabled={loading} className="btn-premium btn-primary w-full h-12 rounded-xl">
               {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : <>Send OTP <ArrowRight className="h-5 w-5 ml-2" /></>}
             </Button>
+          </form>
+        ) : signInOtpStep ? (
+          <form onSubmit={handleVerifySignInOtp} className="space-y-4">
+            <p className="text-sm text-gray-500 text-center">
+              Account created. Enter the <span className="text-gold-400">sign-in</span> code sent to{' '}
+              <span className="text-gold-400">{form.email}</span>.
+            </p>
+            <Input
+              required
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              className="input-premium h-12 text-center tracking-[0.4em] text-lg"
+              placeholder="------"
+              value={signInOtp}
+              maxLength={6}
+              onChange={(e) => setSignInOtp(e.target.value.replace(/\D/g, ''))}
+            />
+            <Button
+              type="submit"
+              disabled={signInOtpVerifying || signInOtp.length !== 6}
+              className="btn-premium btn-primary w-full h-12 rounded-xl"
+            >
+              {signInOtpVerifying ? (
+                <Loader2 className="h-5 w-5 animate-spin" />
+              ) : (
+                <>Verify & sign in <ArrowRight className="h-5 w-5 ml-2" /></>
+              )}
+            </Button>
+            <button
+              type="button"
+              onClick={handleResendSignInOtp}
+              disabled={signInOtpResendLoading}
+              className="mx-auto flex items-center gap-2 text-sm text-gray-500 hover:text-white"
+            >
+              <RefreshCw size={14} className={signInOtpResendLoading ? 'animate-spin' : ''} /> Resend sign-in code
+            </button>
           </form>
         ) : (
           <form onSubmit={handleVerifyOtp} className="space-y-4">

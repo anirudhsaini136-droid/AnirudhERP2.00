@@ -6,7 +6,7 @@ import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../components/ui/dialog';
 import ThemeToggle from '../components/ThemeToggle';
-import { AlertCircle, Loader2, ArrowRight, Shield, Zap, Globe, CheckCircle2, Mail, Smartphone, Download } from 'lucide-react';
+import { AlertCircle, Loader2, ArrowRight, ArrowLeft, Shield, Zap, Globe, CheckCircle2, Mail, Smartphone, Download, RefreshCw } from 'lucide-react';
 
 const BACKEND_ORIGIN =
   process.env.REACT_APP_BACKEND_URL ||
@@ -30,8 +30,13 @@ const LoginPage = () => {
   const [androidApkHref, setAndroidApkHref] = useState(ANDROID_STATIC_FALLBACK);
   const [androidApkVersion, setAndroidApkVersion] = useState('');
   const [apkInfoLoading, setApkInfoLoading] = useState(true);
+  const [authStep, setAuthStep] = useState('credentials');
+  const [otpEmail, setOtpEmail] = useState('');
+  const [loginOtp, setLoginOtp] = useState('');
+  const [otpVerifying, setOtpVerifying] = useState(false);
+  const [otpResendLoading, setOtpResendLoading] = useState(false);
 
-  const { login } = useAuth();
+  const { login, verifyLoginOtp } = useAuth();
   const { isLight } = useTheme();
   const navigate = useNavigate();
   const location = useLocation();
@@ -99,13 +104,53 @@ const LoginPage = () => {
     setError('');
     setLoading(true);
     try {
-      const user = await login(email, password);
-      navigateAfterLogin(user);
+      const r = await login(email, password);
+      if (r?.otpRequired) {
+        setAuthStep('otp');
+        setOtpEmail(r.email || String(email).trim().toLowerCase());
+        setLoginOtp('');
+        return;
+      }
+      navigateAfterLogin(r.user);
     } catch (err) {
-      setError(err.response?.data?.detail || 'Invalid email or password');
+      setError(err.response?.data?.detail || err.message || 'Invalid email or password');
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleVerifyLoginOtp = async (e) => {
+    e.preventDefault();
+    setError('');
+    setOtpVerifying(true);
+    try {
+      const r = await verifyLoginOtp(otpEmail, loginOtp);
+      navigateAfterLogin(r.user);
+    } catch (err) {
+      setError(err.response?.data?.detail || err.message || 'Invalid or expired code');
+    } finally {
+      setOtpVerifying(false);
+    }
+  };
+
+  const handleResendLoginOtp = async () => {
+    setError('');
+    setOtpResendLoading(true);
+    try {
+      const r = await login(otpEmail, password);
+      if (r?.otpRequired) return;
+      navigateAfterLogin(r.user);
+    } catch (err) {
+      setError(err.response?.data?.detail || err.message || 'Could not resend code');
+    } finally {
+      setOtpResendLoading(false);
+    }
+  };
+
+  const backToCredentials = () => {
+    setAuthStep('credentials');
+    setLoginOtp('');
+    setError('');
   };
 
   return (
@@ -237,8 +282,14 @@ const LoginPage = () => {
 
           <div className="glass-card rounded-3xl p-8 lg:p-10 animate-fade-in">
             <div className="text-center mb-10">
-              <h2 className={`font-display text-2xl mb-2 ${isLight ? 'text-slate-900' : 'text-white'}`}>Welcome Back</h2>
-              <p className={isLight ? 'text-slate-600' : 'text-gray-500'}>Sign in to continue to your dashboard</p>
+              <h2 className={`font-display text-2xl mb-2 ${isLight ? 'text-slate-900' : 'text-white'}`}>
+                {authStep === 'otp' ? 'Check your email' : 'Welcome Back'}
+              </h2>
+              <p className={isLight ? 'text-slate-600' : 'text-gray-500'}>
+                {authStep === 'otp'
+                  ? `Enter the 6-digit code sent to ${otpEmail}`
+                  : 'Sign in to continue to your dashboard'}
+              </p>
             </div>
 
               {error && (
@@ -248,6 +299,7 @@ const LoginPage = () => {
                 </div>
               )}
 
+            {authStep === 'credentials' ? (
             <form onSubmit={handleSubmit} className="space-y-6">
               <div className="space-y-2">
                 <label className="block text-sm font-medium text-gray-400 pl-1">Email Address</label>
@@ -293,6 +345,52 @@ const LoginPage = () => {
                 )}
               </Button>
             </form>
+            ) : (
+            <form onSubmit={handleVerifyLoginOtp} className="space-y-6">
+              <div className="space-y-2">
+                <label className="block text-sm font-medium text-gray-400 pl-1">Verification code</label>
+                <Input
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  placeholder="------"
+                  value={loginOtp}
+                  maxLength={6}
+                  onChange={(e) => setLoginOtp(e.target.value.replace(/\D/g, ''))}
+                  required
+                  className="input-premium h-14 text-center text-base tracking-[0.35em]"
+                />
+              </div>
+              <Button
+                type="submit"
+                disabled={otpVerifying || loginOtp.length !== 6}
+                className="btn-premium btn-primary w-full h-14 text-base rounded-xl"
+              >
+                {otpVerifying ? (
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                ) : (
+                  <>Verify & continue <ArrowRight className="h-5 w-5 ml-2" /></>
+                )}
+              </Button>
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <button
+                  type="button"
+                  onClick={backToCredentials}
+                  className={`inline-flex items-center justify-center gap-2 text-sm ${isLight ? 'text-slate-600 hover:text-slate-900' : 'text-gray-400 hover:text-white'}`}
+                >
+                  <ArrowLeft className="h-4 w-4" /> Different account
+                </button>
+                <button
+                  type="button"
+                  onClick={handleResendLoginOtp}
+                  disabled={otpResendLoading}
+                  className={`inline-flex items-center justify-center gap-2 text-sm ${isLight ? 'text-gold-600 hover:text-gold-700' : 'text-gold-400 hover:text-gold-300'}`}
+                >
+                  <RefreshCw className={`h-4 w-4 ${otpResendLoading ? 'animate-spin' : ''}`} />
+                  Resend code
+                </button>
+              </div>
+            </form>
+            )}
 
             {process.env.NODE_ENV === 'development' ? (
               <p className="text-[10px] text-gray-600 mt-6 font-mono leading-relaxed">
