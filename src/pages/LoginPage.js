@@ -7,6 +7,13 @@ import { Input } from '../components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../components/ui/dialog';
 import ThemeToggle from '../components/ThemeToggle';
 import { AlertCircle, Loader2, ArrowRight, ArrowLeft, Shield, Zap, Globe, CheckCircle2, Mail, Smartphone, Download, RefreshCw } from 'lucide-react';
+import {
+  readTrustedDeviceRecord,
+  writeTrustedDeviceRecord,
+  clearTrustedDeviceRecord,
+  createTrustedDeviceUuid,
+  trustedDeviceExpiresAtIso,
+} from '../lib/trustedDevice';
 
 const BACKEND_ORIGIN =
   process.env.REACT_APP_BACKEND_URL ||
@@ -35,8 +42,9 @@ const LoginPage = () => {
   const [loginOtp, setLoginOtp] = useState('');
   const [otpVerifying, setOtpVerifying] = useState(false);
   const [otpResendLoading, setOtpResendLoading] = useState(false);
+  const [rememberDevice, setRememberDevice] = useState(true);
 
-  const { login, verifyLoginOtp } = useAuth();
+  const { login, verifyLoginOtp, verifyLoginTrustedDevice } = useAuth();
   const { isLight } = useTheme();
   const navigate = useNavigate();
   const location = useLocation();
@@ -106,9 +114,21 @@ const LoginPage = () => {
     try {
       const r = await login(email, password);
       if (r?.otpRequired) {
+        const em = r.email || String(email).trim().toLowerCase();
+        const rec = readTrustedDeviceRecord(em);
+        if (rec?.token && new Date(rec.expiresAt) > new Date()) {
+          try {
+            const td = await verifyLoginTrustedDevice(em, rec.token);
+            navigateAfterLogin(td.user);
+            return;
+          } catch {
+            clearTrustedDeviceRecord(em);
+          }
+        }
         setAuthStep('otp');
-        setOtpEmail(r.email || String(email).trim().toLowerCase());
+        setOtpEmail(em);
         setLoginOtp('');
+        setRememberDevice(true);
         return;
       }
       navigateAfterLogin(r.user);
@@ -124,7 +144,16 @@ const LoginPage = () => {
     setError('');
     setOtpVerifying(true);
     try {
-      const r = await verifyLoginOtp(otpEmail, loginOtp);
+      const newToken = rememberDevice ? createTrustedDeviceUuid() : null;
+      const r = await verifyLoginOtp(otpEmail, loginOtp, {
+        rememberDevice,
+        newTrustedDeviceToken: newToken || undefined,
+      });
+      if (rememberDevice && newToken) {
+        writeTrustedDeviceRecord(otpEmail, newToken, trustedDeviceExpiresAtIso());
+      } else {
+        clearTrustedDeviceRecord(otpEmail);
+      }
       navigateAfterLogin(r.user);
     } catch (err) {
       setError(err.response?.data?.detail || err.message || 'Invalid or expired code');
@@ -150,6 +179,7 @@ const LoginPage = () => {
   const backToCredentials = () => {
     setAuthStep('credentials');
     setLoginOtp('');
+    setRememberDevice(true);
     setError('');
   };
 
@@ -360,6 +390,19 @@ const LoginPage = () => {
                   className="input-premium h-14 text-center text-base tracking-[0.35em]"
                 />
               </div>
+              <label
+                className={`flex cursor-pointer items-start gap-3 text-sm leading-snug pl-1 ${
+                  isLight ? 'text-slate-700' : 'text-gray-300'
+                }`}
+              >
+                <input
+                  type="checkbox"
+                  checked={rememberDevice}
+                  onChange={(e) => setRememberDevice(e.target.checked)}
+                  className="mt-0.5 h-4 w-4 shrink-0 rounded border border-gold-500/40 accent-amber-500"
+                />
+                <span>Remember this browser for 30 days (skip the email code next time on this device)</span>
+              </label>
               <Button
                 type="submit"
                 disabled={otpVerifying || loginOtp.length !== 6}

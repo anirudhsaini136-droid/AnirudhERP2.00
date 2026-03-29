@@ -5,9 +5,16 @@ import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import ThemeToggle from '../components/ThemeToggle';
 import { AlertCircle, ArrowRight, Loader2, RefreshCw } from 'lucide-react';
+import {
+  readTrustedDeviceRecord,
+  writeTrustedDeviceRecord,
+  clearTrustedDeviceRecord,
+  createTrustedDeviceUuid,
+  trustedDeviceExpiresAtIso,
+} from '../lib/trustedDevice';
 
 export default function SignupPage() {
-  const { api, login, verifyLoginOtp } = useAuth();
+  const { api, login, verifyLoginOtp, verifyLoginTrustedDevice } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [loading, setLoading] = useState(false);
@@ -19,6 +26,7 @@ export default function SignupPage() {
   const [signInOtp, setSignInOtp] = useState('');
   const [signInOtpVerifying, setSignInOtpVerifying] = useState(false);
   const [signInOtpResendLoading, setSignInOtpResendLoading] = useState(false);
+  const [rememberSignInDevice, setRememberSignInDevice] = useState(true);
   const [form, setForm] = useState({
     business_name: '',
     owner_name: '',
@@ -90,8 +98,20 @@ export default function SignupPage() {
       setOtp('');
       const r = await login(form.email, form.password);
       if (r?.otpRequired) {
+        const em = r.email || String(form.email).trim().toLowerCase();
+        const rec = readTrustedDeviceRecord(em);
+        if (rec?.token && new Date(rec.expiresAt) > new Date()) {
+          try {
+            const td = await verifyLoginTrustedDevice(em, rec.token);
+            navigateAfterLogin(td.user);
+            return;
+          } catch {
+            clearTrustedDeviceRecord(em);
+          }
+        }
         setSignInOtpStep(true);
         setSignInOtp('');
+        setRememberSignInDevice(true);
         return;
       }
       navigateAfterLogin(r.user);
@@ -107,7 +127,16 @@ export default function SignupPage() {
     setError('');
     setSignInOtpVerifying(true);
     try {
-      const r = await verifyLoginOtp(form.email, signInOtp);
+      const newToken = rememberSignInDevice ? createTrustedDeviceUuid() : null;
+      const r = await verifyLoginOtp(form.email, signInOtp, {
+        rememberDevice: rememberSignInDevice,
+        newTrustedDeviceToken: newToken || undefined,
+      });
+      if (rememberSignInDevice && newToken) {
+        writeTrustedDeviceRecord(form.email, newToken, trustedDeviceExpiresAtIso());
+      } else {
+        clearTrustedDeviceRecord(form.email);
+      }
       navigateAfterLogin(r.user);
     } catch (err) {
       setError(err.response?.data?.detail || err.message || 'Invalid or expired code');
@@ -195,6 +224,15 @@ export default function SignupPage() {
               maxLength={6}
               onChange={(e) => setSignInOtp(e.target.value.replace(/\D/g, ''))}
             />
+            <label className="flex cursor-pointer items-start gap-3 text-sm leading-snug text-gray-400 pl-1">
+              <input
+                type="checkbox"
+                checked={rememberSignInDevice}
+                onChange={(e) => setRememberSignInDevice(e.target.checked)}
+                className="mt-0.5 h-4 w-4 shrink-0 rounded border border-gold-500/40 accent-amber-500"
+              />
+              <span>Remember this browser for 30 days (skip the email code next time)</span>
+            </label>
             <Button
               type="submit"
               disabled={signInOtpVerifying || signInOtp.length !== 6}
