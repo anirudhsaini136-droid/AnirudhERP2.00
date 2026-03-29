@@ -294,48 +294,33 @@ const LoginPage = () => {
               </Button>
             </form>
 
-            {(typeof window !== 'undefined' ? window.location.origin : '') && (
-              <div
-                className={`mt-8 rounded-xl border px-3 py-2.5 text-[11px] leading-relaxed ${
-                  isLight
-                    ? 'border-slate-200 bg-slate-50/80 text-slate-600'
-                    : 'border-white/10 bg-white/[0.03] text-gray-500'
-                }`}
-              >
-                <span className={`font-semibold uppercase tracking-wider ${isLight ? 'text-slate-500' : 'text-gray-500'}`}>
-                  You are signing in to
-                </span>
-                <p className={`mt-1 font-medium break-all ${isLight ? 'text-slate-800' : 'text-gray-400'}`}>
-                  {typeof window !== 'undefined' ? window.location.origin : '—'}
-                </p>
-                {BACKEND_ORIGIN ? (
-                  <>
-                    <span
-                      className={`mt-2 block font-semibold uppercase tracking-wider ${isLight ? 'text-slate-500' : 'text-gray-500'}`}
-                    >
-                      API
-                    </span>
-                    <p className={`font-medium break-all ${isLight ? 'text-slate-800' : 'text-gray-400'}`}>
-                      {BACKEND_ORIGIN}/api
-                    </p>
-                  </>
-                ) : null}
-              </div>
-            )}
             {process.env.NODE_ENV === 'development' ? (
-              <p className="text-[10px] text-gray-600 mt-3 font-mono leading-relaxed">
+              <p className="text-[10px] text-gray-600 mt-6 font-mono leading-relaxed">
                 Dev: place <code className="text-gray-500">NexaERP.apk</code> in{' '}
                 <code className="text-gray-500">public/downloads/</code> or set{' '}
                 <code className="text-gray-500">REACT_APP_ANDROID_APK_URL</code>.
               </p>
             ) : null}
+
+            <div className={`mt-8 pt-6 border-t ${isLight ? 'border-slate-200/90' : 'border-white/10'}`}>
+              <p className={`text-center text-sm font-medium ${isLight ? 'text-slate-800' : 'text-gray-200'}`}>
+                New to NexaERP?
+              </p>
+              <Link
+                to="/signup"
+                className={`mt-3 flex h-12 w-full items-center justify-center rounded-xl border-2 text-[15px] font-bold tracking-tight no-underline transition hover:brightness-110 active:scale-[0.99] ${
+                  isLight
+                    ? 'border-gold-500/55 bg-gradient-to-b from-gold-100/90 to-gold-200/50 text-amber-950 shadow-sm shadow-amber-900/10 hover:border-gold-500'
+                    : 'border-gold-500/45 bg-gold-500/10 text-gold-300 shadow-md shadow-black/20 hover:border-gold-400/60 hover:bg-gold-500/15 hover:text-gold-200'
+                }`}
+              >
+                Create account
+              </Link>
+            </div>
           </div>
 
-          <p className="text-center text-gray-600 text-xs mt-8">
+          <p className={`text-center text-xs mt-6 ${isLight ? 'text-slate-500' : 'text-gray-600'}`}>
             By signing in, you agree to our Terms of Service and Privacy Policy
-          </p>
-          <p className="text-center text-sm text-gray-500 mt-3">
-            New business? <Link to="/signup" className="text-gold-400 hover:text-gold-300">Create account</Link>
           </p>
         </div>
       </div>
