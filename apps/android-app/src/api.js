@@ -132,6 +132,17 @@ export function postInvoiceSendWhatsappApi(invoiceId) {
   return request(`/finance/invoices/${invoiceId}/send-whatsapp-api`, { method: "POST" });
 }
 
+export function postInvoiceGenerateEinvoice(invoiceId) {
+  return request(`/finance/invoices/${invoiceId}/einvoice/generate`, { method: "POST" });
+}
+
+export function postEwayBill(body) {
+  return request("/finance/eway-bills", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
 export function postSendAllWhatsappReminders(body) {
   return request("/finance/reminders/whatsapp/send-all", {
     method: "POST",

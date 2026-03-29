@@ -32,6 +32,8 @@ import AccountingPage from './pages/finance/AccountingPage';
 import CustomersLedgerPage from './pages/finance/CustomersLedgerPage';
 import CustomerLedgerDetailPage from './pages/finance/CustomerLedgerDetailPage';
 import DataMigrationPage from './pages/finance/DataMigrationPage';
+import RecurringInvoicesPage from './pages/finance/RecurringInvoicesPage';
+import EwayBillsPage from './pages/finance/EwayBillsPage';
 import InventoryPage from './pages/inventory/InventoryPage';
 import BillingPage from './pages/inventory/BillingPage';
 import StaffHome from './pages/staff/StaffHome';
@@ -113,6 +115,8 @@ function AppRoutes() {
       <Route path="/finance/customers" element={<RequireAuth allowedRoles={['finance_admin', 'business_owner']}><CustomersLedgerPage /></RequireAuth>} />
       <Route path="/finance/customers/:clientName" element={<RequireAuth allowedRoles={['finance_admin', 'business_owner']}><CustomerLedgerDetailPage /></RequireAuth>} />
       <Route path="/finance/migration" element={<RequireAuth allowedRoles={['finance_admin', 'business_owner']}><DataMigrationPage /></RequireAuth>} />
+      <Route path="/finance/recurring-invoices" element={<RequireAuth allowedRoles={['finance_admin', 'business_owner']}><RecurringInvoicesPage /></RequireAuth>} />
+      <Route path="/finance/eway-bills" element={<RequireAuth allowedRoles={['finance_admin', 'business_owner']}><EwayBillsPage /></RequireAuth>} />
 
       {/* Inventory */}
       <Route path="/inventory" element={<RequireAuth allowedRoles={['inventory_admin', 'business_owner']}><InventoryPage /></RequireAuth>} />

@@ -5,8 +5,8 @@ import {
   LayoutDashboard, Building2, Users, UserCheck, Calendar, FileText,
   Receipt, BarChart3, Package, ShoppingCart, Settings, Bell, Truck, 
   LogOut, ChevronDown, Menu, X, Clock, Briefcase, CreditCard,
-  Shield, Home, FileSpreadsheet, UserCircle, ArrowLeftRight, BookUser,
-  IndianRupee, BookOpen, HardDriveDownload
+  Shield, Home,   FileSpreadsheet, UserCircle, ArrowLeftRight, BookUser,
+  IndianRupee, BookOpen, HardDriveDownload, Repeat
 } from 'lucide-react';
 import ThemeToggle from '../ThemeToggle';
 
@@ -33,6 +33,8 @@ const NAV_CONFIG = {
       { path: '/hr/payroll', label: 'Payroll', icon: CreditCard },
       { path: '/finance', label: 'Finance Dashboard', icon: BarChart3 },
       { path: '/finance/invoices', label: 'Invoices', icon: FileSpreadsheet },
+      { path: '/finance/recurring-invoices', label: 'Recurring Invoices', icon: Repeat },
+      { path: '/finance/eway-bills', label: 'E-Way Bills', icon: Truck },
       { path: '/finance/customers', label: 'Customer Ledger', icon: BookUser },
       { path: '/finance/migration', label: 'Import data', icon: HardDriveDownload },
       { path: '/finance/expenses', label: 'Expenses', icon: Receipt },
@@ -62,6 +64,8 @@ const NAV_CONFIG = {
     items: [
       { path: '/finance', label: 'Dashboard', icon: LayoutDashboard },
       { path: '/finance/invoices', label: 'Invoices', icon: FileSpreadsheet },
+      { path: '/finance/recurring-invoices', label: 'Recurring Invoices', icon: Repeat },
+      { path: '/finance/eway-bills', label: 'E-Way Bills', icon: Truck },
       { path: '/finance/customers', label: 'Customer Ledger', icon: BookUser },
       { path: '/finance/migration', label: 'Import data', icon: HardDriveDownload },
       { path: '/finance/expenses', label: 'Expenses', icon: Receipt },
@@ -122,7 +126,7 @@ export default function DashboardLayout({ children }) {
   const MODULE_NAV_MAP = {
     'manage_users': ['/dashboard/users'],
     'hr_payroll': ['/hr', '/hr/employees', '/hr/attendance', '/hr/leave', '/hr/payroll'],
-    'invoices_finance': ['/finance', '/finance/invoices', '/finance/invoices/:id', '/finance/reports', '/finance/migration'],
+    'invoices_finance': ['/finance', '/finance/invoices', '/finance/invoices/:id', '/finance/reports', '/finance/migration', '/finance/recurring-invoices', '/finance/eway-bills'],
     'inventory_billing': ['/inventory', '/inventory/billing'],
     'purchases_itc': ['/purchases'],
     'gst_reports': ['/finance/gst', '/ca'],

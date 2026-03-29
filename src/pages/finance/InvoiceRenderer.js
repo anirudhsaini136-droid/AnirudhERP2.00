@@ -43,6 +43,7 @@ function amountInWords(total) {
 export default function InvoiceRenderer({ invoice, items, business, payments }) {
   const [qrDataUrl, setQrDataUrl] = React.useState(null);
   const [upiLink, setUpiLink] = React.useState(null);
+  const [einvoiceQrDataUrl, setEinvoiceQrDataUrl] = React.useState(null);
 
   React.useEffect(() => {
     if (!invoice) return;
@@ -79,6 +80,25 @@ export default function InvoiceRenderer({ invoice, items, business, payments }) 
     buildQr();
     return () => { cancelled = true; };
   }, [business?.upi_vpa, business?.upi_name, business?.name, invoice?.invoice_number, invoice?.balance_due, invoice?.total_amount, invoice]);
+
+  React.useEffect(() => {
+    const raw = invoice?.einvoice_signed_qr;
+    if (!raw) {
+      setEinvoiceQrDataUrl(null);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const text = typeof raw === 'string' ? raw : String(raw);
+        const url = await QRCode.toDataURL(text, { margin: 1, width: 200, errorCorrectionLevel: 'M' });
+        if (!cancelled) setEinvoiceQrDataUrl(url);
+      } catch {
+        if (!cancelled) setEinvoiceQrDataUrl(null);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [invoice?.einvoice_signed_qr]);
 
   if (!invoice) return null;
 
@@ -294,6 +314,32 @@ export default function InvoiceRenderer({ invoice, items, business, payments }) 
             {business.invoice_bank_account && <div><div style={{ fontSize: 10, color: '#9ca3af' }}>Account No.</div><div style={{ fontSize: 13, fontWeight: 600, color: '#111827' }}>{business.invoice_bank_account}</div></div>}
             {business.invoice_bank_ifsc && <div><div style={{ fontSize: 10, color: '#9ca3af' }}>IFSC</div><div style={{ fontSize: 13, fontWeight: 600, color: '#111827' }}>{business.invoice_bank_ifsc}</div></div>}
           </div>
+        </div>
+      )}
+
+      {/* ── GST E-Invoice (IRN + signed QR) ── */}
+      {(invoice.einvoice_irn || invoice.einvoice_status === 'generated') && (
+        <div className="inv-einvoice-band" style={{ padding: '16px 48px', background: '#f0fdf4', borderTop: '1px solid #bbf7d0', WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }}>
+          <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, color: '#166534', marginBottom: 8 }}>
+            GST E-Invoice (IRN)
+          </div>
+          <div style={{ fontSize: 12, color: '#14532d', marginBottom: 10, wordBreak: 'break-all' }}>
+            <strong>IRN:</strong> {invoice.einvoice_irn || '—'}
+          </div>
+          {(invoice.einvoice_ack_no || invoice.einvoice_ack_date) && (
+            <div style={{ fontSize: 11, color: '#15803d', marginBottom: 12 }}>
+              {invoice.einvoice_ack_no && <span>Ack No: {invoice.einvoice_ack_no} </span>}
+              {invoice.einvoice_ack_date && <span> · Ack Dt: {invoice.einvoice_ack_date}</span>}
+            </div>
+          )}
+          {einvoiceQrDataUrl && (
+            <div style={{ display: 'flex', gap: 20, alignItems: 'center', flexWrap: 'wrap' }}>
+              <img src={einvoiceQrDataUrl} alt="E-Invoice QR" style={{ width: 180, height: 180, objectFit: 'contain', borderRadius: 8, border: '1px solid #d1fae5', background: '#fff' }} />
+              <div style={{ fontSize: 11, color: '#166534', maxWidth: 320, lineHeight: 1.5 }}>
+                Scan for invoice verification per NIC IRP. Generated IRN is registered with the Invoice Registration Portal (when using live GSP mode).
+              </div>
+            </div>
+          )}
         </div>
       )}
 

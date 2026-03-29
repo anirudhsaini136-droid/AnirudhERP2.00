@@ -95,6 +95,15 @@ export default function MobileInvoiceRenderer({ invoice, items, business, qrUrl,
         </View>
       </View>
 
+      {!!invoice?.einvoice_irn && (
+        <View style={{ paddingHorizontal: 14, paddingVertical: 10, backgroundColor: "rgba(16,185,129,0.12)", borderBottomWidth: StyleSheet.hairlineWidth, borderColor: T.border }}>
+          <Text style={{ fontSize: 11, fontWeight: "800", color: T.textMuted, marginBottom: 4 }}>GST E-INVOICE (IRN)</Text>
+          <Text style={{ fontSize: 12, color: T.textPrimary, fontFamily: "monospace" }} selectable>
+            {invoice.einvoice_irn}
+          </Text>
+        </View>
+      )}
+
       <View style={styles.tableHead}>
         <Text style={[styles.th, { flex: 0.5 }]}>No.</Text>
         <Text style={[styles.th, { flex: 2.3 }]}>Description</Text>

@@ -1,7 +1,15 @@
 import React, { useCallback, useMemo, useState } from "react";
 import { ActivityIndicator, Alert, Image, Linking, Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
-import { deleteInvoice, getDashboardSettings, getInvoice, postInvoicePayment, postInvoiceSendWhatsappApi } from "../api";
+import {
+  deleteInvoice,
+  getDashboardSettings,
+  getInvoice,
+  postInvoicePayment,
+  postInvoiceSendWhatsappApi,
+  postInvoiceGenerateEinvoice,
+  postEwayBill,
+} from "../api";
 import { ContentPanel, HeroBand, ListRowCard, PageHeader, PrimaryButton, SecondaryButton } from "../components/NexusUi";
 import MobileInvoiceRenderer from "../components/MobileInvoiceRenderer";
 import * as T from "../theme/tokens";
@@ -52,6 +60,7 @@ export default function InvoiceDetailScreen({ route, navigation }) {
   const [businessName, setBusinessName] = useState("");
   const [business, setBusiness] = useState(null);
 
+  const [gstBusy, setGstBusy] = useState(false);
   const [showPayment, setShowPayment] = useState(false);
   const [paying, setPaying] = useState(false);
   const [paymentForm, setPaymentForm] = useState({
@@ -153,6 +162,54 @@ export default function InvoiceDetailScreen({ route, navigation }) {
     Linking.openURL(url).catch(() => Alert.alert("WhatsApp", "Unable to open WhatsApp."));
   };
 
+  const generateEinvoice = async () => {
+    if (!invoiceId || gstBusy) return;
+    if (inv.einvoice_irn) {
+      Alert.alert("E-Invoice", "IRN already exists.");
+      return;
+    }
+    try {
+      setGstBusy(true);
+      await postInvoiceGenerateEinvoice(invoiceId);
+      Alert.alert("E-Invoice", "IRN generated.");
+      await load();
+    } catch (e) {
+      Alert.alert("E-Invoice", e.message || "Failed");
+    } finally {
+      setGstBusy(false);
+    }
+  };
+
+  const createEwayDemo = () => {
+    if (!invoiceId || gstBusy) return;
+    Alert.alert(
+      "E-Way Bill",
+      "Create e-way bill with vehicle HR26AX1234? (Change in app later or use web.)",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Create",
+          onPress: async () => {
+            try {
+              setGstBusy(true);
+              await postEwayBill({
+                invoice_id: invoiceId,
+                vehicle_no: "HR26AX1234",
+                transport_mode: "road",
+                distance_km: 100,
+              });
+              Alert.alert("E-Way", "Created (mock mode by default).");
+            } catch (e) {
+              Alert.alert("E-Way", e.message || "Failed");
+            } finally {
+              setGstBusy(false);
+            }
+          },
+        },
+      ]
+    );
+  };
+
   const sendWhatsApp = async () => {
     if (!invoiceId) return;
     try {
@@ -216,6 +273,16 @@ export default function InvoiceDetailScreen({ route, navigation }) {
           <PrimaryButton title={paying ? "Recording…" : "Record Payment"} onPress={openPayment} disabled={paying} />
         </View>
       ) : null}
+
+      {inv.status !== "cancelled" && !inv.einvoice_irn ? (
+        <View style={{ marginTop: 10 }}>
+          <SecondaryButton title={gstBusy ? "…" : "Generate E-Invoice (IRN)"} onPress={generateEinvoice} disabled={gstBusy} />
+        </View>
+      ) : null}
+
+      <View style={{ marginTop: 10 }}>
+        <SecondaryButton title={gstBusy ? "…" : "Create E-Way Bill (quick)"} onPress={createEwayDemo} disabled={gstBusy} />
+      </View>
 
       {inv.client_phone ? (
         <View style={{ marginTop: 10 }}>

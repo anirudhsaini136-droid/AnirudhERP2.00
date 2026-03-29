@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
-import { ArrowLeft, Printer, MessageCircle } from 'lucide-react';
+import { ArrowLeft, Printer, MessageCircle, ShieldCheck, Truck, X } from 'lucide-react';
+import { Input } from '../../components/ui/input';
+import { Button } from '../../components/ui/button';
 import { toast } from 'sonner';
 import InvoiceRenderer from './InvoiceRenderer';
 import { getLocalInvoice, upsertLocalInvoiceDetail } from '../../lib/offlineInvoices';
@@ -15,8 +17,13 @@ export default function InvoiceViewPage() {
   const navigate = useNavigate();
   const [invoice, setInvoice] = useState(null);
   const [items, setItems] = useState([]);
+  const [payments, setPayments] = useState([]);
   const [business, setBusiness] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [gstBusy, setGstBusy] = useState(false);
+  const [showEway, setShowEway] = useState(false);
+  const [ewayVehicle, setEwayVehicle] = useState('');
+  const [ewayDistance, setEwayDistance] = useState('100');
   // Email sending removed
 
   useEffect(() => {
@@ -139,6 +146,71 @@ export default function InvoiceViewPage() {
     toast.success('WhatsApp opened!');
   };
 
+  const reloadInvoice = async () => {
+    try {
+      const invRes = await api.get(`/finance/invoices/${id}`);
+      setInvoice(invRes.data.invoice);
+      setItems(invRes.data.items || []);
+      setPayments(invRes.data.payments || []);
+    } catch {
+      toast.error('Could not refresh invoice');
+    }
+  };
+
+  const handleGenerateEinvoice = async () => {
+    if (!invoice?.id) return;
+    setGstBusy(true);
+    try {
+      await api.post(`/finance/invoices/${invoice.id}/einvoice/generate`);
+      toast.success('E-Invoice generated');
+      await reloadInvoice();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'E-Invoice failed');
+    } finally {
+      setGstBusy(false);
+    }
+  };
+
+  const handleCancelEinvoice = async () => {
+    if (!invoice?.id) return;
+    if (!window.confirm('Cancel e-invoice registration locally?')) return;
+    setGstBusy(true);
+    try {
+      await api.post(`/finance/invoices/${invoice.id}/einvoice/cancel`, { reason: '1' });
+      toast.success('E-Invoice cleared');
+      await reloadInvoice();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Cancel failed');
+    } finally {
+      setGstBusy(false);
+    }
+  };
+
+  const handleCreateEway = async () => {
+    if (!invoice?.id || !ewayVehicle.trim()) {
+      toast.error('Vehicle number required');
+      return;
+    }
+    setGstBusy(true);
+    try {
+      await api.post('/finance/eway-bills', {
+        invoice_id: invoice.id,
+        vehicle_no: ewayVehicle.trim().toUpperCase(),
+        transport_mode: 'road',
+        distance_km: Number(ewayDistance) || 100,
+      });
+      toast.success('E-Way bill created');
+      setShowEway(false);
+      setEwayVehicle('');
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'E-Way bill failed');
+    } finally {
+      setGstBusy(false);
+    }
+  };
+
+  const hasIrn = Boolean(invoice?.einvoice_irn || invoice?.einvoice_status === 'generated');
+
   if (loading) return (
     <div className="min-h-screen bg-obsidian flex items-center justify-center">
       <div className="w-8 h-8 border-2 border-gold-500 border-t-transparent rounded-full animate-spin" />
@@ -170,7 +242,38 @@ export default function InvoiceViewPage() {
           <span className="text-sm">Back to Invoices</span>
         </button>
         <div className="flex items-center gap-2 flex-wrap">
-          {/* Send Email removed */}
+          {!hasIrn && invoice?.status !== 'cancelled' && (
+            <Button
+              type="button"
+              disabled={gstBusy}
+              onClick={handleGenerateEinvoice}
+              className="gap-2 text-sm bg-emerald-600/20 border border-emerald-500/40 text-emerald-300 hover:bg-emerald-600/30"
+            >
+              <ShieldCheck size={16} /> E-Invoice (IRN)
+            </Button>
+          )}
+          {hasIrn && (
+            <Button
+              type="button"
+              disabled={gstBusy}
+              variant="outline"
+              size="sm"
+              onClick={handleCancelEinvoice}
+              className="text-xs border-white/20 text-gray-300"
+            >
+              Clear e-invoice
+            </Button>
+          )}
+          <Button
+            type="button"
+            disabled={gstBusy}
+            variant="outline"
+            size="sm"
+            onClick={() => setShowEway(true)}
+            className="gap-1 text-amber-200 border-amber-500/30"
+          >
+            <Truck size={15} /> E-Way Bill
+          </Button>
           <button onClick={handleSendWhatsApp}
             className="btn-premium text-sm flex items-center gap-2 px-4 py-2 rounded-xl border transition-all"
             style={{ background: 'rgba(37,211,102,0.1)', borderColor: 'rgba(37,211,102,0.3)', color: '#25d366' }}>
@@ -182,9 +285,35 @@ export default function InvoiceViewPage() {
         </div>
       </div>
 
+      {showEway && (
+        <div className="print:hidden fixed inset-0 z-[60] flex items-center justify-center bg-black/70 p-4">
+          <div className="bg-void border border-white/10 rounded-2xl p-6 max-w-md w-full shadow-2xl">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-white font-semibold flex items-center gap-2"><Truck size={18} className="text-amber-400" /> Create E-Way Bill</h3>
+              <button type="button" onClick={() => setShowEway(false)} className="text-gray-500 hover:text-white"><X size={20} /></button>
+            </div>
+            <p className="text-xs text-gray-500 mb-4">Uses EWAY_MODE (mock by default). Set EWAY_GSP_URL for production GSP.</p>
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs text-gray-400">Vehicle number</label>
+                <Input className="input-premium mt-1" value={ewayVehicle} onChange={(e) => setEwayVehicle(e.target.value)} placeholder="e.g. HR26AX1234" />
+              </div>
+              <div>
+                <label className="text-xs text-gray-400">Distance (km)</label>
+                <Input type="number" className="input-premium mt-1" value={ewayDistance} onChange={(e) => setEwayDistance(e.target.value)} />
+              </div>
+              <div className="flex gap-2 pt-2">
+                <Button type="button" className="btn-premium btn-primary flex-1" disabled={gstBusy} onClick={handleCreateEway}>Generate</Button>
+                <Button type="button" variant="outline" onClick={() => setShowEway(false)}>Close</Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Invoice */}
       <div className="print-page-wrap" style={{ padding: '24px 16px 64px', display: 'flex', justifyContent: 'center' }}>
-        <InvoiceRenderer invoice={invoice} items={items} business={business} />
+        <InvoiceRenderer invoice={invoice} items={items} business={business} payments={payments} />
       </div>
     </div>
   );
