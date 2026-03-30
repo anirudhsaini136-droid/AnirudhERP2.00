@@ -269,6 +269,10 @@ export default function BusinessSettings() {
     Number(selectedAmount || 0) > 0 &&
     (selectedBillingCycle === 'yearly' ? paymentOffer?.can_pay_yearly : paymentOffer?.can_pay_monthly);
 
+  const daysRemaining = Number(sub.days_remaining || 0);
+  const accessDenomDays = daysRemaining > 60 ? 365 : 30;
+  const accessPct = Math.round(Math.min(100, Math.max(0, (daysRemaining / (accessDenomDays || 1)) * 100)));
+
   return (
     <DashboardLayout>
       <div className="space-y-6 max-w-2xl">
@@ -316,7 +320,7 @@ export default function BusinessSettings() {
                 <div className="text-xs text-gray-400 flex items-center justify-between">
                   <span>Access health</span>
                   <span className="text-gray-300 font-semibold">
-                    {Math.round(Math.min(100, Math.max(0, ((Number(sub.days_remaining || 0) || 0) / ((Number(sub.days_remaining || 0) || 0) > 60 ? 365 : 30) || 1)) * 100)))}
+                    {accessPct}
                     %
                   </span>
                 </div>
@@ -325,15 +329,9 @@ export default function BusinessSettings() {
                     className="h-2 rounded-full"
                     style={{
                       width: `${Math.round(
-                        Math.min(
-                          100,
-                          Math.max(
-                            0,
-                            (Number(sub.days_remaining || 0) / ((Number(sub.days_remaining || 0) || 0) > 60 ? 365 : 30) || 1)) * 100,
-                          ),
-                        ),
+                        Math.min(100, Math.max(0, accessPct))
                       )}%`,
-                      backgroundColor: Number(sub.days_remaining || 0) < 7 ? "#fb7185" : "#d4a017",
+                      backgroundColor: daysRemaining < 7 ? "#fb7185" : "#d4a017",
                     }}
                   />
                 </div>
