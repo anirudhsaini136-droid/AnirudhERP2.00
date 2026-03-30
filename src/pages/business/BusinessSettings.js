@@ -193,6 +193,10 @@ export default function BusinessSettings() {
     selectedBillingCycle === 'yearly'
       ? paymentOffer?.renewal_extend_days_yearly
       : paymentOffer?.renewal_extend_days;
+  const yearlyBasePerMonth =
+    paymentOffer?.yearly_payable_amount && paymentOffer.yearly_payable_amount > 0
+      ? Math.round((paymentOffer.yearly_payable_amount / 12) * 100) / 100
+      : 0;
 
   return (
     <DashboardLayout>
@@ -269,7 +273,12 @@ export default function BusinessSettings() {
                           } ${!paymentOffer.can_pay_yearly ? 'opacity-40 cursor-not-allowed' : ''}`}
                         >
                           Yearly
-                          <div className="text-xs mt-1">{fmt(paymentOffer.yearly_payable_amount)}</div>
+                          <div className="text-xs mt-1">
+                            {fmt(yearlyBasePerMonth)} <span className="text-[11px] text-gray-400">/ month</span>
+                          </div>
+                          <div className="text-[11px] text-gray-400 mt-1">
+                            x12 = {fmt(paymentOffer.yearly_payable_amount)}
+                          </div>
                           <div className="text-[11px] text-gray-400 mt-1">+{paymentOffer.renewal_extend_days_yearly} days</div>
                         </button>
                       </div>
@@ -303,6 +312,11 @@ export default function BusinessSettings() {
                               <div className="flex-1">
                                 <p className="text-xs text-gray-500">Pay {selectedBillingCycle === 'yearly' ? 'Yearly' : 'Monthly'}</p>
                                 <p className="text-lg font-semibold text-emerald-300 mt-1">{fmt(selectedAmount)}</p>
+                                {selectedBillingCycle === 'yearly' && (
+                                  <p className="text-[11px] text-gray-400 mt-1">
+                                    (base {fmt(yearlyBasePerMonth)}/month x 12 = {fmt(paymentOffer?.yearly_payable_amount)})
+                                  </p>
+                                )}
                                 <p className="text-[11px] text-gray-400 mt-1">
                                   Complete transfer, then confirm below (honour-based; optional UTR helps).
                                 </p>
