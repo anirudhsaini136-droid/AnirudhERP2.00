@@ -347,6 +347,56 @@ export function getTrialBalance() {
   return request("/accounting/reports/trial-balance");
 }
 
+export function getAccountingAccounts() {
+  return request("/accounting/accounts");
+}
+
+export function postAccountingSetup() {
+  return request("/accounting/setup", { method: "POST", body: "{}" });
+}
+
+export function getAccountingJournal(limit = 50) {
+  return request(`/accounting/journal?limit=${limit}`);
+}
+
+export function postAccountingJournal(body) {
+  return request("/accounting/journal", { method: "POST", body: JSON.stringify(body) });
+}
+
+export function deleteAccountingJournal(id) {
+  return request(`/accounting/journal/${encodeURIComponent(id)}`, { method: "DELETE" });
+}
+
+export function postFinanceSyncToAccounting() {
+  return request("/finance/sync-to-accounting", { method: "POST", body: "{}" });
+}
+
+export function postPurchasesSyncToAccounting() {
+  return request("/purchases/sync-to-accounting", { method: "POST", body: "{}" });
+}
+
+export function postFinanceSyncPaymentsToAccounting() {
+  return request("/finance/sync-payments-to-accounting", { method: "POST", body: "{}" });
+}
+
+export function postPurchasesSyncPaymentsToAccounting() {
+  return request("/purchases/sync-payments-to-accounting", { method: "POST", body: "{}" });
+}
+
+export function postAccountingRecalculateBalances() {
+  return request("/accounting/recalculate-balances", { method: "POST", body: "{}" });
+}
+
+export function postAccountingClosePeriod(startDate, endDate) {
+  const q = new URLSearchParams({ start_date: startDate, end_date: endDate });
+  return request(`/accounting/reports/close-period?${q}`, { method: "POST", body: "{}" });
+}
+
+export function getAccountingCashFlow(startDate, endDate) {
+  const q = new URLSearchParams({ start_date: startDate, end_date: endDate });
+  return request(`/accounting/reports/cash-flow?${q}`);
+}
+
 /* ——— Notifications (web header) ——— */
 export function getNotifications(limit = 10) {
   return request(`/notifications?limit=${limit}`);

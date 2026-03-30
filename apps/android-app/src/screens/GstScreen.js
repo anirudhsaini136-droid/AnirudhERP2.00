@@ -13,8 +13,8 @@ import {
 import { useFocusEffect } from "@react-navigation/native";
 import { getGstGstr1, getGstSummary, getPurchasesItcSummary } from "../api";
 import { ContentPanel, HeroBand, KpiTile, LoadingCenter, PageHeader, PrimaryButton, SecondaryButton } from "../components/NexaUi";
-import * as T from "../theme/tokens";
-import { S } from "../theme/screenStyles";
+import { useTheme } from "../theme/ThemeProvider";
+import { useScreenStyles } from "../theme/screenStyles";
 import { chunkPairs, fmtInr } from "../utils/format";
 
 function pad2(n) {
@@ -32,6 +32,138 @@ function monthBounds(offset = 0) {
 }
 
 const toNum = (n) => Number(n || 0);
+
+function makeGstStyles(T) {
+  const cardInset = T.mode === "light" ? "rgba(15,23,42,0.045)" : "rgba(0,0,0,0.22)";
+  const footBg = T.mode === "light" ? "rgba(15,23,42,0.04)" : "rgba(255,255,255,0.04)";
+  const g3bBg = T.mode === "light" ? "rgba(15,23,42,0.035)" : "rgba(255,255,255,0.03)";
+  return StyleSheet.create({
+    label: { color: T.textMuted, fontSize: 12, marginBottom: 6 },
+    input: {
+      backgroundColor: T.mode === "light" ? "#FFFFFF" : T.cardBg,
+      borderWidth: 1,
+      borderColor: T.border,
+      borderRadius: 10,
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+      color: T.textPrimary,
+      fontSize: 15,
+    },
+    chipRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 12, marginBottom: 12 },
+    chip: {
+      paddingVertical: 8,
+      paddingHorizontal: 12,
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: T.border,
+      backgroundColor: T.mode === "light" ? T.cardBg : T.cardBg,
+    },
+    chipText: { color: T.textSecondary, fontSize: 12, fontWeight: "600" },
+    kpiRow: { flexDirection: "row", gap: 10, marginBottom: 10 },
+    triRow: { flexDirection: "row", gap: 8, marginBottom: 14, flexWrap: "wrap" },
+    triCard: {
+      flex: 1,
+      minWidth: "28%",
+      backgroundColor: T.cardBg,
+      borderRadius: 12,
+      padding: 12,
+      borderTopWidth: 3,
+      borderWidth: 1,
+      borderColor: T.border,
+    },
+    triLabel: {
+      color: T.textSecondary,
+      fontSize: 11,
+      fontWeight: "700",
+      textTransform: "uppercase",
+      letterSpacing: 0.4,
+    },
+    triVal: { fontSize: 16, fontWeight: "800", marginTop: 6 },
+    triSub: { color: T.textMuted, fontSize: 12, marginTop: 5, fontWeight: "500" },
+    tabRow: { flexDirection: "row", gap: 8, marginBottom: 10 },
+    tab: {
+      flex: 1,
+      paddingVertical: 12,
+      borderRadius: 12,
+      backgroundColor: T.cardBg,
+      borderWidth: 1,
+      borderColor: T.border,
+      alignItems: "center",
+    },
+    tabOn: {
+      backgroundColor: T.mode === "light" ? "rgba(194,142,14,0.14)" : "rgba(212,175,55,0.14)",
+      borderColor: T.gold,
+      borderWidth: 1.5,
+    },
+    tabText: { color: T.textSecondary, fontSize: 13, fontWeight: "700" },
+    tabTextOn: { color: T.textPrimary, fontWeight: "800" },
+    panelTitle: { color: T.textPrimary, fontWeight: "800", fontSize: 16, flex: 1, marginRight: 8 },
+    rowBetween: { flexDirection: "row", alignItems: "center", marginBottom: 12 },
+    invCard: {
+      borderWidth: 1,
+      borderColor: T.border,
+      borderRadius: 12,
+      padding: 12,
+      marginBottom: 10,
+      backgroundColor: cardInset,
+    },
+    invTitle: { color: T.textPrimary, fontWeight: "800", fontSize: 15 },
+    invDate: { color: T.textMuted, fontWeight: "600", fontSize: 12 },
+    invSub: { color: T.textSecondary, fontSize: 14, marginTop: 4, fontWeight: "500" },
+    badgeRow: { marginTop: 8 },
+    badge: { alignSelf: "flex-start", paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999 },
+    badgeCg: {
+      backgroundColor: T.mode === "light" ? "rgba(37,99,235,0.12)" : "rgba(59,130,246,0.2)",
+      borderWidth: T.mode === "light" ? 1 : 0,
+      borderColor: "rgba(37,99,235,0.25)",
+    },
+    badgeIg: {
+      backgroundColor: T.mode === "light" ? "rgba(124,58,237,0.12)" : "rgba(167,139,250,0.2)",
+      borderWidth: T.mode === "light" ? 1 : 0,
+      borderColor: "rgba(124,58,237,0.22)",
+    },
+    badgeTx: { fontSize: 11, fontWeight: "800", color: T.textPrimary },
+    grid4: { flexDirection: "row", flexWrap: "wrap", marginTop: 12, gap: 4, justifyContent: "space-between" },
+    cell: { color: T.textSecondary, fontSize: 12, fontWeight: "600", width: "23%", minWidth: 72 },
+    cellStrong: { color: T.textPrimary, fontWeight: "800", fontSize: 13, marginTop: 4 },
+    totalLine: { marginTop: 12, color: T.gold, fontWeight: "800", fontSize: 15, textAlign: "right" },
+    totalsFoot: {
+      marginTop: 8,
+      padding: 14,
+      borderRadius: 10,
+      backgroundColor: footBg,
+      borderWidth: 1,
+      borderColor: T.border,
+    },
+    footLabel: { color: T.textPrimary, fontWeight: "800", marginBottom: 8, fontSize: 14 },
+    footLine: { color: T.textSecondary, fontSize: 13, marginBottom: 5, fontWeight: "500" },
+    g1Card: {
+      borderWidth: 1,
+      borderColor: T.border,
+      borderRadius: 12,
+      padding: 12,
+      marginBottom: 10,
+      backgroundColor: cardInset,
+    },
+    g1Meta: { color: T.textSecondary, fontSize: 12, marginTop: 6, fontWeight: "500" },
+    g1Desc: { color: T.textPrimary, fontSize: 13, marginTop: 4, fontWeight: "500", opacity: T.mode === "light" ? 0.92 : 1 },
+    empty: { color: T.textMuted, textAlign: "center", padding: 20 },
+    itcGrid: { flexDirection: "row", flexWrap: "wrap", gap: 12, marginTop: 8 },
+    itcLab: { color: T.textMuted, fontSize: 11, fontWeight: "700", textTransform: "uppercase" },
+    itcVal: { color: T.textPrimary, fontWeight: "800", fontSize: 16, marginTop: 4 },
+    hint: { color: T.textMuted, fontSize: 12, marginBottom: 4 },
+    g3bRow: {
+      marginTop: 10,
+      padding: 12,
+      borderRadius: 10,
+      backgroundColor: g3bBg,
+      borderWidth: 1,
+      borderColor: T.border,
+    },
+    g3bLab: { color: T.textPrimary, fontWeight: "800", marginBottom: 8, fontSize: 14 },
+    g3bLine: { color: T.textSecondary, fontSize: 13, marginTop: 3, fontWeight: "500" },
+  });
+}
 
 function buildCsv(rows) {
   if (!rows?.length) return "";
@@ -53,6 +185,10 @@ function buildCsv(rows) {
 }
 
 export default function GstScreen() {
+  const { tokens: T } = useTheme();
+  const S = useScreenStyles();
+  const styles = useMemo(() => makeGstStyles(T), [T]);
+
   const initial = useMemo(() => monthBounds(0), []);
   const [startDate, setStartDate] = useState(initial.start_date);
   const [endDate, setEndDate] = useState(initial.end_date);
@@ -105,7 +241,7 @@ export default function GstScreen() {
         { label: "GST collected", value: fmtInr(s.total_tax), emoji: "₹", accent: T.emerald },
         { label: "Net GST payable", value: fmtInr(netGst), emoji: "⚖️", accent: T.rose },
       ]),
-    [s.total_sales, s.total_taxable_value, s.total_tax, netGst],
+    [s.total_sales, s.total_taxable_value, s.total_tax, netGst, T.gold, T.sapphire, T.emerald, T.rose],
   );
 
   const onShareCsv = async (csv, filenameHint) => {
@@ -173,7 +309,7 @@ export default function GstScreen() {
     <ScrollView
       style={{ flex: 1, backgroundColor: T.screenBg }}
       contentContainerStyle={S.scrollContent}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={load} tintColor={T.gold} />}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={load} tintColor={T.gold} colors={[T.gold]} />}
     >
       <HeroBand eyebrow="COMPLIANCE">
         <PageHeader
@@ -239,7 +375,7 @@ export default function GstScreen() {
             </View>
           ))}
 
-          <View style={styles.triRow}>
+            <View style={styles.triRow}>
             <View style={[styles.triCard, { borderTopColor: T.sapphire }]}>
               <Text style={styles.triLabel}>CGST (intra)</Text>
               <Text style={[styles.triVal, { color: T.sapphire }]}>{fmtInr(s.total_cgst)}</Text>
@@ -250,9 +386,9 @@ export default function GstScreen() {
               <Text style={[styles.triVal, { color: T.sapphire }]}>{fmtInr(s.total_sgst)}</Text>
               <Text style={styles.triSub}>Matches CGST</Text>
             </View>
-            <View style={[styles.triCard, { borderTopColor: "#a78bfa" }]}>
+            <View style={[styles.triCard, { borderTopColor: T.mode === "light" ? "#7C3AED" : "#a78bfa" }]}>
               <Text style={styles.triLabel}>IGST (inter)</Text>
-              <Text style={[styles.triVal, { color: "#a78bfa" }]}>{fmtInr(s.total_igst)}</Text>
+              <Text style={[styles.triVal, { color: T.mode === "light" ? "#6D28D9" : "#a78bfa" }]}>{fmtInr(s.total_igst)}</Text>
               <Text style={styles.triSub}>{s.interstate_count ?? 0} inter-state</Text>
             </View>
           </View>
@@ -460,112 +596,3 @@ export default function GstScreen() {
     </ScrollView>
   );
 }
-
-const styles = StyleSheet.create({
-  label: { color: T.textMuted, fontSize: 12, marginBottom: 6 },
-  input: {
-    backgroundColor: T.cardBg,
-    borderWidth: 1,
-    borderColor: T.border,
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    color: T.textPrimary,
-    fontSize: 15,
-  },
-  chipRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 12, marginBottom: 12 },
-  chip: {
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: T.border,
-    backgroundColor: T.cardBg,
-  },
-  chipText: { color: T.textSecondary, fontSize: 12, fontWeight: "600" },
-  kpiRow: { flexDirection: "row", gap: 10, marginBottom: 10 },
-  triRow: { flexDirection: "row", gap: 8, marginBottom: 14, flexWrap: "wrap" },
-  triCard: {
-    flex: 1,
-    minWidth: "28%",
-    backgroundColor: T.cardBg,
-    borderRadius: 12,
-    padding: 12,
-    borderTopWidth: 3,
-    borderWidth: 1,
-    borderColor: T.border,
-  },
-  triLabel: { color: T.textMuted, fontSize: 10, textTransform: "uppercase", letterSpacing: 0.5 },
-  triVal: { fontSize: 16, fontWeight: "800", marginTop: 6 },
-  triSub: { color: T.textMuted, fontSize: 11, marginTop: 4 },
-  tabRow: { flexDirection: "row", gap: 8, marginBottom: 10 },
-  tab: {
-    flex: 1,
-    paddingVertical: 10,
-    borderRadius: 12,
-    backgroundColor: T.cardBg,
-    borderWidth: 1,
-    borderColor: T.border,
-    alignItems: "center",
-  },
-  tabOn: { backgroundColor: "rgba(255,255,255,0.08)", borderColor: T.gold },
-  tabText: { color: T.textMuted, fontSize: 13, fontWeight: "600" },
-  tabTextOn: { color: T.textPrimary },
-  panelTitle: { color: T.textPrimary, fontWeight: "800", fontSize: 15, flex: 1, marginRight: 8 },
-  rowBetween: { flexDirection: "row", alignItems: "center", marginBottom: 12 },
-  invCard: {
-    borderWidth: 1,
-    borderColor: T.border,
-    borderRadius: 12,
-    padding: 12,
-    marginBottom: 10,
-    backgroundColor: "rgba(0,0,0,0.15)",
-  },
-  invTitle: { color: T.textPrimary, fontWeight: "800", fontSize: 14 },
-  invDate: { color: T.textMuted, fontWeight: "500", fontSize: 12 },
-  invSub: { color: T.textSecondary, fontSize: 13, marginTop: 4 },
-  badgeRow: { marginTop: 8 },
-  badge: { alignSelf: "flex-start", paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999 },
-  badgeCg: { backgroundColor: "rgba(59,130,246,0.2)" },
-  badgeIg: { backgroundColor: "rgba(167,139,250,0.2)" },
-  badgeTx: { fontSize: 10, fontWeight: "800", color: T.textPrimary },
-  grid4: { flexDirection: "row", flexWrap: "wrap", marginTop: 10, gap: 8 },
-  cell: { color: T.textMuted, fontSize: 11, width: "22%" },
-  cellStrong: { color: T.textPrimary, fontWeight: "700", fontSize: 12 },
-  totalLine: { marginTop: 10, color: T.gold, fontWeight: "800", fontSize: 14, textAlign: "right" },
-  totalsFoot: {
-    marginTop: 8,
-    padding: 12,
-    borderRadius: 10,
-    backgroundColor: "rgba(255,255,255,0.04)",
-    borderWidth: 1,
-    borderColor: T.border,
-  },
-  footLabel: { color: T.textPrimary, fontWeight: "800", marginBottom: 6 },
-  footLine: { color: T.textSecondary, fontSize: 12, marginBottom: 4 },
-  g1Card: {
-    borderWidth: 1,
-    borderColor: T.border,
-    borderRadius: 12,
-    padding: 12,
-    marginBottom: 10,
-    backgroundColor: "rgba(0,0,0,0.12)",
-  },
-  g1Meta: { color: T.textMuted, fontSize: 11, marginTop: 6 },
-  g1Desc: { color: T.textSecondary, fontSize: 12, marginTop: 4 },
-  empty: { color: T.textMuted, textAlign: "center", padding: 20 },
-  itcGrid: { flexDirection: "row", flexWrap: "wrap", gap: 12, marginTop: 8 },
-  itcLab: { color: T.textMuted, fontSize: 10, textTransform: "uppercase" },
-  itcVal: { color: T.textPrimary, fontWeight: "800", fontSize: 15, marginTop: 4 },
-  hint: { color: T.textMuted, fontSize: 12, marginBottom: 4 },
-  g3bRow: {
-    marginTop: 10,
-    padding: 10,
-    borderRadius: 10,
-    backgroundColor: "rgba(255,255,255,0.03)",
-    borderWidth: 1,
-    borderColor: T.border,
-  },
-  g3bLab: { color: T.textSecondary, fontWeight: "800", marginBottom: 6 },
-  g3bLine: { color: T.textMuted, fontSize: 12, marginTop: 2 },
-});

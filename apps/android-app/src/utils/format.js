@@ -10,3 +10,10 @@ export function fmtInr(n) {
     Number(n) || 0
   );
 }
+
+/** INR with paise (accounting / reports). */
+export function fmtInrDec(n) {
+  return new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 2 }).format(
+    Number(n) || 0
+  );
+}
