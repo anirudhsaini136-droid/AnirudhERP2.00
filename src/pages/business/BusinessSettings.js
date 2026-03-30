@@ -31,6 +31,8 @@ export default function BusinessSettings() {
   const [payOfferLoading, setPayOfferLoading] = useState(true);
   const [utr, setUtr] = useState('');
   const [confirmingPay, setConfirmingPay] = useState(false);
+  const [showRenewOptions, setShowRenewOptions] = useState(false);
+  const [selectedBillingCycle, setSelectedBillingCycle] = useState('monthly'); // 'monthly' | 'yearly'
 
   const [form, setForm] = useState({
     name: '', phone: '', address: '', city: '', country: '', state: ''
@@ -94,6 +96,8 @@ export default function BusinessSettings() {
       return;
     }
     setPayOfferLoading(true);
+    setShowRenewOptions(false);
+    setSelectedBillingCycle('monthly');
     api
       .get('/subscription/payment-offer')
       .then((r) => setPaymentOffer(r.data))
@@ -117,7 +121,10 @@ export default function BusinessSettings() {
     }
     setConfirmingPay(true);
     try {
-      await api.post('/subscription/confirm-upi-paid', { utr: utr.trim() || undefined });
+      await api.post('/subscription/confirm-upi-paid', {
+        utr: utr.trim() || undefined,
+        billing_cycle: selectedBillingCycle,
+      });
       toast.success('Subscription updated. Thank you!');
       setUtr('');
       const offer = await api.get('/subscription/payment-offer');
@@ -178,6 +185,14 @@ export default function BusinessSettings() {
   );
 
   const sub = data?.subscription || {};
+  const selectedUpiUrl =
+    selectedBillingCycle === 'yearly' ? paymentOffer?.yearly_upi_url : paymentOffer?.monthly_upi_url;
+  const selectedAmount =
+    selectedBillingCycle === 'yearly' ? paymentOffer?.yearly_payable_amount : paymentOffer?.monthly_payable_amount;
+  const selectedExtendDays =
+    selectedBillingCycle === 'yearly'
+      ? paymentOffer?.renewal_extend_days_yearly
+      : paymentOffer?.renewal_extend_days;
 
   return (
     <DashboardLayout>
@@ -216,89 +231,132 @@ export default function BusinessSettings() {
             {payOfferLoading ? (
               <p className="text-xs text-gray-500">Loading payment options...</p>
             ) : (
-              paymentOffer?.eligible &&
-              paymentOffer?.upi_url && (
+              paymentOffer?.eligible && (
                 <div className="space-y-4">
-                  <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-3">
-                    <div className="flex items-start gap-3">
-                      <div className="w-10 h-10 rounded-xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center shrink-0">
-                        <IndianRupee className="w-5 h-5 text-emerald-400" />
-                      </div>
-                      <div>
-                        <p className="text-xs text-gray-500">Renew via UPI</p>
-                        <p className="text-lg font-semibold text-emerald-300 mt-1">
-                          Pay {fmt(paymentOffer.payable_amount)}
-                        </p>
-                        <p className="text-[11px] text-gray-400 mt-1">
-                          Complete payment in your UPI app, then confirm below (honour-based; optional UTR helps records).
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <button
-                        type="button"
-                        onClick={() => window.location.assign(paymentOffer.upi_url)}
-                        className="btn-premium btn-primary whitespace-nowrap"
-                        disabled={!paymentOffer?.upi_url}
-                      >
-                        <Smartphone size={16} /> Pay with UPI
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => copyText(paymentOffer.upi_vpa, 'UPI ID')}
-                        className="btn-premium btn-secondary whitespace-nowrap"
-                      >
-                        <Copy size={16} /> Copy UPI ID
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="grid md:grid-cols-2 gap-4 items-start">
-                    <div className="bg-white/[0.03] border border-white/10 rounded-xl p-3">
-                      <div className="flex items-center gap-2 text-gray-300 mb-2">
-                        <QrCode size={16} className="text-gold-400" />
-                        <span className="text-sm">Scan & pay</span>
-                      </div>
-                      <img
-                        src={`https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(paymentOffer.upi_url)}`}
-                        alt="UPI QR"
-                        className="w-56 h-56 rounded-xl bg-white p-2 mx-auto"
-                      />
-                      <p className="text-xs text-gray-500 mt-3 text-center break-all">
-                        UPI: {paymentOffer.upi_vpa}
-                        <br />
-                        Payee: {paymentOffer.payee_name || '-'}
-                      </p>
-                    </div>
-
-                    {user?.role === 'business_owner' ? (
-                      <div className="glass-card rounded-xl p-4 border border-white/10">
-                        <label className="text-xs text-gray-500">UTR / reference (optional)</label>
-                        <Input
-                          className="input-premium mt-1 w-full text-sm"
-                          value={utr}
-                          onChange={(e) => setUtr(e.target.value)}
-                          placeholder="e.g. transaction reference / UTR"
-                        />
+                  {!showRenewOptions ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const next = paymentOffer.can_pay_monthly ? 'monthly' : 'yearly';
+                        setSelectedBillingCycle(next);
+                        setShowRenewOptions(true);
+                      }}
+                      className="btn-premium btn-primary whitespace-nowrap w-full animate-pulse"
+                    >
+                      Renew subscription (UPI)
+                    </button>
+                  ) : (
+                    <>
+                      <div className="grid grid-cols-2 gap-3">
                         <button
                           type="button"
-                          disabled={confirmingPay}
-                          onClick={handleConfirmUpiPaid}
-                          className="btn-premium btn-secondary whitespace-nowrap w-full mt-3"
+                          disabled={!paymentOffer.can_pay_monthly}
+                          onClick={() => setSelectedBillingCycle('monthly')}
+                          className={`btn-premium whitespace-nowrap w-full ${
+                            selectedBillingCycle === 'monthly' ? 'btn-primary' : 'btn-secondary'
+                          } ${!paymentOffer.can_pay_monthly ? 'opacity-40 cursor-not-allowed' : ''}`}
                         >
-                          {confirmingPay ? 'Saving…' : "I've completed payment"}
+                          Monthly
+                          <div className="text-xs mt-1">{fmt(paymentOffer.monthly_payable_amount)}</div>
+                          <div className="text-[11px] text-gray-400 mt-1">+{paymentOffer.renewal_extend_days} days</div>
                         </button>
-                        <p className="text-[11px] text-gray-500 mt-2">
-                          After you click confirm, your subscription will be extended.
-                        </p>
+                        <button
+                          type="button"
+                          disabled={!paymentOffer.can_pay_yearly}
+                          onClick={() => setSelectedBillingCycle('yearly')}
+                          className={`btn-premium whitespace-nowrap w-full ${
+                            selectedBillingCycle === 'yearly' ? 'btn-primary' : 'btn-secondary'
+                          } ${!paymentOffer.can_pay_yearly ? 'opacity-40 cursor-not-allowed' : ''}`}
+                        >
+                          Yearly
+                          <div className="text-xs mt-1">{fmt(paymentOffer.yearly_payable_amount)}</div>
+                          <div className="text-[11px] text-gray-400 mt-1">+{paymentOffer.renewal_extend_days_yearly} days</div>
+                        </button>
                       </div>
-                    ) : (
-                      <div className="text-xs text-amber-200/80">
-                        Only the business owner can confirm payment here.
+
+                      <div className="grid md:grid-cols-2 gap-4 items-start">
+                        <div className="bg-white/[0.03] border border-white/10 rounded-xl p-3">
+                          <div className="flex items-center gap-2 text-gray-300 mb-2">
+                            <QrCode size={16} className="text-gold-400" />
+                            <span className="text-sm">Scan & pay</span>
+                          </div>
+                          <img
+                            src={`https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(
+                              selectedUpiUrl || ''
+                            )}`}
+                            alt="UPI QR"
+                            className="w-56 h-56 rounded-xl bg-white p-2 mx-auto"
+                          />
+                          <p className="text-xs text-gray-500 mt-3 text-center break-all">
+                            UPI: {paymentOffer.upi_vpa}
+                            <br />
+                            Payee: {paymentOffer.payee_name || '-'}
+                          </p>
+                        </div>
+
+                        {user?.role === 'business_owner' ? (
+                          <div className="glass-card rounded-xl p-4 border border-white/10">
+                            <div className="flex items-start gap-2">
+                              <div className="w-9 h-9 rounded-xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center shrink-0">
+                                <IndianRupee className="w-4 h-4 text-emerald-400" />
+                              </div>
+                              <div className="flex-1">
+                                <p className="text-xs text-gray-500">Pay {selectedBillingCycle === 'yearly' ? 'Yearly' : 'Monthly'}</p>
+                                <p className="text-lg font-semibold text-emerald-300 mt-1">{fmt(selectedAmount)}</p>
+                                <p className="text-[11px] text-gray-400 mt-1">
+                                  Complete transfer, then confirm below (honour-based; optional UTR helps).
+                                </p>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-2 flex-wrap mt-4">
+                              <button
+                                type="button"
+                                onClick={() => window.location.assign(selectedUpiUrl)}
+                                className="btn-premium btn-primary whitespace-nowrap"
+                                disabled={!selectedUpiUrl}
+                              >
+                                <Smartphone size={16} /> Pay with UPI
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => copyText(paymentOffer.upi_vpa, 'UPI ID')}
+                                className="btn-premium btn-secondary whitespace-nowrap"
+                              >
+                                <Copy size={16} /> Copy UPI ID
+                              </button>
+                            </div>
+
+                            <div className="mt-4">
+                              <label className="text-xs text-gray-500">UTR / reference (optional)</label>
+                              <Input
+                                className="input-premium mt-1 w-full text-sm"
+                                value={utr}
+                                onChange={(e) => setUtr(e.target.value)}
+                                placeholder="e.g. transaction reference / UTR"
+                              />
+                            </div>
+
+                            <button
+                              type="button"
+                              disabled={confirmingPay}
+                              onClick={handleConfirmUpiPaid}
+                              className="btn-premium btn-secondary whitespace-nowrap w-full mt-3"
+                            >
+                              {confirmingPay ? 'Saving…' : "I've completed payment"}
+                            </button>
+                            <p className="text-[11px] text-gray-500 mt-2">
+                              After confirmation, your subscription will be extended.
+                            </p>
+                          </div>
+                        ) : (
+                          <div className="text-xs text-amber-200/80">
+                            Only the business owner can confirm payment here.
+                          </div>
+                        )}
                       </div>
-                    )}
-                  </div>
+                    </>
+                  )}
                 </div>
               )
             )}

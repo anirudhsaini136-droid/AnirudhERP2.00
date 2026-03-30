@@ -52,6 +52,11 @@ function ModulesEditor({ businessId, api, bizData, onRefresh }) {
   const [upiCollect, setUpiCollect] = React.useState(
     bizData?.upi_collect_amount != null && bizData?.upi_collect_amount !== '' ? String(bizData.upi_collect_amount) : '',
   );
+  const [upiCollectYearly, setUpiCollectYearly] = React.useState(
+    bizData?.upi_collect_yearly_monthly_amount != null && bizData?.upi_collect_yearly_monthly_amount !== ''
+      ? String(bizData.upi_collect_yearly_monthly_amount)
+      : '',
+  );
   const [renewExtendDays, setRenewExtendDays] = React.useState(bizData?.renewal_extend_days ?? 30);
   const [maxUsers, setMaxUsers] = React.useState(bizData?.max_users || 5);
   const [maxEmp, setMaxEmp] = React.useState(bizData?.max_employees || 10);
@@ -65,6 +70,11 @@ function ModulesEditor({ businessId, api, bizData, onRefresh }) {
     setMonthly(bizData.monthly_amount != null && bizData.monthly_amount !== '' ? Number(bizData.monthly_amount) : 0);
     setUpiCollect(
       bizData.upi_collect_amount != null && bizData.upi_collect_amount !== '' ? String(bizData.upi_collect_amount) : '',
+    );
+    setUpiCollectYearly(
+      bizData.upi_collect_yearly_monthly_amount != null && bizData.upi_collect_yearly_monthly_amount !== ''
+        ? String(bizData.upi_collect_yearly_monthly_amount)
+        : '',
     );
     setRenewExtendDays(Number(bizData.renewal_extend_days) > 0 ? Number(bizData.renewal_extend_days) : 30);
     setMaxUsers(Number(bizData.max_users) || 5);
@@ -92,6 +102,11 @@ function ModulesEditor({ businessId, api, bizData, onRefresh }) {
       } else {
         payload.upi_collect_amount = null;
       }
+      if (upiCollectYearly.trim() !== '') {
+        payload.upi_collect_yearly_monthly_amount = parseFloat(upiCollectYearly) || 0;
+      } else {
+        payload.upi_collect_yearly_monthly_amount = null;
+      }
       await api.put(`/super-admin/businesses/${businessId}`, payload);
       onRefresh();
       alert('Saved successfully!');
@@ -109,9 +124,14 @@ function ModulesEditor({ businessId, api, bizData, onRefresh }) {
         </div>
         <div className="col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
-            <label className="text-xs text-gray-400">UPI collect amount (₹)</label>
-            <input type="number" className="input-premium mt-1 w-full" value={upiCollect} onChange={e => setUpiCollect(e.target.value)} min={0} step={1} placeholder="e.g. 200 (leave empty to use monthly amount)" />
-            <p className="text-[10px] text-gray-600 mt-1">Shown in the tenant pay flow. Empty = use monthly amount above when &gt; 0.</p>
+            <label className="text-xs text-gray-400">UPI collect amount (Monthly) (₹)</label>
+            <input type="number" className="input-premium mt-1 w-full" value={upiCollect} onChange={e => setUpiCollect(e.target.value)} min={0} step={1} placeholder="e.g. 499 (leave empty to use monthly amount above when &gt; 0)" />
+            <p className="text-[10px] text-gray-600 mt-1">Used for tenant “Pay Monthly”.</p>
+            <div className="mt-3">
+              <label className="text-xs text-gray-400">UPI collect base (Yearly monthly equiv) (₹)</label>
+              <input type="number" className="input-premium mt-1 w-full" value={upiCollectYearly} onChange={e => setUpiCollectYearly(e.target.value)} min={0} step={1} placeholder="e.g. 399 (leave empty to use monthly amount above when &gt; 0)" />
+              <p className="text-[10px] text-gray-600 mt-1">Tenant pays this * 12 for “Pay Yearly”.</p>
+            </div>
           </div>
           <div>
             <label className="text-xs text-gray-400">Days to extend on self-service UPI pay</label>

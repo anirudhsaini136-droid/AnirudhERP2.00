@@ -35,7 +35,7 @@ export default function BusinessDashboard() {
   const { api, business, user, refreshUser } = useAuth();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [billingCycle, setBillingCycle] = useState('yearly');
+  const [billingCycle, setBillingCycle] = useState('monthly');
   const [showUpgrade, setShowUpgrade] = useState(false);
   const [paymentOffer, setPaymentOffer] = useState(null);
   const [payOfferLoading, setPayOfferLoading] = useState(true);
@@ -72,15 +72,16 @@ export default function BusinessDashboard() {
   const isTrialOrExpired = ['trial', 'expired', 'suspended'].includes((business?.status || '').toLowerCase());
   const upiId = paymentOffer?.upi_vpa || process.env.REACT_APP_UPI_ID || 'anirudhsaini85-2@okaxis';
   const upiName = paymentOffer?.payee_name || process.env.REACT_APP_UPI_NAME || 'Anirudh Saini';
-  const amount = paymentOffer?.eligible && paymentOffer?.payable_amount > 0
-    ? paymentOffer.payable_amount
+  const amount = paymentOffer?.eligible
+    ? (billingCycle === 'yearly' ? paymentOffer?.yearly_payable_amount : paymentOffer?.monthly_payable_amount)
     : (billingCycle === 'yearly' ? 399 * 12 : 499);
   const monthlyTotalYearlyEquivalent = 499 * 12;
   const yearlySavings = monthlyTotalYearlyEquivalent - (399 * 12);
   const yearlySavingsPct = Math.round((yearlySavings / monthlyTotalYearlyEquivalent) * 100);
   const planLabel = billingCycle === 'yearly' ? 'Yearly (399x12)' : 'Monthly (499)';
   const paymentNote = paymentOffer?.payment_note || `NexaERP ${planLabel} - ${business?.name || 'Business'} - ${business?.id || ''}`;
-  const upiUrl = paymentOffer?.upi_url
+  const selectedUpiUrl = billingCycle === 'yearly' ? paymentOffer?.yearly_upi_url : paymentOffer?.monthly_upi_url;
+  const upiUrl = selectedUpiUrl
     || `upi://pay?pa=${encodeURIComponent(upiId)}&pn=${encodeURIComponent(upiName)}&am=${amount}&cu=INR&tn=${encodeURIComponent(paymentNote)}`;
   const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(upiUrl)}`;
 
@@ -99,7 +100,7 @@ export default function BusinessDashboard() {
     }
     setConfirmingPay(true);
     try {
-      await api.post('/subscription/confirm-upi-paid', { utr: utr.trim() || undefined });
+      await api.post('/subscription/confirm-upi-paid', { utr: utr.trim() || undefined, billing_cycle: billingCycle });
       toast.success('Subscription updated. Thank you!');
       setUtr('');
       const offer = await api.get('/subscription/payment-offer');
@@ -139,7 +140,7 @@ export default function BusinessDashboard() {
   return (
     <DashboardLayout>
       <div className="space-y-6" data-testid="business-dashboard">
-        {!payOfferLoading && paymentOffer?.eligible && paymentOffer?.upi_url && (
+        {!payOfferLoading && paymentOffer?.eligible && (paymentOffer?.can_pay_monthly || paymentOffer?.can_pay_yearly) && (
           <div className="glass-card rounded-2xl p-4 border border-emerald-500/30 bg-gradient-to-r from-emerald-500/10 to-gold-500/5">
             <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
               <div className="flex items-start gap-3">
@@ -148,23 +149,52 @@ export default function BusinessDashboard() {
                 </div>
                 <div>
                   <h2 className="font-display text-lg text-white">Renew subscription (UPI)</h2>
+                  <div className="flex items-center gap-2 mt-2">
+                    <button
+                      type="button"
+                      disabled={!paymentOffer?.can_pay_monthly}
+                      onClick={() => setBillingCycle('monthly')}
+                      className={`btn-premium whitespace-nowrap px-3 h-[36px] ${billingCycle === 'monthly' ? 'btn-primary' : 'btn-secondary'} ${!paymentOffer?.can_pay_monthly ? 'opacity-40 cursor-not-allowed' : ''}`}
+                    >
+                      Monthly
+                    </button>
+                    <button
+                      type="button"
+                      disabled={!paymentOffer?.can_pay_yearly}
+                      onClick={() => setBillingCycle('yearly')}
+                      className={`btn-premium whitespace-nowrap px-3 h-[36px] ${billingCycle === 'yearly' ? 'btn-primary' : 'btn-secondary'} ${!paymentOffer?.can_pay_yearly ? 'opacity-40 cursor-not-allowed' : ''}`}
+                    >
+                      Yearly
+                    </button>
+                  </div>
                   <p className="text-sm text-gray-400 mt-1">
-                    Pay <span className="text-emerald-300 font-semibold">{fmt(paymentOffer.payable_amount)}</span>
-                    {paymentOffer.renewal_extend_days ? (
+                    Pay <span className="text-emerald-300 font-semibold">{fmt(amount)}</span>
+                    {billingCycle === 'yearly' ? (
+                      <> — extends access by <span className="text-gray-200">{paymentOffer.renewal_extend_days_yearly}</span> days after you confirm.</>
+                    ) : (
                       <> — extends access by <span className="text-gray-200">{paymentOffer.renewal_extend_days}</span> days after you confirm.</>
-                    ) : null}
+                    )}
                     {' '}
                     Open your UPI app, complete the transfer, then confirm below so your subscription updates (honour-based; optional UTR helps reconciliation).
                   </p>
                 </div>
               </div>
               <div className="flex flex-col sm:flex-row gap-2 shrink-0">
-                <button type="button" onClick={() => window.location.assign(paymentOffer.upi_url)} className="btn-premium btn-primary whitespace-nowrap">
+                <button type="button" onClick={() => window.location.assign(upiUrl)} className="btn-premium btn-primary whitespace-nowrap" disabled={!upiUrl}>
                   <Smartphone size={16} /> Pay with UPI
                 </button>
                 <button type="button" onClick={() => copyText(paymentOffer.upi_vpa, 'UPI ID')} className="btn-premium btn-secondary whitespace-nowrap">
                   <Copy size={16} /> Copy UPI ID
                 </button>
+              </div>
+            </div>
+            <div className="mt-4 grid md:grid-cols-3 gap-3 items-start">
+              <div className="md:col-span-2 bg-white/[0.03] border border-white/10 rounded-xl p-3">
+                <div className="flex items-center gap-2 text-gray-300 mb-2">
+                  <QrCode size={16} className="text-gold-400" />
+                  <span className="text-sm">Scan & pay</span>
+                </div>
+                <img src={qrUrl} alt="UPI QR" className="w-44 h-44 rounded-xl bg-white p-2" />
               </div>
             </div>
             {user?.role === 'business_owner' && (
