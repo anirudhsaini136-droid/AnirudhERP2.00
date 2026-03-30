@@ -190,8 +190,14 @@ export default function BusinessSettingsScreen() {
       const orderRes = await postPaymentsCreateOrder({ billing_cycle: selectedBillingCycle });
       const order = orderRes;
 
-      const key = paymentOffer?.razorpay_key_id;
+      const key = process.env.EXPO_PUBLIC_RAZORPAY_KEY_ID || paymentOffer?.razorpay_key_id;
       if (!key) throw new Error("Razorpay key not configured");
+
+      if (!RazorpayCheckout || typeof RazorpayCheckout.open !== "function") {
+        throw new Error(
+          "Razorpay SDK not available in this build. Please update the app (new APK build) and try again."
+        );
+      }
 
       RazorpayCheckout.open({
         key,
@@ -205,7 +211,7 @@ export default function BusinessSettingsScreen() {
           email: "",
           contact: "",
         },
-        theme: { color: "#C9A84C" },
+        theme: { color: T.gold },
       })
         .then(async (resp) => {
           try {
@@ -326,10 +332,28 @@ export default function BusinessSettingsScreen() {
         ) : (
           <>
             <Text style={S.cardLabel} />
-            <Text style={{ color: T.gold, fontWeight: "900", fontSize: 34, marginTop: 10, letterSpacing: -0.6 }}>
+            <Text
+              style={{
+                color: T.gold,
+                fontWeight: "900",
+                fontSize: 38,
+                marginTop: 14,
+                letterSpacing: -0.7,
+                textAlign: "center",
+              }}
+            >
               ₹{Number(selectedAmount || 0).toLocaleString("en-IN", { maximumFractionDigits: 0 })}
             </Text>
-            <Text style={S.muted}>Extends access by {selectedExtendDays || 0} days after verification.</Text>
+            <Text style={[S.muted, { textAlign: "center", marginTop: 4 }]}>Extends access by {selectedExtendDays || 0} days</Text>
+
+            <View style={{ marginTop: 12 }}>
+              {["GST Billing", "Accounting", "HR & Payroll", "Android App"].map((t) => (
+                <Text key={t} style={{ color: T.textSecondary, fontSize: 14, marginTop: 6, fontWeight: "700" }}>
+                  ✓ {t}
+                </Text>
+              ))}
+            </View>
+
             <TouchableOpacity
               onPress={handlePayWithRazorpay}
               disabled={!canPayWithRazorpay || razorpayBusy || payOfferLoading}
@@ -348,14 +372,41 @@ export default function BusinessSettingsScreen() {
                   shadowOpacity: 0.35,
                   shadowRadius: 20,
                   elevation: 14,
+                  overflow: "hidden",
                 },
                 (!canPayWithRazorpay || razorpayBusy || payOfferLoading) && { opacity: 0.55 },
               ]}
             >
+              <View style={{ position: "absolute", left: 0, right: 0, top: 0, bottom: 0, opacity: 0.28 }} pointerEvents="none">
+                <View
+                  style={{
+                    position: "absolute",
+                    left: -60,
+                    top: -90,
+                    width: 180,
+                    height: 240,
+                    backgroundColor: T.goldMuted,
+                    transform: [{ rotate: "-10deg" }],
+                  }}
+                />
+                <View
+                  style={{
+                    position: "absolute",
+                    right: -80,
+                    bottom: -110,
+                    width: 220,
+                    height: 280,
+                    backgroundColor: T.goldMuted,
+                    transform: [{ rotate: "12deg" }],
+                  }}
+                />
+              </View>
               <Text style={{ color: "#0b1223", fontWeight: "900", fontSize: 16 }}>
                 {razorpayBusy ? "Processing…" : "Pay with Razorpay"}
               </Text>
             </TouchableOpacity>
+
+            <Text style={[S.muted, { textAlign: "center", marginTop: 10 }]}>🔒 Secure payment via Razorpay</Text>
           </>
         )}
       </View>
