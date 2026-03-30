@@ -4,7 +4,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import DashboardLayout from '../../components/layout/DashboardLayout';
 import { parseEnabledModules, isNavPathAllowedForModules } from '../../shared-core/modules';
 import {
-  IndianRupee, Users, FileText, TrendingUp, AlertTriangle, Sparkles, Copy, QrCode, Smartphone,
+  IndianRupee, Users, FileText, TrendingUp, AlertTriangle, Sparkles, Copy, QrCode, Smartphone, CreditCard,
   ShieldCheck, Headphones, Clock3, CheckCircle2, UserCheck, BarChart3, FileSpreadsheet, Repeat,
   Truck, BookUser, HardDriveDownload, Receipt, BookOpen, Package, ShoppingCart, ClipboardList,
 } from 'lucide-react';
@@ -41,6 +41,7 @@ export default function BusinessDashboard() {
   const [payOfferLoading, setPayOfferLoading] = useState(true);
   const [utr, setUtr] = useState('');
   const [confirmingPay, setConfirmingPay] = useState(false);
+  const [razorpayBusy, setRazorpayBusy] = useState(false);
 
   const enabledModules = useMemo(() => parseEnabledModules(business), [business]);
   const canNav = (path) =>
@@ -72,22 +73,22 @@ export default function BusinessDashboard() {
   const isTrialOrExpired = ['trial', 'expired', 'suspended'].includes((business?.status || '').toLowerCase());
   const upiId = paymentOffer?.upi_vpa || process.env.REACT_APP_UPI_ID || 'anirudhsaini85-2@okaxis';
   const upiName = paymentOffer?.payee_name || process.env.REACT_APP_UPI_NAME || 'Anirudh Saini';
-  const amount = paymentOffer?.eligible
-    ? (billingCycle === 'yearly' ? paymentOffer?.yearly_payable_amount : paymentOffer?.monthly_payable_amount)
-    : (billingCycle === 'yearly' ? 399 * 12 : 499);
+  const amount =
+    billingCycle === 'yearly' ? paymentOffer?.yearly_payable_amount : paymentOffer?.monthly_payable_amount;
   const monthlyTotalYearlyEquivalent = 499 * 12;
   const yearlySavings = monthlyTotalYearlyEquivalent - (399 * 12);
   const yearlySavingsPct = Math.round((yearlySavings / monthlyTotalYearlyEquivalent) * 100);
   const planLabel = billingCycle === 'yearly' ? 'Yearly (399x12)' : 'Monthly (499)';
   const paymentNote = paymentOffer?.payment_note || `NexaERP ${planLabel} - ${business?.name || 'Business'} - ${business?.id || ''}`;
   const selectedUpiUrl = billingCycle === 'yearly' ? paymentOffer?.yearly_upi_url : paymentOffer?.monthly_upi_url;
-  const upiUrl = selectedUpiUrl
-    || `upi://pay?pa=${encodeURIComponent(upiId)}&pn=${encodeURIComponent(upiName)}&am=${amount}&cu=INR&tn=${encodeURIComponent(paymentNote)}`;
-  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(upiUrl)}`;
+  const upiUrl = selectedUpiUrl || null;
+  const qrUrl = upiUrl
+    ? `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(upiUrl)}`
+    : null;
 
   const handlePayNow = () => {
-    if (!upiId) {
-      window.alert('Payment UPI is not configured. Ask your administrator to set platform UPI in Super Admin → Platform settings (or REACT_APP_UPI_ID for legacy).');
+    if (!upiUrl) {
+      window.alert('UPI payment is not available right now. If a cash/UPI payment is pending admin approval, wait for it to complete.');
       return;
     }
     window.location.assign(upiUrl);
@@ -111,6 +112,94 @@ export default function BusinessDashboard() {
       toast.error(typeof d === 'string' ? d : (e.response?.data?.message || 'Could not confirm payment'));
     }
     setConfirmingPay(false);
+  };
+
+  const canPayWithRazorpay =
+    Boolean(paymentOffer?.razorpay_enabled) &&
+    Boolean(paymentOffer?.razorpay_eligible) &&
+    Number(amount || 0) > 0 &&
+    (billingCycle === 'yearly' ? paymentOffer?.can_pay_yearly : paymentOffer?.can_pay_monthly);
+
+  const loadRazorpayCheckout = () =>
+    new Promise((resolve, reject) => {
+      if (typeof window === 'undefined') return reject(new Error('window unavailable'));
+      if (window.Razorpay) return resolve();
+      const script = document.createElement('script');
+      script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+      script.async = true;
+      script.onload = () => resolve();
+      script.onerror = () => reject(new Error('Failed to load Razorpay checkout'));
+      document.body.appendChild(script);
+    });
+
+  const handlePayWithRazorpay = async () => {
+    if (user?.role !== 'business_owner') {
+      toast.error('Only the business owner can pay via Razorpay.');
+      return;
+    }
+    if (!canPayWithRazorpay) {
+      toast.error('Razorpay payment is not available right now.');
+      return;
+    }
+
+    setRazorpayBusy(true);
+    try {
+      const orderRes = await api.post('/payments/create-order', { billing_cycle: billingCycle });
+      const order = orderRes.data;
+
+      await loadRazorpayCheckout();
+      const key = paymentOffer?.razorpay_key_id;
+      if (!key) throw new Error('Razorpay key not configured');
+
+      const options = {
+        key,
+        amount: order.amount,
+        currency: order.currency,
+        name: 'NexaERP',
+        description: paymentNote,
+        order_id: order.order_id,
+        prefill: {
+          name: user?.name || business?.owner_name || business?.name || 'Business',
+          email: user?.email || '',
+          contact: user?.phone || '',
+        },
+        theme: { color: '#C9A84C' },
+        handler: async function (response) {
+          try {
+            const verifyRes = await api.post('/payments/verify', {
+              razorpay_payment_id: response.razorpay_payment_id,
+              razorpay_order_id: response.razorpay_order_id,
+              razorpay_signature: response.razorpay_signature,
+              billing_cycle: billingCycle,
+            });
+
+            const verify = verifyRes.data;
+            if (verify?.new_expiry_date) {
+              toast.success(
+                `Payment successful. Subscription extended till ${new Date(verify.new_expiry_date).toLocaleDateString('en-IN')}.`
+              );
+            } else {
+              toast.success('Payment successful. Subscription extended.');
+            }
+            await refreshUser();
+            const offer = await api.get('/subscription/payment-offer');
+            setPaymentOffer(offer.data);
+          } catch (e) {
+            const d = e.response?.data?.detail;
+            toast.error(typeof d === 'string' ? d : (e.response?.data?.message || 'Payment verification failed'));
+          } finally {
+            setRazorpayBusy(false);
+          }
+        },
+      };
+
+      const rzp = new window.Razorpay(options);
+      rzp.open();
+    } catch (e) {
+      const d = e.response?.data?.detail;
+      toast.error(typeof d === 'string' ? d : (e.response?.data?.message || 'Could not start Razorpay payment'));
+      setRazorpayBusy(false);
+    }
   };
 
   const copyText = async (value, label) => {
@@ -140,7 +229,9 @@ export default function BusinessDashboard() {
   return (
     <DashboardLayout>
       <div className="space-y-6" data-testid="business-dashboard">
-        {!payOfferLoading && paymentOffer?.eligible && (paymentOffer?.can_pay_monthly || paymentOffer?.can_pay_yearly) && (
+        {!payOfferLoading &&
+          (paymentOffer?.upi_eligible || paymentOffer?.razorpay_eligible) &&
+          (paymentOffer?.can_pay_monthly || paymentOffer?.can_pay_yearly) && (
           <div className="glass-card rounded-2xl p-4 border border-emerald-500/30 bg-gradient-to-r from-emerald-500/10 to-gold-500/5">
             <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
               <div className="flex items-start gap-3">
@@ -148,7 +239,7 @@ export default function BusinessDashboard() {
                   <IndianRupee className="w-5 h-5 text-emerald-400" />
                 </div>
                 <div>
-                  <h2 className="font-display text-lg text-white">Renew subscription (UPI)</h2>
+                  <h2 className="font-display text-lg text-white">Extend subscription</h2>
                   <div className="flex items-center gap-2 mt-2">
                     <button
                       type="button"
@@ -175,29 +266,50 @@ export default function BusinessDashboard() {
                       <> — extends access by <span className="text-gray-200">{paymentOffer.renewal_extend_days}</span> days after you confirm.</>
                     )}
                     {' '}
-                    Open your UPI app, complete the transfer, then confirm below so your subscription updates (honour-based; optional UTR helps reconciliation).
+                    Razorpay extends immediately. UPI requires confirmation/admin review.
                   </p>
                 </div>
               </div>
               <div className="flex flex-col sm:flex-row gap-2 shrink-0">
-                <button type="button" onClick={() => window.location.assign(upiUrl)} className="btn-premium btn-primary whitespace-nowrap" disabled={!upiUrl}>
+                <button
+                  type="button"
+                  onClick={handlePayWithRazorpay}
+                  className="btn-premium btn-primary whitespace-nowrap"
+                  disabled={user?.role !== 'business_owner' || !canPayWithRazorpay || razorpayBusy}
+                >
+                  <CreditCard size={16} /> {razorpayBusy ? 'Processing…' : 'Pay with Razorpay'}
+                </button>
+                <button type="button" onClick={handlePayNow} className="btn-premium btn-secondary whitespace-nowrap" disabled={!upiUrl}>
                   <Smartphone size={16} /> Pay with UPI
                 </button>
-                <button type="button" onClick={() => copyText(paymentOffer.upi_vpa, 'UPI ID')} className="btn-premium btn-secondary whitespace-nowrap">
+                <button
+                  type="button"
+                  onClick={() => copyText(paymentOffer.upi_vpa, 'UPI ID')}
+                  className="btn-premium btn-secondary whitespace-nowrap"
+                  disabled={!paymentOffer?.upi_vpa}
+                >
                   <Copy size={16} /> Copy UPI ID
                 </button>
               </div>
             </div>
             <div className="mt-4 grid md:grid-cols-3 gap-3 items-start">
               <div className="md:col-span-2 bg-white/[0.03] border border-white/10 rounded-xl p-3">
-                <div className="flex items-center gap-2 text-gray-300 mb-2">
-                  <QrCode size={16} className="text-gold-400" />
-                  <span className="text-sm">Scan & pay</span>
-                </div>
-                <img src={qrUrl} alt="UPI QR" className="w-44 h-44 rounded-xl bg-white p-2" />
+                {upiUrl ? (
+                  <>
+                    <div className="flex items-center gap-2 text-gray-300 mb-2">
+                      <QrCode size={16} className="text-gold-400" />
+                      <span className="text-sm">Scan & pay</span>
+                    </div>
+                    <img src={qrUrl} alt="UPI QR" className="w-44 h-44 rounded-xl bg-white p-2" />
+                  </>
+                ) : (
+                  <p className="text-sm text-amber-200/90">
+                    UPI option may be temporarily disabled (e.g. pending admin approval). Use Razorpay to extend immediately.
+                  </p>
+                )}
               </div>
             </div>
-            {user?.role === 'business_owner' && (
+            {user?.role === 'business_owner' && upiUrl && (
               <div className="mt-4 pt-4 border-t border-white/10 flex flex-col sm:flex-row gap-3 sm:items-end">
                 <div className="flex-1">
                   <label className="text-xs text-gray-500">UTR / reference (optional)</label>
