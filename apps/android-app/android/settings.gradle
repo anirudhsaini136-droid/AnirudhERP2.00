@@ -63,4 +63,8 @@ if (getRNMinorVersion() < 75) {
 }
 
 include ':app'
+
+// Manual include for Razorpay RN SDK (ensures native module is present)
+include ':react-native-razorpay'
+project(':react-native-razorpay').projectDir = new File(rootProject.projectDir, '../node_modules/react-native-razorpay/android')
 includeBuild(new File(["node", "--print", "require.resolve('@react-native/gradle-plugin/package.json', { paths: [require.resolve('react-native/package.json')] })"].execute(null, rootDir).text.trim()).getParentFile())
