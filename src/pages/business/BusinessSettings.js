@@ -29,8 +29,6 @@ export default function BusinessSettings() {
   const [savingBank, setSavingBank] = useState(false);
   const [paymentOffer, setPaymentOffer] = useState(null);
   const [payOfferLoading, setPayOfferLoading] = useState(true);
-  const [utr, setUtr] = useState('');
-  const [confirmingPay, setConfirmingPay] = useState(false);
   const [razorpayBusy, setRazorpayBusy] = useState(false);
   const [showRenewOptions, setShowRenewOptions] = useState(false);
   const [selectedBillingCycle, setSelectedBillingCycle] = useState('monthly'); // 'monthly' | 'yearly'
@@ -113,31 +111,6 @@ export default function BusinessSettings() {
     } catch {
       toast.error(`Failed to copy ${label.toLowerCase()}`);
     }
-  };
-
-  const handleConfirmUpiPaid = async () => {
-    if (user?.role !== 'business_owner') {
-      toast.error('Only the business owner can confirm payment.');
-      return;
-    }
-    setConfirmingPay(true);
-    try {
-      await api.post('/subscription/confirm-upi-paid', {
-        utr: utr.trim() || undefined,
-        billing_cycle: selectedBillingCycle,
-      });
-      toast.success('Payment submitted. Admin will review and activate within ~30 minutes.');
-      setUtr('');
-      const offer = await api.get('/subscription/payment-offer');
-      setPaymentOffer(offer.data);
-      const settings = await api.get('/dashboard/settings');
-      setData(settings.data);
-      await refreshUser();
-    } catch (e) {
-      const d = e.response?.data?.detail;
-      toast.error(typeof d === 'string' ? d : (e.response?.data?.message || 'Could not confirm payment'));
-    }
-    setConfirmingPay(false);
   };
 
   const loadRazorpayCheckout = () =>
@@ -281,8 +254,6 @@ export default function BusinessSettings() {
   );
 
   const sub = data?.subscription || {};
-  const selectedUpiUrl =
-    selectedBillingCycle === 'yearly' ? paymentOffer?.yearly_upi_url : paymentOffer?.monthly_upi_url;
   const selectedAmount =
     selectedBillingCycle === 'yearly' ? paymentOffer?.yearly_payable_amount : paymentOffer?.monthly_payable_amount;
   const selectedExtendDays =
@@ -337,7 +308,7 @@ export default function BusinessSettings() {
             {payOfferLoading ? (
               <p className="text-xs text-gray-500">Loading payment options...</p>
             ) : (
-              (paymentOffer?.upi_eligible || paymentOffer?.razorpay_eligible) && (
+              paymentOffer?.razorpay_eligible && (
                 <div className="space-y-4">
                   {!showRenewOptions ? (
                     <button
@@ -385,32 +356,7 @@ export default function BusinessSettings() {
                         </button>
                       </div>
 
-                      <div className="grid md:grid-cols-2 gap-4 items-start">
-                        {selectedUpiUrl ? (
-                          <div className="bg-white/[0.03] border border-white/10 rounded-xl p-3">
-                            <div className="flex items-center gap-2 text-gray-300 mb-2">
-                              <QrCode size={16} className="text-gold-400" />
-                              <span className="text-sm">Scan & pay</span>
-                            </div>
-                            <img
-                              src={`https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(selectedUpiUrl)}`}
-                              alt="UPI QR"
-                              className="w-56 h-56 rounded-xl bg-white p-2 mx-auto"
-                            />
-                            <p className="text-xs text-gray-500 mt-3 text-center break-all">
-                              UPI: {paymentOffer.upi_vpa}
-                              <br />
-                              Payee: {paymentOffer.payee_name || '-'}
-                            </p>
-                          </div>
-                        ) : (
-                          <div className="bg-white/[0.03] border border-white/10 rounded-xl p-3">
-                            <p className="text-sm text-amber-200/90">
-                              UPI option may be temporarily disabled (e.g. pending admin approval). Use Razorpay to extend immediately.
-                            </p>
-                          </div>
-                        )}
-
+                      <div className="space-y-4">
                         {user?.role === 'business_owner' ? (
                           <div className="glass-card rounded-xl p-4 border border-white/10">
                             <div className="flex items-start gap-2">
@@ -425,9 +371,7 @@ export default function BusinessSettings() {
                                     (base {fmt(yearlyBasePerMonth)}/month x 12 = {fmt(paymentOffer?.yearly_payable_amount)})
                                   </p>
                                 )}
-                                <p className="text-[11px] text-gray-400 mt-1">
-                                  Razorpay extends immediately. UPI requires confirmation/admin review.
-                                </p>
+                                <p className="text-[11px] text-gray-400 mt-1">Razorpay extends immediately after verification.</p>
                               </div>
                             </div>
 
@@ -440,58 +384,10 @@ export default function BusinessSettings() {
                               >
                                 <CreditCard size={16} /> {razorpayBusy ? 'Processing…' : 'Pay with Razorpay'}
                               </button>
-                              <button
-                                type="button"
-                                onClick={() => window.location.assign(selectedUpiUrl)}
-                                className="btn-premium btn-secondary whitespace-nowrap"
-                                disabled={!selectedUpiUrl}
-                              >
-                                <Smartphone size={16} /> Pay with UPI
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => copyText(paymentOffer.upi_vpa, 'UPI ID')}
-                                className="btn-premium btn-secondary whitespace-nowrap"
-                                disabled={!paymentOffer?.upi_vpa}
-                              >
-                                <Copy size={16} /> Copy UPI ID
-                              </button>
                             </div>
-
-                            {selectedUpiUrl ? (
-                              <>
-                                <div className="mt-4">
-                                  <label className="text-xs text-gray-500">UTR / reference (optional)</label>
-                                  <Input
-                                    className="input-premium mt-1 w-full text-sm"
-                                    value={utr}
-                                    onChange={(e) => setUtr(e.target.value)}
-                                    placeholder="e.g. transaction reference / UTR"
-                                  />
-                                </div>
-
-                                <button
-                                  type="button"
-                                  disabled={confirmingPay}
-                                  onClick={handleConfirmUpiPaid}
-                                  className="btn-premium btn-secondary whitespace-nowrap w-full mt-3"
-                                >
-                                  {confirmingPay ? 'Saving…' : "I've completed payment"}
-                                </button>
-                                <p className="text-[11px] text-gray-500 mt-2">
-                                  After confirmation, your subscription will be extended.
-                                </p>
-                              </>
-                            ) : (
-                              <p className="text-[11px] text-amber-200/80 mt-3">
-                                UPI is pending admin approval. Use Razorpay to extend immediately.
-                              </p>
-                            )}
                           </div>
                         ) : (
-                          <div className="text-xs text-amber-200/80">
-                            Only the business owner can confirm payment here.
-                          </div>
+                          <div className="text-xs text-amber-200/80">Only the business owner can pay here.</div>
                         )}
                       </div>
                     </>

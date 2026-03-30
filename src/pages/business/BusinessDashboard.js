@@ -39,8 +39,6 @@ export default function BusinessDashboard() {
   const [showUpgrade, setShowUpgrade] = useState(false);
   const [paymentOffer, setPaymentOffer] = useState(null);
   const [payOfferLoading, setPayOfferLoading] = useState(true);
-  const [utr, setUtr] = useState('');
-  const [confirmingPay, setConfirmingPay] = useState(false);
   const [razorpayBusy, setRazorpayBusy] = useState(false);
 
   const enabledModules = useMemo(() => parseEnabledModules(business), [business]);
@@ -71,48 +69,15 @@ export default function BusinessDashboard() {
 
   const s = data?.stats || {};
   const isTrialOrExpired = ['trial', 'expired', 'suspended'].includes((business?.status || '').toLowerCase());
-  const upiId = paymentOffer?.upi_vpa || process.env.REACT_APP_UPI_ID || 'anirudhsaini85-2@okaxis';
-  const upiName = paymentOffer?.payee_name || process.env.REACT_APP_UPI_NAME || 'Anirudh Saini';
   const amount =
-    billingCycle === 'yearly' ? paymentOffer?.yearly_payable_amount : paymentOffer?.monthly_payable_amount;
+    billingCycle === 'yearly'
+      ? paymentOffer?.yearly_payable_amount ?? 399 * 12
+      : paymentOffer?.monthly_payable_amount ?? 499;
   const monthlyTotalYearlyEquivalent = 499 * 12;
   const yearlySavings = monthlyTotalYearlyEquivalent - (399 * 12);
   const yearlySavingsPct = Math.round((yearlySavings / monthlyTotalYearlyEquivalent) * 100);
   const planLabel = billingCycle === 'yearly' ? 'Yearly (399x12)' : 'Monthly (499)';
   const paymentNote = paymentOffer?.payment_note || `NexaERP ${planLabel} - ${business?.name || 'Business'} - ${business?.id || ''}`;
-  const selectedUpiUrl = billingCycle === 'yearly' ? paymentOffer?.yearly_upi_url : paymentOffer?.monthly_upi_url;
-  const upiUrl = selectedUpiUrl || null;
-  const qrUrl = upiUrl
-    ? `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(upiUrl)}`
-    : null;
-
-  const handlePayNow = () => {
-    if (!upiUrl) {
-      window.alert('UPI payment is not available right now. If a cash/UPI payment is pending admin approval, wait for it to complete.');
-      return;
-    }
-    window.location.assign(upiUrl);
-  };
-
-  const handleConfirmUpiPaid = async () => {
-    if (user?.role !== 'business_owner') {
-      toast.error('Only the business owner can confirm payment.');
-      return;
-    }
-    setConfirmingPay(true);
-    try {
-      await api.post('/subscription/confirm-upi-paid', { utr: utr.trim() || undefined, billing_cycle: billingCycle });
-      toast.success('Payment submitted. Admin will review and activate within ~30 minutes.');
-      setUtr('');
-      const offer = await api.get('/subscription/payment-offer');
-      setPaymentOffer(offer.data);
-      await refreshUser();
-    } catch (e) {
-      const d = e.response?.data?.detail;
-      toast.error(typeof d === 'string' ? d : (e.response?.data?.message || 'Could not confirm payment'));
-    }
-    setConfirmingPay(false);
-  };
 
   const canPayWithRazorpay =
     Boolean(paymentOffer?.razorpay_enabled) &&
@@ -230,7 +195,7 @@ export default function BusinessDashboard() {
     <DashboardLayout>
       <div className="space-y-6" data-testid="business-dashboard">
         {!payOfferLoading &&
-          (paymentOffer?.upi_eligible || paymentOffer?.razorpay_eligible) &&
+          paymentOffer?.razorpay_eligible &&
           (paymentOffer?.can_pay_monthly || paymentOffer?.can_pay_yearly) && (
           <div className="glass-card rounded-2xl p-4 border border-emerald-500/30 bg-gradient-to-r from-emerald-500/10 to-gold-500/5">
             <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
@@ -266,7 +231,7 @@ export default function BusinessDashboard() {
                       <> — extends access by <span className="text-gray-200">{paymentOffer.renewal_extend_days}</span> days after you confirm.</>
                     )}
                     {' '}
-                    Razorpay extends immediately. UPI requires confirmation/admin review.
+                    Razorpay extends immediately after verification.
                   </p>
                 </div>
               </div>
@@ -279,60 +244,13 @@ export default function BusinessDashboard() {
                 >
                   <CreditCard size={16} /> {razorpayBusy ? 'Processing…' : 'Pay with Razorpay'}
                 </button>
-                <button type="button" onClick={handlePayNow} className="btn-premium btn-secondary whitespace-nowrap" disabled={!upiUrl}>
-                  <Smartphone size={16} /> Pay with UPI
-                </button>
-                <button
-                  type="button"
-                  onClick={() => copyText(paymentOffer.upi_vpa, 'UPI ID')}
-                  className="btn-premium btn-secondary whitespace-nowrap"
-                  disabled={!paymentOffer?.upi_vpa}
-                >
-                  <Copy size={16} /> Copy UPI ID
-                </button>
               </div>
             </div>
-            <div className="mt-4 grid md:grid-cols-3 gap-3 items-start">
-              <div className="md:col-span-2 bg-white/[0.03] border border-white/10 rounded-xl p-3">
-                {upiUrl ? (
-                  <>
-                    <div className="flex items-center gap-2 text-gray-300 mb-2">
-                      <QrCode size={16} className="text-gold-400" />
-                      <span className="text-sm">Scan & pay</span>
-                    </div>
-                    <img src={qrUrl} alt="UPI QR" className="w-44 h-44 rounded-xl bg-white p-2" />
-                  </>
-                ) : (
-                  <p className="text-sm text-amber-200/90">
-                    UPI option may be temporarily disabled (e.g. pending admin approval). Use Razorpay to extend immediately.
-                  </p>
-                )}
-              </div>
+            <div className="mt-4 pt-3 border-t border-white/10">
+              <p className="text-xs text-gray-400">
+                Razorpay extends immediately after successful payment verification.
+              </p>
             </div>
-            {user?.role === 'business_owner' && upiUrl && (
-              <div className="mt-4 pt-4 border-t border-white/10 flex flex-col sm:flex-row gap-3 sm:items-end">
-                <div className="flex-1">
-                  <label className="text-xs text-gray-500">UTR / reference (optional)</label>
-                  <input
-                    className="input-premium mt-1 w-full text-sm"
-                    value={utr}
-                    onChange={(e) => setUtr(e.target.value)}
-                    placeholder="e.g. bank reference number"
-                  />
-                </div>
-                <button
-                  type="button"
-                  disabled={confirmingPay}
-                  onClick={handleConfirmUpiPaid}
-                  className="btn-premium btn-secondary whitespace-nowrap h-[42px]"
-                >
-                  {confirmingPay ? 'Saving…' : "I've completed payment"}
-                </button>
-              </div>
-            )}
-            {user?.role !== 'business_owner' && (
-              <p className="text-xs text-amber-200/80 mt-3">Ask the business owner to open this page and confirm after paying.</p>
-            )}
           </div>
         )}
 
@@ -443,7 +361,9 @@ export default function BusinessDashboard() {
           </DialogHeader>
           <div className="grid lg:grid-cols-2 gap-5 mt-2">
             <div className="space-y-4">
-              <p className="text-gray-400 text-sm">Choose a billing plan and pay directly via UPI. After payment, share transaction ID with support/admin for instant activation.</p>
+              <p className="text-gray-400 text-sm">
+                Choose a billing plan and pay securely via Razorpay. After payment verification, your subscription will extend immediately.
+              </p>
               <div className="flex gap-2">
                 <button
                   type="button"
@@ -483,11 +403,12 @@ export default function BusinessDashboard() {
                 <p className="text-xs text-gray-500 mt-1">{planLabel}</p>
               </div>
               <div className="flex gap-2">
-                <button onClick={handlePayNow} className="btn-premium btn-primary flex-1">
-                  <Smartphone size={16} /> Open UPI App
-                </button>
-                <button onClick={() => copyText(upiId, 'UPI ID')} className="btn-premium btn-secondary flex-1">
-                  <Copy size={16} /> Copy UPI ID
+                <button
+                  onClick={handlePayWithRazorpay}
+                  className="btn-premium btn-primary flex-1"
+                  disabled={!canPayWithRazorpay || razorpayBusy}
+                >
+                  <CreditCard size={16} /> {razorpayBusy ? 'Processing…' : 'Pay with Razorpay'}
                 </button>
               </div>
               <button onClick={() => copyText(paymentNote, 'Payment note')} className="w-full text-xs text-gray-400 hover:text-gray-300">
@@ -532,11 +453,12 @@ export default function BusinessDashboard() {
             </div>
             <div className="glass-card rounded-xl p-4 border border-white/10 flex flex-col items-center">
               <div className="flex items-center gap-2 text-gray-300 mb-3">
-                <QrCode size={16} className="text-gold-400" />
-                <span className="text-sm">Scan QR and pay</span>
+                <CreditCard size={16} className="text-gold-400" />
+                <span className="text-sm">Razorpay checkout</span>
               </div>
-              <img src={qrUrl} alt="UPI QR for payment" className="w-52 h-52 rounded-xl bg-white p-2" />
-              <p className="text-xs text-gray-500 mt-3 text-center">UPI: {upiId}<br />Name: {upiName}</p>
+              <p className="text-xs text-gray-500 mt-2 text-center">
+                After successful payment verification, subscription access is extended automatically.
+              </p>
               <div className="w-full mt-4 pt-4 border-t border-white/10 grid grid-cols-3 gap-2">
                 <div className="text-center">
                   <ShieldCheck size={14} className="mx-auto text-emerald-400 mb-1" />
