@@ -199,6 +199,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   const endImpersonation = async () => {
+    const localOriginalAdminToken = localStorage.getItem('original_admin_token');
     try {
       const response = await api.post('/super-admin/end-impersonation');
       const { access_token } = response.data;
@@ -208,6 +209,18 @@ export const AuthProvider = ({ children }) => {
       return true;
     } catch (error) {
       console.error('End impersonation failed:', error);
+      // Fallback: restore original admin session from local token when API rejects
+      // (e.g. impersonation claims lost after token refresh).
+      if (localOriginalAdminToken) {
+        try {
+          localStorage.setItem('access_token', localOriginalAdminToken);
+          localStorage.removeItem('original_admin_token');
+          await fetchUser();
+          return true;
+        } catch (fallbackError) {
+          console.error('End impersonation fallback failed:', fallbackError);
+        }
+      }
       return false;
     }
   };
