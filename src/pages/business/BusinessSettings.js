@@ -253,15 +253,17 @@ export default function BusinessSettings() {
 
   const sub = data?.subscription || {};
   const selectedAmount =
-    selectedBillingCycle === 'yearly' ? paymentOffer?.yearly_payable_amount : paymentOffer?.monthly_payable_amount;
+    selectedBillingCycle === 'yearly'
+      ? paymentOffer?.yearly_payable_amount ?? 4788
+      : paymentOffer?.monthly_payable_amount ?? 499;
   const selectedExtendDays =
     selectedBillingCycle === 'yearly'
-      ? paymentOffer?.renewal_extend_days_yearly
-      : paymentOffer?.renewal_extend_days;
+      ? paymentOffer?.renewal_extend_days_yearly ?? 360
+      : paymentOffer?.renewal_extend_days ?? 30;
   const yearlyBasePerMonth =
     paymentOffer?.yearly_payable_amount && paymentOffer.yearly_payable_amount > 0
       ? Math.round((paymentOffer.yearly_payable_amount / 12) * 100) / 100
-      : 0;
+      : 399;
 
   const canPayWithRazorpay =
     Boolean(paymentOffer?.razorpay_enabled) &&
@@ -366,8 +368,8 @@ export default function BusinessSettings() {
                       <div className="flex items-start justify-between gap-3">
                         <div>
                           <p className="text-xs text-gray-400">Monthly</p>
-                          <p className="text-lg font-bold text-white mt-0.5">{fmt(paymentOffer.monthly_payable_amount)}</p>
-                          <p className="text-[11px] text-gray-400 mt-1">+{paymentOffer.renewal_extend_days} days</p>
+                            <p className="text-lg font-bold text-white mt-0.5">{fmt(paymentOffer.monthly_payable_amount ?? 499)}</p>
+                            <p className="text-[11px] text-gray-400 mt-1">+{paymentOffer.renewal_extend_days ?? 30} days</p>
                         </div>
                         {selectedBillingCycle === "monthly" ? (
                           <span className="inline-flex items-center rounded-full border border-[#d4a017]/50 bg-[#d4a017]/10 px-2 py-1 text-[11px] font-bold text-[#d4a017]">
@@ -418,16 +420,16 @@ export default function BusinessSettings() {
                             {fmt(yearlyBasePerMonth)} <span className="text-[12px] text-gray-400 font-semibold">/ month</span>
                           </p>
                           <p className="text-[11px] text-gray-400 mt-1">
-                            x12 = {fmt(paymentOffer.yearly_payable_amount)} • +{paymentOffer.renewal_extend_days_yearly} days
+                            x12 = {fmt(paymentOffer.yearly_payable_amount ?? 4788)} • +{paymentOffer.renewal_extend_days_yearly ?? 360} days
                           </p>
                         </div>
                       </div>
 
                       {/* Savings */}
-                      {Number(paymentOffer.monthly_payable_amount || 0) > 0 && Number(paymentOffer.yearly_payable_amount || 0) > 0 ? (
+                      {Number(paymentOffer.monthly_payable_amount ?? 499) > 0 && Number(paymentOffer.yearly_payable_amount ?? 4788) > 0 ? (
                         (() => {
-                          const monthly12 = Number(paymentOffer.monthly_payable_amount) * 12;
-                          const yearlyTotal = Number(paymentOffer.yearly_payable_amount);
+                          const monthly12 = Number(paymentOffer.monthly_payable_amount ?? 499) * 12;
+                          const yearlyTotal = Number(paymentOffer.yearly_payable_amount ?? 4788);
                           const savings = Math.max(0, monthly12 - yearlyTotal);
                           const savingsPct = monthly12 > 0 ? Math.round((savings / monthly12) * 100) : 0;
                           return (
