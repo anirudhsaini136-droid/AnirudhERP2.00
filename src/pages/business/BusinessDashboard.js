@@ -32,11 +32,15 @@ const QUICK_ACCESS = [
 ];
 
 export default function BusinessDashboard() {
-  const { api, business } = useAuth();
+  const { api, business, user, refreshUser } = useAuth();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [billingCycle, setBillingCycle] = useState('yearly');
   const [showUpgrade, setShowUpgrade] = useState(false);
+  const [paymentOffer, setPaymentOffer] = useState(null);
+  const [payOfferLoading, setPayOfferLoading] = useState(true);
+  const [utr, setUtr] = useState('');
+  const [confirmingPay, setConfirmingPay] = useState(false);
 
   const enabledModules = useMemo(() => parseEnabledModules(business), [business]);
   const canNav = (path) =>
@@ -48,27 +52,64 @@ export default function BusinessDashboard() {
     api.get('/dashboard').then(r => setData(r.data)).catch(() => {}).finally(() => setLoading(false));
   }, [api]);
 
+  useEffect(() => {
+    if (!business?.id || user?.role === 'super_admin') {
+      setPaymentOffer(null);
+      setPayOfferLoading(false);
+      return;
+    }
+    setPayOfferLoading(true);
+    api
+      .get('/subscription/payment-offer')
+      .then((r) => setPaymentOffer(r.data))
+      .catch(() => setPaymentOffer(null))
+      .finally(() => setPayOfferLoading(false));
+  }, [api, business?.id, user?.role]);
+
   if (loading) return <DashboardLayout><div className="flex items-center justify-center h-64"><div className="w-8 h-8 border-2 border-gold-500 border-t-transparent rounded-full animate-spin" /></div></DashboardLayout>;
 
   const s = data?.stats || {};
   const isTrialOrExpired = ['trial', 'expired', 'suspended'].includes((business?.status || '').toLowerCase());
-  const upiId = process.env.REACT_APP_UPI_ID || 'anirudhsaini85-2@okaxis';
-  const upiName = process.env.REACT_APP_UPI_NAME || 'Anirudh Saini';
-  const amount = billingCycle === 'yearly' ? 399 * 12 : 499;
+  const upiId = paymentOffer?.upi_vpa || process.env.REACT_APP_UPI_ID || 'anirudhsaini85-2@okaxis';
+  const upiName = paymentOffer?.payee_name || process.env.REACT_APP_UPI_NAME || 'Anirudh Saini';
+  const amount = paymentOffer?.eligible && paymentOffer?.payable_amount > 0
+    ? paymentOffer.payable_amount
+    : (billingCycle === 'yearly' ? 399 * 12 : 499);
   const monthlyTotalYearlyEquivalent = 499 * 12;
   const yearlySavings = monthlyTotalYearlyEquivalent - (399 * 12);
   const yearlySavingsPct = Math.round((yearlySavings / monthlyTotalYearlyEquivalent) * 100);
   const planLabel = billingCycle === 'yearly' ? 'Yearly (399x12)' : 'Monthly (499)';
-  const paymentNote = `NexaERP ${planLabel} - ${business?.name || 'Business'} - ${business?.id || ''}`;
-  const upiUrl = `upi://pay?pa=${encodeURIComponent(upiId)}&pn=${encodeURIComponent(upiName)}&am=${amount}&cu=INR&tn=${encodeURIComponent(paymentNote)}`;
+  const paymentNote = paymentOffer?.payment_note || `NexaERP ${planLabel} - ${business?.name || 'Business'} - ${business?.id || ''}`;
+  const upiUrl = paymentOffer?.upi_url
+    || `upi://pay?pa=${encodeURIComponent(upiId)}&pn=${encodeURIComponent(upiName)}&am=${amount}&cu=INR&tn=${encodeURIComponent(paymentNote)}`;
   const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(upiUrl)}`;
 
   const handlePayNow = () => {
     if (!upiId) {
-      window.alert('Payment UPI is not configured. Please set REACT_APP_UPI_ID in frontend env.');
+      window.alert('Payment UPI is not configured. Ask your administrator to set platform UPI in Super Admin → Platform settings (or REACT_APP_UPI_ID for legacy).');
       return;
     }
     window.location.assign(upiUrl);
+  };
+
+  const handleConfirmUpiPaid = async () => {
+    if (user?.role !== 'business_owner') {
+      toast.error('Only the business owner can confirm payment.');
+      return;
+    }
+    setConfirmingPay(true);
+    try {
+      await api.post('/subscription/confirm-upi-paid', { utr: utr.trim() || undefined });
+      toast.success('Subscription updated. Thank you!');
+      setUtr('');
+      const offer = await api.get('/subscription/payment-offer');
+      setPaymentOffer(offer.data);
+      await refreshUser();
+    } catch (e) {
+      const d = e.response?.data?.detail;
+      toast.error(typeof d === 'string' ? d : (e.response?.data?.message || 'Could not confirm payment'));
+    }
+    setConfirmingPay(false);
   };
 
   const copyText = async (value, label) => {
@@ -98,6 +139,61 @@ export default function BusinessDashboard() {
   return (
     <DashboardLayout>
       <div className="space-y-6" data-testid="business-dashboard">
+        {!payOfferLoading && paymentOffer?.eligible && paymentOffer?.upi_url && (
+          <div className="glass-card rounded-2xl p-4 border border-emerald-500/30 bg-gradient-to-r from-emerald-500/10 to-gold-500/5">
+            <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
+              <div className="flex items-start gap-3">
+                <div className="w-10 h-10 rounded-xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center shrink-0">
+                  <IndianRupee className="w-5 h-5 text-emerald-400" />
+                </div>
+                <div>
+                  <h2 className="font-display text-lg text-white">Renew subscription (UPI)</h2>
+                  <p className="text-sm text-gray-400 mt-1">
+                    Pay <span className="text-emerald-300 font-semibold">{fmt(paymentOffer.payable_amount)}</span>
+                    {paymentOffer.renewal_extend_days ? (
+                      <> — extends access by <span className="text-gray-200">{paymentOffer.renewal_extend_days}</span> days after you confirm.</>
+                    ) : null}
+                    {' '}
+                    Open your UPI app, complete the transfer, then confirm below so your subscription updates (honour-based; optional UTR helps reconciliation).
+                  </p>
+                </div>
+              </div>
+              <div className="flex flex-col sm:flex-row gap-2 shrink-0">
+                <button type="button" onClick={() => window.location.assign(paymentOffer.upi_url)} className="btn-premium btn-primary whitespace-nowrap">
+                  <Smartphone size={16} /> Pay with UPI
+                </button>
+                <button type="button" onClick={() => copyText(paymentOffer.upi_vpa, 'UPI ID')} className="btn-premium btn-secondary whitespace-nowrap">
+                  <Copy size={16} /> Copy UPI ID
+                </button>
+              </div>
+            </div>
+            {user?.role === 'business_owner' && (
+              <div className="mt-4 pt-4 border-t border-white/10 flex flex-col sm:flex-row gap-3 sm:items-end">
+                <div className="flex-1">
+                  <label className="text-xs text-gray-500">UTR / reference (optional)</label>
+                  <input
+                    className="input-premium mt-1 w-full text-sm"
+                    value={utr}
+                    onChange={(e) => setUtr(e.target.value)}
+                    placeholder="e.g. bank reference number"
+                  />
+                </div>
+                <button
+                  type="button"
+                  disabled={confirmingPay}
+                  onClick={handleConfirmUpiPaid}
+                  className="btn-premium btn-secondary whitespace-nowrap h-[42px]"
+                >
+                  {confirmingPay ? 'Saving…' : "I've completed payment"}
+                </button>
+              </div>
+            )}
+            {user?.role !== 'business_owner' && (
+              <p className="text-xs text-amber-200/80 mt-3">Ask the business owner to open this page and confirm after paying.</p>
+            )}
+          </div>
+        )}
+
         {isTrialOrExpired && (
           <div className="glass-card rounded-2xl p-4 border border-amber-500/30 bg-gradient-to-r from-amber-500/10 to-rose-500/5">
             <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">

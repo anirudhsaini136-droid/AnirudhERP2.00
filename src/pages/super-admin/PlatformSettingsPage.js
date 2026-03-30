@@ -25,6 +25,9 @@ export default function PlatformSettingsPage() {
 
   const settingFields = [
     { key: 'trial_days', label: 'Trial Duration (days)', type: 'number' },
+    { key: 'platform_upi_vpa', label: 'Platform UPI ID (VPA) for tenant renewals', type: 'text' },
+    { key: 'platform_upi_payee_name', label: 'Payee name shown in UPI app', type: 'text' },
+    { key: 'subscription_pay_before_days', label: 'Show pay CTA when expiry within (days)', type: 'number' },
     { key: 'starter_price_monthly', label: 'Starter Monthly Price (INR)', type: 'number' },
     { key: 'starter_price_yearly', label: 'Starter Yearly Price (INR)', type: 'number' },
     { key: 'growth_price_monthly', label: 'Growth Monthly Price (INR)', type: 'number' },

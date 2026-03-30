@@ -49,6 +49,10 @@ function ModulesEditor({ businessId, api, bizData, onRefresh }) {
     try { return JSON.parse(bizData?.modules || '[]'); } catch { return []; }
   });
   const [monthly, setMonthly] = React.useState(bizData?.monthly_amount || 0);
+  const [upiCollect, setUpiCollect] = React.useState(
+    bizData?.upi_collect_amount != null && bizData?.upi_collect_amount !== '' ? String(bizData.upi_collect_amount) : '',
+  );
+  const [renewExtendDays, setRenewExtendDays] = React.useState(bizData?.renewal_extend_days ?? 30);
   const [maxUsers, setMaxUsers] = React.useState(bizData?.max_users || 5);
   const [maxEmp, setMaxEmp] = React.useState(bizData?.max_employees || 10);
   const [maxInv, setMaxInv] = React.useState(bizData?.max_invoices_month || 100);
@@ -59,6 +63,10 @@ function ModulesEditor({ businessId, api, bizData, onRefresh }) {
     if (!bizData) return;
     try { setModules(JSON.parse(bizData.modules || '[]')); } catch { setModules([]); }
     setMonthly(bizData.monthly_amount != null && bizData.monthly_amount !== '' ? Number(bizData.monthly_amount) : 0);
+    setUpiCollect(
+      bizData.upi_collect_amount != null && bizData.upi_collect_amount !== '' ? String(bizData.upi_collect_amount) : '',
+    );
+    setRenewExtendDays(Number(bizData.renewal_extend_days) > 0 ? Number(bizData.renewal_extend_days) : 30);
     setMaxUsers(Number(bizData.max_users) || 5);
     setMaxEmp(Number(bizData.max_employees) || 10);
     setMaxInv(Number(bizData.max_invoices_month) || 100);
@@ -70,14 +78,21 @@ function ModulesEditor({ businessId, api, bizData, onRefresh }) {
   const save = async () => {
     setSaving(true);
     try {
-      await api.put(`/super-admin/businesses/${businessId}`, {
+      const payload = {
         modules: JSON.stringify(modules),
         monthly_amount: parseFloat(monthly) || 0,
+        renewal_extend_days: parseInt(renewExtendDays, 10) || 30,
         max_users: parseInt(maxUsers) || 5,
         max_employees: parseInt(maxEmp) || 10,
         max_invoices_month: parseInt(maxInv) || 100,
         max_products: parseInt(maxProd) || 50,
-      });
+      };
+      if (upiCollect.trim() !== '') {
+        payload.upi_collect_amount = parseFloat(upiCollect) || 0;
+      } else {
+        payload.upi_collect_amount = null;
+      }
+      await api.put(`/super-admin/businesses/${businessId}`, payload);
       onRefresh();
       alert('Saved successfully!');
     } catch(e) { alert('Failed to save: ' + (e.response?.data?.detail || e.message)); }
@@ -91,6 +106,18 @@ function ModulesEditor({ businessId, api, bizData, onRefresh }) {
           <label className="text-xs text-gray-400">Your monthly revenue from this business (₹)</label>
           <input type="number" className="input-premium mt-1 w-full" value={monthly} onChange={e => setMonthly(e.target.value)} min={0} step={1} />
           <p className="text-[10px] text-gray-600 mt-1">Counted in platform MRR. For active accounts, if this is 0 the plan list price is used instead.</p>
+        </div>
+        <div className="col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label className="text-xs text-gray-400">UPI collect amount (₹)</label>
+            <input type="number" className="input-premium mt-1 w-full" value={upiCollect} onChange={e => setUpiCollect(e.target.value)} min={0} step={1} placeholder="e.g. 200 (leave empty to use monthly amount)" />
+            <p className="text-[10px] text-gray-600 mt-1">Shown in the tenant pay flow. Empty = use monthly amount above when &gt; 0.</p>
+          </div>
+          <div>
+            <label className="text-xs text-gray-400">Days to extend on self-service UPI pay</label>
+            <input type="number" className="input-premium mt-1 w-full" value={renewExtendDays} onChange={e => setRenewExtendDays(e.target.value)} min={1} max={3650} step={1} />
+            <p className="text-[10px] text-gray-600 mt-1">Added to subscription end date when the owner confirms payment.</p>
+          </div>
         </div>
         <div><label className="text-xs text-gray-400">Max Users</label>
           <input type="number" className="input-premium mt-1 w-full" value={maxUsers} onChange={e => setMaxUsers(e.target.value)} /></div>

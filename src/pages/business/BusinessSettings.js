@@ -3,7 +3,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import DashboardLayout from '../../components/layout/DashboardLayout';
 import { Input } from '../../components/ui/input';
 import { Label } from '../../components/ui/label';
-import { Save, Building2, CreditCard, FileText, Landmark, BookOpen } from 'lucide-react';
+import { Save, Building2, CreditCard, FileText, Landmark, BookOpen, IndianRupee, QrCode, Smartphone, Copy } from 'lucide-react';
 import { toast } from 'sonner';
 
 const fmt = (n) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(n || 0);
@@ -21,12 +21,16 @@ const INDIAN_STATES = [
 ];
 
 export default function BusinessSettings() {
-  const { api, refreshUser } = useAuth();
+  const { api, refreshUser, user } = useAuth();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [savingInvoice, setSavingInvoice] = useState(false);
   const [savingBank, setSavingBank] = useState(false);
+  const [paymentOffer, setPaymentOffer] = useState(null);
+  const [payOfferLoading, setPayOfferLoading] = useState(true);
+  const [utr, setUtr] = useState('');
+  const [confirmingPay, setConfirmingPay] = useState(false);
 
   const [form, setForm] = useState({
     name: '', phone: '', address: '', city: '', country: '', state: ''
@@ -82,6 +86,51 @@ export default function BusinessSettings() {
       });
     }).catch(() => {}).finally(() => setLoading(false));
   }, [api]);
+
+  useEffect(() => {
+    if (!user?.business_id || user?.role === 'super_admin') {
+      setPaymentOffer(null);
+      setPayOfferLoading(false);
+      return;
+    }
+    setPayOfferLoading(true);
+    api
+      .get('/subscription/payment-offer')
+      .then((r) => setPaymentOffer(r.data))
+      .catch(() => setPaymentOffer(null))
+      .finally(() => setPayOfferLoading(false));
+  }, [api, user?.business_id, user?.role]);
+
+  const copyText = async (value, label) => {
+    try {
+      await navigator.clipboard.writeText(value);
+      toast.success(`${label} copied`);
+    } catch {
+      toast.error(`Failed to copy ${label.toLowerCase()}`);
+    }
+  };
+
+  const handleConfirmUpiPaid = async () => {
+    if (user?.role !== 'business_owner') {
+      toast.error('Only the business owner can confirm payment.');
+      return;
+    }
+    setConfirmingPay(true);
+    try {
+      await api.post('/subscription/confirm-upi-paid', { utr: utr.trim() || undefined });
+      toast.success('Subscription updated. Thank you!');
+      setUtr('');
+      const offer = await api.get('/subscription/payment-offer');
+      setPaymentOffer(offer.data);
+      const settings = await api.get('/dashboard/settings');
+      setData(settings.data);
+      await refreshUser();
+    } catch (e) {
+      const d = e.response?.data?.detail;
+      toast.error(typeof d === 'string' ? d : (e.response?.data?.message || 'Could not confirm payment'));
+    }
+    setConfirmingPay(false);
+  };
 
   const handleSave = async (e) => {
     e.preventDefault();
@@ -161,6 +210,98 @@ export default function BusinessSettings() {
               <p className="text-xs text-gray-500">Days Left</p>
               <p className={`text-sm font-semibold mt-0.5 ${sub.days_remaining <= 7 ? 'text-rose-400' : 'text-emerald-400'}`}>{sub.days_remaining}</p>
             </div>
+          </div>
+
+          <div className="mt-5 pt-4 border-t border-white/10">
+            {payOfferLoading ? (
+              <p className="text-xs text-gray-500">Loading payment options...</p>
+            ) : (
+              paymentOffer?.eligible &&
+              paymentOffer?.upi_url && (
+                <div className="space-y-4">
+                  <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-3">
+                    <div className="flex items-start gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center shrink-0">
+                        <IndianRupee className="w-5 h-5 text-emerald-400" />
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-500">Renew via UPI</p>
+                        <p className="text-lg font-semibold text-emerald-300 mt-1">
+                          Pay {fmt(paymentOffer.payable_amount)}
+                        </p>
+                        <p className="text-[11px] text-gray-400 mt-1">
+                          Complete payment in your UPI app, then confirm below (honour-based; optional UTR helps records).
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <button
+                        type="button"
+                        onClick={() => window.location.assign(paymentOffer.upi_url)}
+                        className="btn-premium btn-primary whitespace-nowrap"
+                        disabled={!paymentOffer?.upi_url}
+                      >
+                        <Smartphone size={16} /> Pay with UPI
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => copyText(paymentOffer.upi_vpa, 'UPI ID')}
+                        className="btn-premium btn-secondary whitespace-nowrap"
+                      >
+                        <Copy size={16} /> Copy UPI ID
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="grid md:grid-cols-2 gap-4 items-start">
+                    <div className="bg-white/[0.03] border border-white/10 rounded-xl p-3">
+                      <div className="flex items-center gap-2 text-gray-300 mb-2">
+                        <QrCode size={16} className="text-gold-400" />
+                        <span className="text-sm">Scan & pay</span>
+                      </div>
+                      <img
+                        src={`https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(paymentOffer.upi_url)}`}
+                        alt="UPI QR"
+                        className="w-56 h-56 rounded-xl bg-white p-2 mx-auto"
+                      />
+                      <p className="text-xs text-gray-500 mt-3 text-center break-all">
+                        UPI: {paymentOffer.upi_vpa}
+                        <br />
+                        Payee: {paymentOffer.payee_name || '-'}
+                      </p>
+                    </div>
+
+                    {user?.role === 'business_owner' ? (
+                      <div className="glass-card rounded-xl p-4 border border-white/10">
+                        <label className="text-xs text-gray-500">UTR / reference (optional)</label>
+                        <Input
+                          className="input-premium mt-1 w-full text-sm"
+                          value={utr}
+                          onChange={(e) => setUtr(e.target.value)}
+                          placeholder="e.g. transaction reference / UTR"
+                        />
+                        <button
+                          type="button"
+                          disabled={confirmingPay}
+                          onClick={handleConfirmUpiPaid}
+                          className="btn-premium btn-secondary whitespace-nowrap w-full mt-3"
+                        >
+                          {confirmingPay ? 'Saving…' : "I've completed payment"}
+                        </button>
+                        <p className="text-[11px] text-gray-500 mt-2">
+                          After you click confirm, your subscription will be extended.
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="text-xs text-amber-200/80">
+                        Only the business owner can confirm payment here.
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )
+            )}
           </div>
         </div>
 
