@@ -21,15 +21,15 @@ export function makeScreenStyles(T) {
   const shadow = T.mode === "light" ? shLight : shDark;
   return StyleSheet.create({
     flex: { flex: 1 },
-    scrollContent: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 40 },
-    title: { color: T.textPrimary, fontSize: 26, fontWeight: "800", marginBottom: 6, letterSpacing: -0.6 },
-    subtitle: { color: T.textSecondary, fontSize: 14, lineHeight: 20, marginBottom: 4 },
+    scrollContent: { paddingHorizontal: 20, paddingTop: 16, paddingBottom: 48 },
+    title: { color: T.textPrimary, fontSize: 28, fontWeight: "900", marginBottom: 6, letterSpacing: -0.7 },
+    subtitle: { color: T.textSecondary, fontSize: 15, lineHeight: 21, marginBottom: 4 },
     card: {
       backgroundColor: T.cardBg,
       borderRadius: 18,
       padding: 16,
       marginBottom: 14,
-      borderWidth: 1,
+      borderWidth: 1.5,
       borderColor: T.border,
       ...shadow,
     },
@@ -39,8 +39,8 @@ export function makeScreenStyles(T) {
     muted: { color: T.textMuted, fontSize: 12, lineHeight: 17 },
     sectionTitle: {
       color: T.textPrimary,
-      fontSize: 17,
-      fontWeight: "700",
+      fontSize: 18,
+      fontWeight: "800",
       marginTop: 20,
       marginBottom: 12,
       letterSpacing: -0.2,
@@ -107,16 +107,16 @@ export const S = /** @type {any} */ ({});
 
 Object.defineProperties(S, {
   flex: { get: () => ({ flex: 1 }) },
-  scrollContent: { get: () => ({ paddingHorizontal: 16, paddingTop: 12, paddingBottom: 40 }) },
-  title: { get: () => ({ color: Tokens.textPrimary, fontSize: 26, fontWeight: "800", marginBottom: 6, letterSpacing: -0.6 }) },
-  subtitle: { get: () => ({ color: Tokens.textSecondary, fontSize: 14, lineHeight: 20, marginBottom: 4 }) },
+  scrollContent: { get: () => ({ paddingHorizontal: 20, paddingTop: 16, paddingBottom: 48 }) },
+  title: { get: () => ({ color: Tokens.textPrimary, fontSize: 28, fontWeight: "900", marginBottom: 6, letterSpacing: -0.7 }) },
+  subtitle: { get: () => ({ color: Tokens.textSecondary, fontSize: 15, lineHeight: 21, marginBottom: 4 }) },
   card: {
     get: () => ({
       backgroundColor: Tokens.cardBg,
       borderRadius: 16,
       padding: 16,
       marginBottom: 14,
-      borderWidth: 1,
+      borderWidth: 1.5,
       borderColor: Tokens.border,
       ...(Tokens.mode === "light"
         ? {
@@ -142,8 +142,8 @@ Object.defineProperties(S, {
   sectionTitle: {
     get: () => ({
       color: Tokens.textPrimary,
-      fontSize: 17,
-      fontWeight: "700",
+      fontSize: 18,
+      fontWeight: "800",
       marginTop: 20,
       marginBottom: 12,
       letterSpacing: -0.2,

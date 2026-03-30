@@ -40,6 +40,17 @@ export default function WebSidebar() {
   const insets = useSafeAreaInsets();
   const slide = React.useRef(new Animated.Value(0)).current;
 
+  const initialsFrom = (value) => {
+    const s = String(value || "").trim();
+    if (!s) return "U";
+    const parts = s.split(/\s+/).filter(Boolean);
+    const a = parts[0]?.[0] || "U";
+    const b = parts.length > 1 ? parts[parts.length - 1]?.[0] : (parts[0]?.[1] || "");
+    return String(a + b).toUpperCase().slice(0, 2);
+  };
+
+  const bizInitials = initialsFrom(business?.name);
+
   React.useEffect(() => {
     Animated.timing(slide, {
       toValue: drawerOpen ? 1 : 0,
@@ -135,7 +146,7 @@ export default function WebSidebar() {
                 >
                   <Text style={[styles.navLabel, active && styles.navLabelActive]}>{item.label}</Text>
                   {item.trialLocked ? (
-                    <Text style={{ color: "#f59e0b", fontSize: 11, fontWeight: "700" }}>LOCK</Text>
+                    <Text style={styles.lockText}>LOCK</Text>
                   ) : null}
                   {!item.trialLocked && item.newBadge && !active ? (
                     <View style={styles.newPill}>
@@ -152,13 +163,18 @@ export default function WebSidebar() {
 
           {business ? (
             <View style={styles.bizFoot}>
-              <Text style={styles.bizName} numberOfLines={1}>
-                {business.name}
-              </Text>
-              <Text style={styles.bizPlan}>
-                {(business.plan || "").toUpperCase()}
-                {business.days_remaining != null ? ` · ${business.days_remaining}d left` : ""}
-              </Text>
+              <View style={styles.bizAvatar}>
+                <Text style={styles.bizAvatarTx}>{bizInitials}</Text>
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.bizName} numberOfLines={1}>
+                  {business.name}
+                </Text>
+                <Text style={styles.bizPlan}>
+                  {(business.plan || "").toUpperCase()}
+                  {business.days_remaining != null ? ` · ${business.days_remaining}d left` : ""}
+                </Text>
+              </View>
             </View>
           ) : null}
 
@@ -187,14 +203,14 @@ function makeStyles(T) {
     },
     logoRow: { flexDirection: "row", alignItems: "center", paddingHorizontal: 8, marginBottom: 16 },
     logoBadge: {
-      width: 32,
-      height: 32,
-      borderRadius: 8,
+      width: 40,
+      height: 40,
+      borderRadius: 12,
       backgroundColor: T.gold,
       alignItems: "center",
       justifyContent: "center",
     },
-    logoLetter: { color: "#111", fontWeight: "900", fontSize: 14 },
+    logoLetter: { color: "#111", fontWeight: "900", fontSize: 16 },
     logoText: { color: T.textPrimary, fontSize: 18, fontWeight: "700", marginLeft: 10, letterSpacing: -0.3 },
     roleBadge: {
       marginHorizontal: 4,
@@ -210,13 +226,17 @@ function makeStyles(T) {
     impersonationBanner: {
       marginHorizontal: 4,
       marginBottom: 12,
-      padding: 12,
+      paddingVertical: 12,
+      paddingHorizontal: 12,
+      paddingLeft: 14,
       borderRadius: 14,
-      backgroundColor: "rgba(212,175,55,0.1)",
+      backgroundColor: "transparent",
+      borderLeftWidth: 4,
+      borderLeftColor: T.gold,
       borderWidth: 1,
-      borderColor: "rgba(212,175,55,0.22)",
+      borderColor: "rgba(212,175,55,0.18)",
     },
-    impersonationTitle: { color: T.gold, fontSize: 10, fontWeight: "800", letterSpacing: 0.8 },
+    impersonationTitle: { color: T.gold, fontSize: 11, fontWeight: "900", letterSpacing: 1.0 },
     impersonationBiz: { color: T.textPrimary, fontSize: 14, fontWeight: "700", marginTop: 6 },
     impersonationBtn: {
       marginTop: 12,
@@ -230,14 +250,14 @@ function makeStyles(T) {
     navRow: {
       flexDirection: "row",
       alignItems: "center",
-      paddingVertical: 12,
-      paddingHorizontal: 12,
+      paddingVertical: 13,
+      paddingHorizontal: 14,
       borderRadius: 12,
       marginBottom: 4,
     },
     navRowActive: {
       backgroundColor: "rgba(212,175,55,0.12)",
-      borderLeftWidth: 2,
+      borderLeftWidth: 3,
       borderLeftColor: T.gold,
     },
     navLabel: { color: T.textSecondary, fontSize: 14, fontWeight: "600", flex: 1 },
@@ -254,21 +274,41 @@ function makeStyles(T) {
     navRowMuted: { paddingVertical: 12, paddingHorizontal: 12, marginTop: 8 },
     navLabelMuted: { color: T.textMuted, fontSize: 13 },
     bizFoot: {
-      borderTopWidth: 1,
-      borderTopColor: T.mode === "light" ? "rgba(15,23,42,0.08)" : "rgba(255,255,255,0.06)",
-      paddingTop: 12,
-      paddingHorizontal: 8,
+      marginHorizontal: 4,
+      marginTop: 10,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 10,
+      borderWidth: 1,
+      borderColor: T.mode === "light" ? "rgba(15,23,42,0.08)" : "rgba(255,255,255,0.06)",
+      backgroundColor: T.mode === "light" ? "rgba(15,23,42,0.02)" : "rgba(255,255,255,0.03)",
+      borderRadius: 16,
+      paddingVertical: 12,
+      paddingHorizontal: 12,
     },
-    bizName: { color: T.textSecondary, fontSize: 12 },
+    bizAvatar: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      backgroundColor: "rgba(212,175,55,0.16)",
+      borderWidth: 1,
+      borderColor: "rgba(212,175,55,0.28)",
+      alignItems: "center",
+      justifyContent: "center",
+      overflow: "hidden",
+    },
+    bizAvatarTx: { color: T.gold, fontWeight: "900", fontSize: 12 },
+    bizName: { color: T.textSecondary, fontSize: 13, fontWeight: "800" },
     bizPlan: { color: T.textMuted, fontSize: 11, marginTop: 4 },
+    lockText: { color: T.textMuted, fontSize: 10, fontWeight: "800", letterSpacing: 0.4 },
     logout: {
       marginTop: 12,
       paddingVertical: 14,
       alignItems: "center",
       borderRadius: 12,
-      backgroundColor: "rgba(244,63,94,0.08)",
+      backgroundColor: "transparent",
       borderWidth: 1,
-      borderColor: "rgba(244,63,94,0.2)",
+      borderColor: "rgba(244,63,94,0.38)",
     },
     logoutText: { color: T.rose, fontWeight: "700" },
   });

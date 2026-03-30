@@ -177,7 +177,21 @@ export default function LoginScreen() {
                 value={password}
                 onChangeText={setPassword}
               />
-              <PrimaryButton title={loading ? "Signing in…" : "Sign in"} onPress={handleLogin} disabled={loading} />
+              <Pressable
+                onPress={handleLogin}
+                disabled={loading}
+                style={({ pressed }) => [
+                  styles.gradBtn,
+                  pressed && !loading ? { transform: [{ scale: 0.99 }] } : null,
+                  loading ? { opacity: 0.55 } : null,
+                ]}
+              >
+                <View style={styles.gradBtnBg} pointerEvents="none">
+                  <View style={styles.gradLeft} />
+                  <View style={styles.gradRight} />
+                </View>
+                <Text style={styles.gradBtnTx}>{loading ? "Signing in…" : "Sign in"}</Text>
+              </Pressable>
             </>
           ) : (
             <>
@@ -563,6 +577,47 @@ function makeStyles() {
       marginBottom: 14,
     },
     emailEmphasis: { color: T.gold, fontWeight: "700" },
+
+    // Gold gradient-ish button (no extra native gradient dependency)
+    gradBtn: {
+      marginTop: 10,
+      width: "100%",
+      borderRadius: 16,
+      alignItems: "center",
+      justifyContent: "center",
+      paddingVertical: 16,
+      backgroundColor: T.gold,
+      overflow: "hidden",
+      borderWidth: 1,
+      borderColor: T.goldMuted,
+      shadowColor: T.gold,
+      shadowOpacity: 0.28,
+      shadowRadius: 18,
+      elevation: 10,
+    },
+    gradBtnBg: { ...StyleSheet.absoluteFillObject, pointerEvents: "none" },
+    gradLeft: {
+      position: "absolute",
+      left: -40,
+      top: -60,
+      width: 140,
+      height: 180,
+      backgroundColor: T.goldMuted,
+      opacity: 0.35,
+      transform: [{ rotate: "-10deg" }],
+    },
+    gradRight: {
+      position: "absolute",
+      right: -50,
+      bottom: -80,
+      width: 160,
+      height: 220,
+      backgroundColor: T.goldMuted,
+      opacity: 0.22,
+      transform: [{ rotate: "12deg" }],
+    },
+    gradBtnTx: { color: T.abyss, fontWeight: "900", fontSize: 16 },
+
     rememberRow: {
       flexDirection: "row",
       alignItems: "center",

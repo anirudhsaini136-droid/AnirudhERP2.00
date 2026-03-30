@@ -1,5 +1,6 @@
-import React, { useCallback, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  Animated,
   Alert,
   Modal,
   RefreshControl,
@@ -10,10 +11,11 @@ import {
   View,
 } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
-import { getDashboardSettings, putDashboardInvoiceSettings, putDashboardSettings } from "../api";
+import { getDashboardSettings, getSubscriptionPaymentOffer, postPaymentsCreateOrder, postPaymentsVerify, putDashboardInvoiceSettings, putDashboardSettings } from "../api";
 import { HeroBand, PageHeader, PrimaryButton, SecondaryButton } from "../components/NexaUi";
 import * as T from "../theme/tokens";
 import { S } from "../theme/screenStyles";
+import RazorpayCheckout from "react-native-razorpay";
 
 const INDIAN_STATES = [
   "Andhra Pradesh",
@@ -60,6 +62,27 @@ export default function BusinessSettingsScreen() {
   const [savingProfile, setSavingProfile] = useState(false);
   const [savingInvoice, setSavingInvoice] = useState(false);
   const [savingBank, setSavingBank] = useState(false);
+  const [paymentOffer, setPaymentOffer] = useState(null);
+  const [payOfferLoading, setPayOfferLoading] = useState(false);
+  const [selectedBillingCycle, setSelectedBillingCycle] = useState("monthly"); // 'monthly' | 'yearly'
+  const [razorpayBusy, setRazorpayBusy] = useState(false);
+  const [toggleW, setToggleW] = useState(0);
+  const toggleAnim = useRef(new Animated.Value(0)).current;
+  const togglePad = 4;
+  const highlightW = Math.max(0, (toggleW - togglePad * 2) / 2);
+  const highlightTranslateX = toggleAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, highlightW],
+  });
+
+  useEffect(() => {
+    Animated.spring(toggleAnim, {
+      toValue: selectedBillingCycle === "yearly" ? 1 : 0,
+      useNativeDriver: true,
+      speed: 14,
+      bounciness: 2,
+    }).start();
+  }, [selectedBillingCycle, toggleAnim]);
 
   const [statePickerOpen, setStatePickerOpen] = useState(false);
 
@@ -122,6 +145,17 @@ export default function BusinessSettingsScreen() {
         invoice_bank_account: b.invoice_bank_account || "",
         invoice_bank_ifsc: b.invoice_bank_ifsc || "",
       });
+
+      // Razorpay order eligibility + amounts for subscription extension
+      try {
+        setPayOfferLoading(true);
+        const offer = await getSubscriptionPaymentOffer();
+        setPaymentOffer(offer);
+      } catch {
+        setPaymentOffer(null);
+      } finally {
+        setPayOfferLoading(false);
+      }
     } catch (e) {
       Alert.alert("Settings", e.message);
     } finally {
@@ -135,6 +169,75 @@ export default function BusinessSettingsScreen() {
     }, [load])
   );
 
+  const selectedAmount =
+    selectedBillingCycle === "yearly" ? paymentOffer?.yearly_payable_amount : paymentOffer?.monthly_payable_amount;
+  const selectedExtendDays =
+    selectedBillingCycle === "yearly" ? paymentOffer?.renewal_extend_days_yearly : paymentOffer?.renewal_extend_days;
+  const canPayWithRazorpay =
+    Boolean(paymentOffer?.razorpay_enabled) &&
+    Boolean(paymentOffer?.razorpay_eligible) &&
+    Number(selectedAmount || 0) > 0 &&
+    (selectedBillingCycle === "yearly" ? paymentOffer?.can_pay_yearly : paymentOffer?.can_pay_monthly);
+
+  const handlePayWithRazorpay = async () => {
+    if (!canPayWithRazorpay) {
+      Alert.alert("Payment", "Razorpay payment is not available right now.");
+      return;
+    }
+    try {
+      setRazorpayBusy(true);
+
+      const orderRes = await postPaymentsCreateOrder({ billing_cycle: selectedBillingCycle });
+      const order = orderRes;
+
+      const key = paymentOffer?.razorpay_key_id;
+      if (!key) throw new Error("Razorpay key not configured");
+
+      RazorpayCheckout.open({
+        key,
+        amount: order.amount,
+        currency: order.currency,
+        name: "NexaERP",
+        description: paymentOffer?.payment_note || "Subscription extension",
+        order_id: order.order_id,
+        prefill: {
+          name: data?.business?.owner_name || data?.business?.name || "Business",
+          email: "",
+          contact: "",
+        },
+        theme: { color: "#C9A84C" },
+      })
+        .then(async (resp) => {
+          try {
+            if (!resp?.razorpay_signature) {
+              throw new Error("Razorpay signature missing from payment response");
+            }
+            const verifyRes = await postPaymentsVerify({
+              razorpay_payment_id: resp.razorpay_payment_id,
+              razorpay_order_id: resp.razorpay_order_id,
+              razorpay_signature: resp.razorpay_signature,
+              billing_cycle: selectedBillingCycle,
+            });
+
+            const expiry = verifyRes?.new_expiry_date ? new Date(verifyRes.new_expiry_date).toLocaleDateString("en-IN") : null;
+            Alert.alert("Payment successful", expiry ? `Subscription extended till ${expiry}` : "Subscription extended.");
+            await load();
+          } catch (e) {
+            Alert.alert("Payment verification failed", e?.message || "Could not verify payment");
+          } finally {
+            setRazorpayBusy(false);
+          }
+        })
+        .catch((err) => {
+          Alert.alert("Razorpay", err?.description || err?.message || "Payment cancelled/failed");
+          setRazorpayBusy(false);
+        });
+    } catch (e) {
+      Alert.alert("Payment", e?.message || "Could not start payment");
+      setRazorpayBusy(false);
+    }
+  };
+
   return (
     <ScrollView
       style={{ flex: 1, backgroundColor: T.screenBg }}
@@ -144,6 +247,118 @@ export default function BusinessSettingsScreen() {
       <HeroBand eyebrow="BUSINESS">
         <PageHeader title="Settings" subtitle="Business profile & invoice defaults" />
       </HeroBand>
+
+      <Text style={S.sectionTitle}>Subscription Extension</Text>
+      <View
+        style={[
+          S.card,
+          {
+            borderColor: T.goldMuted,
+            shadowColor: T.goldMuted,
+            shadowOpacity: 0.28,
+            shadowRadius: 18,
+            elevation: 12,
+          },
+        ]}
+      >
+        <Text style={S.cardLabel}>Choose duration</Text>
+
+        <View
+          style={{
+            marginTop: 10,
+            flexDirection: "row",
+            padding: togglePad,
+            borderRadius: 999,
+            borderWidth: 1,
+            borderColor: T.border,
+            backgroundColor: T.cardBg,
+            overflow: "hidden",
+          }}
+          onLayout={(e) => setToggleW(e.nativeEvent.layout.width)}
+        >
+          <Animated.View
+            style={{
+              position: "absolute",
+              left: togglePad,
+              top: togglePad,
+              bottom: togglePad,
+              width: highlightW,
+              borderRadius: 999,
+              backgroundColor: T.gold,
+              transform: [{ translateX: highlightTranslateX }],
+            }}
+          />
+
+          <TouchableOpacity
+            style={{ flex: 1, paddingVertical: 14, alignItems: "center", justifyContent: "center" }}
+            activeOpacity={0.85}
+            onPress={() => setSelectedBillingCycle("monthly")}
+          >
+            <Text
+              style={{
+                color: selectedBillingCycle === "monthly" ? T.textPrimary : T.textMuted,
+                fontWeight: "900",
+                fontSize: 15,
+              }}
+            >
+              Monthly
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={{ flex: 1, paddingVertical: 14, alignItems: "center", justifyContent: "center" }}
+            activeOpacity={0.85}
+            onPress={() => setSelectedBillingCycle("yearly")}
+          >
+            <Text
+              style={{
+                color: selectedBillingCycle === "yearly" ? T.textPrimary : T.textMuted,
+                fontWeight: "900",
+                fontSize: 15,
+              }}
+            >
+              Yearly
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        {payOfferLoading ? (
+          <Text style={S.muted}>Loading payment options…</Text>
+        ) : (
+          <>
+            <Text style={S.cardLabel} />
+            <Text style={{ color: T.gold, fontWeight: "900", fontSize: 34, marginTop: 10, letterSpacing: -0.6 }}>
+              ₹{Number(selectedAmount || 0).toLocaleString("en-IN", { maximumFractionDigits: 0 })}
+            </Text>
+            <Text style={S.muted}>Extends access by {selectedExtendDays || 0} days after verification.</Text>
+            <TouchableOpacity
+              onPress={handlePayWithRazorpay}
+              disabled={!canPayWithRazorpay || razorpayBusy || payOfferLoading}
+              activeOpacity={0.92}
+              style={[
+                {
+                  marginTop: 14,
+                  borderRadius: 999,
+                  paddingVertical: 14,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  backgroundColor: T.gold,
+                  borderWidth: 1,
+                  borderColor: T.goldMuted,
+                  shadowColor: T.gold,
+                  shadowOpacity: 0.35,
+                  shadowRadius: 20,
+                  elevation: 14,
+                },
+                (!canPayWithRazorpay || razorpayBusy || payOfferLoading) && { opacity: 0.55 },
+              ]}
+            >
+              <Text style={{ color: "#0b1223", fontWeight: "900", fontSize: 16 }}>
+                {razorpayBusy ? "Processing…" : "Pay with Razorpay"}
+              </Text>
+            </TouchableOpacity>
+          </>
+        )}
+      </View>
 
       <Text style={S.sectionTitle}>Business Profile</Text>
       <View style={S.card}>

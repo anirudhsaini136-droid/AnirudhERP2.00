@@ -510,6 +510,19 @@ export function getDashboardSettings() {
   return request("/dashboard/settings");
 }
 
+/* ——— Subscription payment (Razorpay auto-extend) ——— */
+export function getSubscriptionPaymentOffer() {
+  return request("/subscription/payment-offer");
+}
+
+export function postPaymentsCreateOrder(body) {
+  return request("/payments/create-order", { method: "POST", body: JSON.stringify(body || {}) });
+}
+
+export function postPaymentsVerify(body) {
+  return request("/payments/verify", { method: "POST", body: JSON.stringify(body || {}) });
+}
+
 export function putDashboardSettings(body) {
   return request("/dashboard/settings", { method: "PUT", body: JSON.stringify(body) });
 }
