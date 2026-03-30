@@ -303,8 +303,10 @@ export default function BusinessSettings() {
 
                 <div className="mt-3 grid grid-cols-2 gap-4">
                   <div>
-                    <p className="text-xs text-gray-400">Expires</p>
-                    <p className="text-sm text-white font-semibold mt-0.5">{fmtDate(sub.expires_at)}</p>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-gray-400">Expires</span>
+                      <span className="text-sm text-white font-semibold">{fmtDate(sub.expires_at)}</span>
+                    </div>
                   </div>
                   <div>
                     <p className="text-xs text-gray-400">Days remaining</p>
@@ -318,7 +320,7 @@ export default function BusinessSettings() {
               {/* Progress bar */}
               <div className="md:min-w-[260px]">
                 <div className="text-xs text-gray-400 flex items-center justify-between">
-                  <span>Access health</span>
+                  <span>Trial remaining</span>
                   <span className="text-gray-300 font-semibold">
                     {accessPct}
                     %
@@ -336,7 +338,7 @@ export default function BusinessSettings() {
                   />
                 </div>
                 <div className="mt-1 text-[11px] text-gray-500">
-                  {Number(sub.days_remaining || 0) < 7 ? "Hurry: low access window" : "You're good to go"}
+                  {daysRemaining < 7 ? `Your trial expires in ${daysRemaining} days. Upgrade to continue.` : "You're good to go"}
                 </div>
               </div>
             </div>
@@ -467,6 +469,7 @@ export default function BusinessSettings() {
                               Pay {selectedBillingCycle === "yearly" ? "Yearly" : "Monthly"} via Razorpay
                             </p>
                             <p className="text-lg font-bold text-white mt-0.5">{fmt(selectedAmount)}</p>
+                            <p className="text-[11px] text-gray-400 mt-1">+{selectedExtendDays || 0} days</p>
                           </div>
                           <div className="text-right">
                             <p className="text-[11px] text-gray-500">Instant activation after verification</p>
@@ -482,7 +485,9 @@ export default function BusinessSettings() {
                           }`}
                         >
                           <span className="inline-flex items-center justify-center gap-2">
-                            <CreditCard size={16} className="text-[#0b1223]" />
+                            <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-[#d4a017]/15 border border-[#d4a017]/60 text-[#d4a017] font-black text-[14px]">
+                              N
+                            </span>
                             Razorpay
                             {razorpayBusy ? "— Processing…" : ""}
                           </span>
