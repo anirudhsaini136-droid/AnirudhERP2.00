@@ -193,6 +193,7 @@ export default function BusinessDetailPage() {
   const [resetPwdValue, setResetPwdValue] = useState('');
   const [resetting, setResetting] = useState(false);
   const [trialSaving, setTrialSaving] = useState(false);
+  const [processingPaymentId, setProcessingPaymentId] = useState(null);
 
   const fetchData = async () => {
     try {
@@ -222,6 +223,37 @@ export default function BusinessDetailPage() {
       toast.error(e.response?.data?.detail || 'Failed to extend');
     }
     setExtending(false);
+  };
+
+  const handleApproveUpiPayment = async (paymentId) => {
+    if (!paymentId) return;
+    if (!window.confirm('Approve this UPI payment and activate/extend subscription?')) return;
+    setProcessingPaymentId(paymentId);
+    try {
+      await api.post('/super-admin/subscription/upi/approve', { payment_id: paymentId });
+      toast.success('Payment approved and subscription extended.');
+      setProcessingPaymentId(null);
+      fetchData();
+    } catch (e) {
+      setProcessingPaymentId(null);
+      toast.error(e.response?.data?.detail || 'Failed to approve payment');
+    }
+  };
+
+  const handleRejectUpiPayment = async (paymentId) => {
+    if (!paymentId) return;
+    if (!window.confirm('Reject this UPI payment? Subscription will remain unchanged.')) return;
+    const reason = window.prompt('Optional rejection reason (shown in email):') || '';
+    setProcessingPaymentId(paymentId);
+    try {
+      await api.post('/super-admin/subscription/upi/reject', { payment_id: paymentId, reason });
+      toast.success('Payment rejected.');
+      setProcessingPaymentId(null);
+      fetchData();
+    } catch (e) {
+      setProcessingPaymentId(null);
+      toast.error(e.response?.data?.detail || 'Failed to reject payment');
+    }
   };
 
   const handleSuspend = async () => {
@@ -483,12 +515,12 @@ export default function BusinessDetailPage() {
               <table className="table-premium w-full">
                 <thead>
                   <tr>
-                    <th>Date</th><th>Amount</th><th>Method</th><th>Duration</th><th>Reference</th><th>New Expiry</th>
+                    <th>Date</th><th>Amount</th><th>Method</th><th>Duration</th><th>Reference</th><th>New Expiry</th><th className="text-right">Admin Action</th>
                   </tr>
                 </thead>
                 <tbody>
                   {payments.length === 0 ? (
-                    <tr><td colSpan={6} className="text-center text-gray-500 py-8">No payments recorded</td></tr>
+                    <tr><td colSpan={7} className="text-center text-gray-500 py-8">No payments recorded</td></tr>
                   ) : payments.map(p => (
                     <tr key={p.id}>
                       <td className="text-sm">{fmtDate(p.payment_date)}</td>
@@ -497,6 +529,30 @@ export default function BusinessDetailPage() {
                       <td className="text-sm">{p.duration_days} days</td>
                       <td className="text-sm text-gray-500">{p.reference_number || '-'}</td>
                       <td className="text-sm">{fmtDate(p.new_expiry_date)}</td>
+                      <td className="text-right">
+                        {(p.notes || '').includes('Self-service UPI|PENDING|') ? (
+                          <div className="flex justify-end gap-2">
+                            <button
+                              type="button"
+                              disabled={processingPaymentId === p.id}
+                              onClick={() => handleApproveUpiPayment(p.id)}
+                              className="btn-premium btn-secondary text-xs whitespace-nowrap"
+                            >
+                              {processingPaymentId === p.id ? 'Processing…' : 'Approve'}
+                            </button>
+                            <button
+                              type="button"
+                              disabled={processingPaymentId === p.id}
+                              onClick={() => handleRejectUpiPayment(p.id)}
+                              className="btn-premium bg-rose-500/10 border border-rose-500/20 text-rose-400 hover:bg-rose-500/20 text-xs whitespace-nowrap"
+                            >
+                              Reject
+                            </button>
+                          </div>
+                        ) : (
+                          <span className="text-xs text-gray-500">-</span>
+                        )}
+                      </td>
                     </tr>
                   ))}
                 </tbody>

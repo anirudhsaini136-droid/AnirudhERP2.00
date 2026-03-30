@@ -101,7 +101,7 @@ export default function BusinessDashboard() {
     setConfirmingPay(true);
     try {
       await api.post('/subscription/confirm-upi-paid', { utr: utr.trim() || undefined, billing_cycle: billingCycle });
-      toast.success('Subscription updated. Thank you!');
+      toast.success('Payment submitted. Admin will review and activate within ~30 minutes.');
       setUtr('');
       const offer = await api.get('/subscription/payment-offer');
       setPaymentOffer(offer.data);

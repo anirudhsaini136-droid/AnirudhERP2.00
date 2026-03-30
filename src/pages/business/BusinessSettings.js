@@ -125,7 +125,7 @@ export default function BusinessSettings() {
         utr: utr.trim() || undefined,
         billing_cycle: selectedBillingCycle,
       });
-      toast.success('Subscription updated. Thank you!');
+      toast.success('Payment submitted. Admin will review and activate within ~30 minutes.');
       setUtr('');
       const offer = await api.get('/subscription/payment-offer');
       setPaymentOffer(offer.data);
