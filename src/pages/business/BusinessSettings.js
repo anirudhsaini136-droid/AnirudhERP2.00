@@ -3,7 +3,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import DashboardLayout from '../../components/layout/DashboardLayout';
 import { Input } from '../../components/ui/input';
 import { Label } from '../../components/ui/label';
-import { Save, Building2, CreditCard, FileText, Landmark, BookOpen, IndianRupee, QrCode, Smartphone, Copy } from 'lucide-react';
+import { Save, Building2, CreditCard, FileText, Landmark, BookOpen, IndianRupee, QrCode, Smartphone, Copy, CheckCircle2 } from 'lucide-react';
 import { toast } from 'sonner';
 
 const fmt = (n) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(n || 0);
@@ -30,7 +30,6 @@ export default function BusinessSettings() {
   const [paymentOffer, setPaymentOffer] = useState(null);
   const [payOfferLoading, setPayOfferLoading] = useState(true);
   const [razorpayBusy, setRazorpayBusy] = useState(false);
-  const [showRenewOptions, setShowRenewOptions] = useState(false);
   const [selectedBillingCycle, setSelectedBillingCycle] = useState('monthly'); // 'monthly' | 'yearly'
 
   const [form, setForm] = useState({
@@ -95,7 +94,6 @@ export default function BusinessSettings() {
       return;
     }
     setPayOfferLoading(true);
-    setShowRenewOptions(false);
     setSelectedBillingCycle('monthly');
     api
       .get('/subscription/payment-offer')
@@ -285,22 +283,64 @@ export default function BusinessSettings() {
             <CreditCard size={18} className="text-gold-400" />
             <h2 className="font-display text-lg text-white">Subscription</h2>
           </div>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div>
-              <p className="text-xs text-gray-500">Plan</p>
-              <p className="text-sm text-white font-semibold capitalize mt-0.5">{sub.plan}</p>
-            </div>
-            <div>
-              <p className="text-xs text-gray-500">Status</p>
-              <span className={`badge-premium ${sub.status === 'active' ? 'badge-success' : sub.status === 'trial' ? 'badge-warning' : 'badge-danger'} mt-0.5 inline-block`}>{sub.status}</span>
-            </div>
-            <div>
-              <p className="text-xs text-gray-500">Expires</p>
-              <p className="text-sm text-white mt-0.5">{fmtDate(sub.expires_at)}</p>
-            </div>
-            <div>
-              <p className="text-xs text-gray-500">Days Left</p>
-              <p className={`text-sm font-semibold mt-0.5 ${sub.days_remaining <= 7 ? 'text-rose-400' : 'text-emerald-400'}`}>{sub.days_remaining}</p>
+
+          {/* Current plan card */}
+          <div className="rounded-2xl p-4 border border-[#d4a017]/40 bg-gradient-to-br from-[#0b1223] via-[#0f172a] to-[#111827]">
+            <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
+              <div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="inline-flex items-center gap-2 rounded-full border border-[#d4a017]/50 bg-[#d4a017]/10 px-3 py-1 text-[12px] font-bold text-[#d4a017]">
+                    {sub.plan || "Plan"}
+                  </span>
+                  <span className={`badge-premium ${sub.status === "active" ? "badge-success" : sub.status === "trial" ? "badge-warning" : "badge-danger"} mt-0.5 inline-block`}>
+                    {sub.status || "status"}
+                  </span>
+                </div>
+
+                <div className="mt-3 grid grid-cols-2 gap-4">
+                  <div>
+                    <p className="text-xs text-gray-400">Expires</p>
+                    <p className="text-sm text-white font-semibold mt-0.5">{fmtDate(sub.expires_at)}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-400">Days remaining</p>
+                    <p className={`text-sm font-semibold mt-0.5 ${Number(sub.days_remaining || 0) < 7 ? "text-rose-400" : "text-[#d4a017]"}`}>
+                      {sub.days_remaining ?? 0}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Progress bar */}
+              <div className="md:min-w-[260px]">
+                <div className="text-xs text-gray-400 flex items-center justify-between">
+                  <span>Access health</span>
+                  <span className="text-gray-300 font-semibold">
+                    {Math.round(Math.min(100, Math.max(0, ((Number(sub.days_remaining || 0) || 0) / ((Number(sub.days_remaining || 0) || 0) > 60 ? 365 : 30) || 1)) * 100)))}
+                    %
+                  </span>
+                </div>
+                <div className="mt-2 h-2 rounded-full bg-white/10 overflow-hidden">
+                  <div
+                    className="h-2 rounded-full"
+                    style={{
+                      width: `${Math.round(
+                        Math.min(
+                          100,
+                          Math.max(
+                            0,
+                            (Number(sub.days_remaining || 0) / ((Number(sub.days_remaining || 0) || 0) > 60 ? 365 : 30) || 1)) * 100,
+                          ),
+                        ),
+                      )}%`,
+                      backgroundColor: Number(sub.days_remaining || 0) < 7 ? "#fb7185" : "#d4a017",
+                    }}
+                  />
+                </div>
+                <div className="mt-1 text-[11px] text-gray-500">
+                  {Number(sub.days_remaining || 0) < 7 ? "Hurry: low access window" : "You're good to go"}
+                </div>
+              </div>
             </div>
           </div>
 
@@ -310,88 +350,150 @@ export default function BusinessSettings() {
             ) : (
               paymentOffer?.razorpay_eligible && (
                 <div className="space-y-4">
-                  {!showRenewOptions ? (
+                  {/* Plan selection */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Monthly */}
                     <button
                       type="button"
-                      onClick={() => {
-                        const next = paymentOffer.can_pay_monthly ? 'monthly' : 'yearly';
-                        setSelectedBillingCycle(next);
-                        setShowRenewOptions(true);
-                      }}
-                      className="btn-premium btn-primary whitespace-nowrap w-full animate-pulse"
+                      disabled={!paymentOffer.can_pay_monthly}
+                      onClick={() => setSelectedBillingCycle("monthly")}
+                      className={`relative text-left rounded-2xl border p-4 transition-all transform hover:-translate-y-0.5 hover:shadow-xl hover:border-[#d4a017]/60 ${
+                        selectedBillingCycle === "monthly"
+                          ? "border-[#d4a017] bg-[#d4a017]/10"
+                          : "border-white/10 bg-white/[0.02]"
+                      } ${!paymentOffer.can_pay_monthly ? "opacity-40 cursor-not-allowed hover:shadow-none hover:-translate-y-0" : ""}`}
                     >
-                      Extend subscription
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="text-xs text-gray-400">Monthly</p>
+                          <p className="text-lg font-bold text-white mt-0.5">{fmt(paymentOffer.monthly_payable_amount)}</p>
+                          <p className="text-[11px] text-gray-400 mt-1">+{paymentOffer.renewal_extend_days} days</p>
+                        </div>
+                        {selectedBillingCycle === "monthly" ? (
+                          <span className="inline-flex items-center rounded-full border border-[#d4a017]/50 bg-[#d4a017]/10 px-2 py-1 text-[11px] font-bold text-[#d4a017]">
+                            Selected
+                          </span>
+                        ) : null}
+                      </div>
+
+                      <div className="mt-3">
+                        <p className="text-[11px] text-gray-500 font-bold uppercase tracking-wider mb-2">Included</p>
+                        <ul className="space-y-2 text-[12px] text-gray-300">
+                          {[
+                            "All enabled ERP modules",
+                            "Invoices, GST reports & ledger updates",
+                            "Inventory + purchase management",
+                            "Priority support & updates",
+                          ].map((f) => (
+                            <li key={f} className="flex items-start gap-2">
+                              <CheckCircle2 size={14} className="text-[#d4a017] mt-0.5" />
+                              <span className="leading-4">{f}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
                     </button>
-                  ) : (
-                    <>
-                      <div className="grid grid-cols-2 gap-3">
-                        <button
-                          type="button"
-                          disabled={!paymentOffer.can_pay_monthly}
-                          onClick={() => setSelectedBillingCycle('monthly')}
-                          className={`btn-premium whitespace-nowrap w-full ${
-                            selectedBillingCycle === 'monthly' ? 'btn-primary' : 'btn-secondary'
-                          } ${!paymentOffer.can_pay_monthly ? 'opacity-40 cursor-not-allowed' : ''}`}
-                        >
-                          Monthly
-                          <div className="text-xs mt-1">{fmt(paymentOffer.monthly_payable_amount)}</div>
-                          <div className="text-[11px] text-gray-400 mt-1">+{paymentOffer.renewal_extend_days} days</div>
-                        </button>
-                        <button
-                          type="button"
-                          disabled={!paymentOffer.can_pay_yearly}
-                          onClick={() => setSelectedBillingCycle('yearly')}
-                          className={`btn-premium whitespace-nowrap w-full ${
-                            selectedBillingCycle === 'yearly' ? 'btn-primary' : 'btn-secondary'
-                          } ${!paymentOffer.can_pay_yearly ? 'opacity-40 cursor-not-allowed' : ''}`}
-                        >
-                          Yearly
-                          <div className="text-xs mt-1">
-                            {fmt(yearlyBasePerMonth)} <span className="text-[11px] text-gray-400">/ month</span>
-                          </div>
-                          <div className="text-[11px] text-gray-400 mt-1">
-                            x12 = {fmt(paymentOffer.yearly_payable_amount)}
-                          </div>
-                          <div className="text-[11px] text-gray-400 mt-1">+{paymentOffer.renewal_extend_days_yearly} days</div>
-                        </button>
+
+                    {/* Yearly */}
+                    <button
+                      type="button"
+                      disabled={!paymentOffer.can_pay_yearly}
+                      onClick={() => setSelectedBillingCycle("yearly")}
+                      className={`relative text-left rounded-2xl border p-4 transition-all transform hover:-translate-y-0.5 hover:shadow-xl hover:border-[#d4a017]/60 ${
+                        selectedBillingCycle === "yearly"
+                          ? "border-[#d4a017] bg-[#d4a017]/10"
+                          : "border-white/10 bg-white/[0.02]"
+                      } ${!paymentOffer.can_pay_yearly ? "opacity-40 cursor-not-allowed hover:shadow-none hover:-translate-y-0" : ""}`}
+                    >
+                      <div className="absolute -top-2 right-3">
+                        <span className="inline-flex items-center rounded-full border border-[#d4a017]/50 bg-[#d4a017]/15 px-3 py-1 text-[10px] font-extrabold text-[#ffd966]">
+                          Best Value
+                        </span>
                       </div>
 
-                      <div className="space-y-4">
-                        {user?.role === 'business_owner' ? (
-                          <div className="glass-card rounded-xl p-4 border border-white/10">
-                            <div className="flex items-start gap-2">
-                              <div className="w-9 h-9 rounded-xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center shrink-0">
-                                <IndianRupee className="w-4 h-4 text-emerald-400" />
-                              </div>
-                              <div className="flex-1">
-                                <p className="text-xs text-gray-500">Pay {selectedBillingCycle === 'yearly' ? 'Yearly' : 'Monthly'}</p>
-                                <p className="text-lg font-semibold text-emerald-300 mt-1">{fmt(selectedAmount)}</p>
-                                {selectedBillingCycle === 'yearly' && (
-                                  <p className="text-[11px] text-gray-400 mt-1">
-                                    (base {fmt(yearlyBasePerMonth)}/month x 12 = {fmt(paymentOffer?.yearly_payable_amount)})
-                                  </p>
-                                )}
-                                <p className="text-[11px] text-gray-400 mt-1">Razorpay extends immediately after verification.</p>
-                              </div>
-                            </div>
-
-                            <div className="flex items-center gap-2 flex-wrap mt-4">
-                              <button
-                                type="button"
-                                onClick={handlePayWithRazorpay}
-                                className="btn-premium btn-primary whitespace-nowrap"
-                                disabled={!canPayWithRazorpay || razorpayBusy}
-                              >
-                                <CreditCard size={16} /> {razorpayBusy ? 'Processing…' : 'Pay with Razorpay'}
-                              </button>
-                            </div>
-                          </div>
-                        ) : (
-                          <div className="text-xs text-amber-200/80">Only the business owner can pay here.</div>
-                        )}
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="text-xs text-gray-400">Yearly</p>
+                          <p className="text-lg font-bold text-white mt-0.5">
+                            {fmt(yearlyBasePerMonth)} <span className="text-[12px] text-gray-400 font-semibold">/ month</span>
+                          </p>
+                          <p className="text-[11px] text-gray-400 mt-1">
+                            x12 = {fmt(paymentOffer.yearly_payable_amount)} • +{paymentOffer.renewal_extend_days_yearly} days
+                          </p>
+                        </div>
                       </div>
-                    </>
-                  )}
+
+                      {/* Savings */}
+                      {Number(paymentOffer.monthly_payable_amount || 0) > 0 && Number(paymentOffer.yearly_payable_amount || 0) > 0 ? (
+                        (() => {
+                          const monthly12 = Number(paymentOffer.monthly_payable_amount) * 12;
+                          const yearlyTotal = Number(paymentOffer.yearly_payable_amount);
+                          const savings = Math.max(0, monthly12 - yearlyTotal);
+                          const savingsPct = monthly12 > 0 ? Math.round((savings / monthly12) * 100) : 0;
+                          return (
+                            <div className="mt-2">
+                              <p className="text-[11px] text-[#d4a017] font-bold">
+                                Save ₹{fmt(savings)} ({savingsPct}%)
+                              </p>
+                            </div>
+                          );
+                        })()
+                      ) : null}
+
+                      <div className="mt-3">
+                        <p className="text-[11px] text-gray-500 font-bold uppercase tracking-wider mb-2">Included</p>
+                        <ul className="space-y-2 text-[12px] text-gray-300">
+                          {[
+                            "All enabled ERP modules",
+                            "Invoices, GST reports & ledger updates",
+                            "Inventory + purchase management",
+                            "Priority support & updates",
+                          ].map((f) => (
+                            <li key={f} className="flex items-start gap-2">
+                              <CheckCircle2 size={14} className="text-[#d4a017] mt-0.5" />
+                              <span className="leading-4">{f}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    </button>
+                  </div>
+
+                  {/* Payment button */}
+                  <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-4">
+                    {user?.role === "business_owner" ? (
+                      <>
+                        <div className="flex items-center justify-between gap-3">
+                          <div>
+                            <p className="text-xs text-gray-400">
+                              Pay {selectedBillingCycle === "yearly" ? "Yearly" : "Monthly"} via Razorpay
+                            </p>
+                            <p className="text-lg font-bold text-white mt-0.5">{fmt(selectedAmount)}</p>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-[11px] text-gray-500">Instant activation after verification</p>
+                          </div>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={handlePayWithRazorpay}
+                          disabled={!canPayWithRazorpay || razorpayBusy}
+                          className={`mt-4 w-full rounded-xl px-4 py-3 font-extrabold text-[#0b1223] bg-gradient-to-r from-[#d4a017] via-[#f1c24b] to-[#d4a017] border border-[#d4a017]/60 shadow-[0_0_0_1px_rgba(212,160,23,0.15),0_12px_30px_rgba(212,160,23,0.14)] transition hover:brightness-110 ${
+                            !canPayWithRazorpay || razorpayBusy ? "opacity-50 cursor-not-allowed hover:brightness-100" : ""
+                          }`}
+                        >
+                          <span className="inline-flex items-center justify-center gap-2">
+                            <CreditCard size={16} className="text-[#0b1223]" />
+                            Razorpay
+                            {razorpayBusy ? "— Processing…" : ""}
+                          </span>
+                        </button>
+                      </>
+                    ) : (
+                      <div className="text-xs text-amber-200/80">Only the business owner can pay here.</div>
+                    )}
+                  </div>
                 </div>
               )
             )}
