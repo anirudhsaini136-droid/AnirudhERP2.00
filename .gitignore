@@ -12,3 +12,4 @@ apps/android-app/.idea/
 apps/android-app/android/.gradle/
 apps/android-app/android/app/build/
 apps/android-app/android/local.properties
+public/downloads/*.apk

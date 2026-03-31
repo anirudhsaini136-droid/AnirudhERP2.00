@@ -21,8 +21,7 @@ const BACKEND_ORIGIN =
   '';
 const ENV_ANDROID_APK =
   (process.env.REACT_APP_ANDROID_APK_URL && String(process.env.REACT_APP_ANDROID_APK_URL).trim()) || '';
-const LOCAL_APK_FALLBACK = `${typeof window !== 'undefined' ? window.location.origin : ''}/downloads/NexaERP.apk`;
-const ANDROID_STATIC_FALLBACK = ENV_ANDROID_APK || LOCAL_APK_FALLBACK;
+const ANDROID_STATIC_FALLBACK = ENV_ANDROID_APK;
 
 const LoginPage = () => {
   const [email, setEmail] = useState('');
@@ -62,7 +61,7 @@ const LoginPage = () => {
   }, []);
 
   useEffect(() => {
-    // Keep APK on same domain (/downloads/NexaERP.apk) so browser honors download filename.
+    // APK link is controlled by REACT_APP_ANDROID_APK_URL.
     setAndroidApkHref(ANDROID_STATIC_FALLBACK);
     setApkInfoLoading(false);
     return undefined;
