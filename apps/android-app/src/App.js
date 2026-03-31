@@ -336,15 +336,19 @@ function ThemedNavigation() {
                   }
                 }}
                 style={{
-                  backgroundColor: T.gold,
-                  borderRadius: 999,
-                  paddingHorizontal: 12,
-                  paddingVertical: 7,
-                  borderWidth: 1,
-                  borderColor: T.goldMuted,
+                  backgroundColor: "#d4a017",
+                  paddingVertical: 12,
+                  paddingHorizontal: 20,
+                  borderRadius: 10,
+                  alignItems: "center",
+                  shadowColor: "#d4a017",
+                  shadowOffset: { width: 0, height: 4 },
+                  shadowOpacity: 0.3,
+                  shadowRadius: 8,
+                  elevation: 6,
                 }}
               >
-                <Text style={{ color: "#0b1223", fontWeight: "900", fontSize: 12 }}>Restart</Text>
+                <Text style={{ color: "#000000", fontWeight: "700", fontSize: 15 }}>Restart</Text>
               </Pressable>
             ) : (
               <ActivityIndicator size="small" color={T.gold} />

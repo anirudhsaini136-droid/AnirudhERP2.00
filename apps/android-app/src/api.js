@@ -309,6 +309,10 @@ export function getProducts(params = {}) {
   return request(`/inventory/products?${q}`);
 }
 
+export function postInventoryProduct(body) {
+  return request("/inventory/products", { method: "POST", body: JSON.stringify(body) });
+}
+
 export function postInventoryBill(body) {
   return request("/inventory/bill", { method: "POST", body: JSON.stringify(body) });
 }
@@ -316,6 +320,10 @@ export function postInventoryBill(body) {
 export function getPurchases(params = {}) {
   const q = new URLSearchParams({ limit: "50", page: "1", ...params });
   return request(`/purchases?${q}`);
+}
+
+export function postPurchaseBill(body) {
+  return request("/purchases/bills", { method: "POST", body: JSON.stringify(body) });
 }
 
 export function getPurchaseBill(id) {
@@ -521,6 +529,10 @@ export function postPaymentsCreateOrder(body) {
 
 export function postPaymentsVerify(body) {
   return request("/payments/verify", { method: "POST", body: JSON.stringify(body || {}) });
+}
+
+export function getPaymentsRazorpayKey() {
+  return request("/payments/razorpay-key");
 }
 
 export function putDashboardSettings(body) {

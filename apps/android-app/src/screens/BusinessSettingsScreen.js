@@ -12,7 +12,15 @@ import {
   View,
 } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
-import { getDashboardSettings, getSubscriptionPaymentOffer, postPaymentsCreateOrder, postPaymentsVerify, putDashboardInvoiceSettings, putDashboardSettings } from "../api";
+import {
+  getDashboardSettings,
+  getPaymentsRazorpayKey,
+  getSubscriptionPaymentOffer,
+  postPaymentsCreateOrder,
+  postPaymentsVerify,
+  putDashboardInvoiceSettings,
+  putDashboardSettings,
+} from "../api";
 import { HeroBand, PageHeader, PrimaryButton, SecondaryButton } from "../components/NexaUi";
 import * as T from "../theme/tokens";
 import { S } from "../theme/screenStyles";
@@ -223,6 +231,19 @@ export default function BusinessSettingsScreen() {
     return String(rawCode || "").toUpperCase();
   };
 
+  const resolveRazorpayKey = async () => {
+    const envKey = String(process.env.EXPO_PUBLIC_RAZORPAY_KEY_ID || "").trim();
+    if (envKey) return envKey;
+
+    const backendKey = String(paymentOffer?.razorpay_key_id || "").trim();
+    if (backendKey) return backendKey;
+
+    const backendRes = await getPaymentsRazorpayKey();
+    const fetched = String(backendRes?.key || "").trim();
+    if (!fetched) throw new Error("Razorpay key not configured");
+    return fetched;
+  };
+
   const handlePayWithRazorpay = async () => {
     if (!canPayWithRazorpay) {
       Alert.alert("Payment", "Razorpay payment is not available right now.");
@@ -234,7 +255,7 @@ export default function BusinessSettingsScreen() {
       const orderRes = await postPaymentsCreateOrder({ billing_cycle: selectedBillingCycle });
       const order = orderRes;
 
-      const key = process.env.EXPO_PUBLIC_RAZORPAY_KEY_ID || paymentOffer?.razorpay_key_id;
+      const key = await resolveRazorpayKey();
       if (!key) throw new Error("Razorpay key not configured");
 
       if (!RazorpayCheckout || typeof RazorpayCheckout.open !== "function") {
@@ -439,17 +460,17 @@ export default function BusinessSettingsScreen() {
               style={[
                 {
                   marginTop: 14,
-                  borderRadius: 999,
-                  paddingVertical: 14,
+                  backgroundColor: "#d4a017",
+                  paddingVertical: 12,
+                  paddingHorizontal: 20,
+                  borderRadius: 10,
                   alignItems: "center",
                   justifyContent: "center",
-                  backgroundColor: T.gold,
-                  borderWidth: 1,
-                  borderColor: T.goldMuted,
-                  shadowColor: T.gold,
-                  shadowOpacity: 0.35,
-                  shadowRadius: 20,
-                  elevation: 14,
+                  shadowColor: "#d4a017",
+                  shadowOffset: { width: 0, height: 4 },
+                  shadowOpacity: 0.3,
+                  shadowRadius: 8,
+                  elevation: 6,
                   overflow: "hidden",
                 },
                 (!canPayWithRazorpay || razorpayBusy || payOfferLoading) && { opacity: 0.55 },
@@ -479,7 +500,7 @@ export default function BusinessSettingsScreen() {
                   }}
                 />
               </View>
-              <Text style={{ color: "#0b1223", fontWeight: "900", fontSize: 16 }}>
+              <Text style={{ color: "#000000", fontWeight: "700", fontSize: 15 }}>
                 {razorpayBusy ? "Processing…" : "Pay with Razorpay"}
               </Text>
             </TouchableOpacity>
@@ -673,16 +694,20 @@ export default function BusinessSettingsScreen() {
                 onPress={closePaymentDialog}
                 style={{
                   marginTop: 16,
-                  borderRadius: 999,
-                  paddingVertical: 13,
+                  backgroundColor: "#d4a017",
+                  paddingVertical: 12,
+                  paddingHorizontal: 20,
+                  borderRadius: 10,
                   alignItems: "center",
                   justifyContent: "center",
-                  backgroundColor: T.gold,
-                  borderWidth: 1,
-                  borderColor: T.goldMuted,
+                  shadowColor: "#d4a017",
+                  shadowOffset: { width: 0, height: 4 },
+                  shadowOpacity: 0.3,
+                  shadowRadius: 8,
+                  elevation: 6,
                 }}
               >
-                <Text style={{ color: "#0b1223", fontWeight: "900", fontSize: 15 }}>Continue</Text>
+                <Text style={{ color: "#000000", fontWeight: "700", fontSize: 15 }}>Continue</Text>
               </TouchableOpacity>
             ) : (
               <View style={{ flexDirection: "row", gap: 10, marginTop: 16 }}>
@@ -691,16 +716,20 @@ export default function BusinessSettingsScreen() {
                   onPress={retryPaymentFromDialog}
                   style={{
                     flex: 1,
-                    borderRadius: 999,
-                    paddingVertical: 13,
+                    backgroundColor: "#d4a017",
+                    paddingVertical: 12,
+                    paddingHorizontal: 20,
+                    borderRadius: 10,
                     alignItems: "center",
                     justifyContent: "center",
-                    backgroundColor: T.gold,
-                    borderWidth: 1,
-                    borderColor: T.goldMuted,
+                    shadowColor: "#d4a017",
+                    shadowOffset: { width: 0, height: 4 },
+                    shadowOpacity: 0.3,
+                    shadowRadius: 8,
+                    elevation: 6,
                   }}
                 >
-                  <Text style={{ color: "#0b1223", fontWeight: "900", fontSize: 15 }}>Try Again</Text>
+                  <Text style={{ color: "#000000", fontWeight: "700", fontSize: 15 }}>Try Again</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   activeOpacity={0.9}
