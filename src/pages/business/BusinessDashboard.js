@@ -290,7 +290,7 @@ export default function BusinessDashboard() {
                 <Link
                   key={q.path}
                   to={q.path}
-                  className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-white/[0.04] border border-white/[0.08] text-sm text-gray-200 hover:bg-white/[0.08] hover:border-gold-500/30 transition-colors"
+                  className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-sm text-gray-300 hover:bg-white/10 hover:border-gold-500/30 transition-colors"
                 >
                   <q.icon size={16} className="text-gold-400 shrink-0" />
                   {q.label}

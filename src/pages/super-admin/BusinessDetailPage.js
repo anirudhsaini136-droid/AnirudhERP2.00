@@ -6,7 +6,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Input } from '../../components/ui/input';
 import { Label } from '../../components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../components/ui/tabs';
-import { ArrowLeft, CreditCard, Ban, ChevronUp, LogIn, Eye, EyeOff, FlaskConical, Unlock } from 'lucide-react';
+import { ArrowLeft, CreditCard, Ban, ChevronUp, LogIn, Eye, EyeOff, FlaskConical, Unlock, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
 
 const fmt = (n) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(n || 0);
@@ -279,6 +279,17 @@ export default function BusinessDetailPage() {
     } catch(e) { toast.error(e.response?.data?.detail || 'Failed to delete'); }
   };
 
+  const handleGrantSpecialAccess = async () => {
+    if (!window.confirm('Grant special access for 30 days? This keeps revenue as ₹0 and emails the business owner.')) return;
+    try {
+      const res = await api.post(`/super-admin/businesses/${id}/special-access`);
+      toast.success(res.data?.message || 'Special access granted');
+      fetchData();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to grant special access');
+    }
+  };
+
   const setTrialRestrictedFlag = async (next) => {
     setTrialSaving(true);
     try {
@@ -406,6 +417,9 @@ export default function BusinessDetailPage() {
             </button>
             <button onClick={() => setShowExtend(true)} className="btn-premium btn-primary text-sm">
               <CreditCard size={15} /> Adjust subscription
+            </button>
+            <button onClick={handleGrantSpecialAccess} className="btn-premium text-sm bg-gold-500/10 border border-gold-500/30 text-gold-300 hover:bg-gold-500/20">
+              <Sparkles size={15} /> Special Access
             </button>
             <button onClick={handleImpersonate} className="btn-premium btn-secondary text-sm">
               <LogIn size={15} /> Login As
