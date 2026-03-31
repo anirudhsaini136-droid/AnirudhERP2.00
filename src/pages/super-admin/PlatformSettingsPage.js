@@ -53,13 +53,26 @@ export default function PlatformSettingsPage() {
             <div key={f.key} className="flex items-end gap-3">
               <div className="flex-1">
                 <Label className="text-gray-400 text-xs">{f.label}</Label>
-                <Input
-                  type={f.type === 'checkbox' ? 'checkbox' : f.type} className="input-premium mt-1"
-                  checked={f.type === 'checkbox' ? String(settings[f.key] || '').toLowerCase() === 'true' : undefined}
-                  value={f.type === 'checkbox' ? undefined : (settings[f.key] || '')}
-                  onChange={e => setSettings(s => ({ ...s, [f.key]: f.type === 'checkbox' ? (e.target.checked ? 'true' : 'false') : e.target.value }))}
-                  data-testid={`setting-${f.key}`}
-                />
+                {f.type === 'checkbox' ? (
+                  <label className="mt-2 inline-flex items-center gap-2 text-sm text-gray-300 select-none">
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4 accent-gold-500"
+                      checked={String(settings[f.key] || '').toLowerCase() === 'true'}
+                      onChange={e => setSettings(s => ({ ...s, [f.key]: e.target.checked ? 'true' : 'false' }))}
+                      data-testid={`setting-${f.key}`}
+                    />
+                    <span>{String(settings[f.key] || '').toLowerCase() === 'true' ? 'Enabled' : 'Disabled'}</span>
+                  </label>
+                ) : (
+                  <Input
+                    type={f.type}
+                    className="input-premium mt-1"
+                    value={settings[f.key] || ''}
+                    onChange={e => setSettings(s => ({ ...s, [f.key]: e.target.value }))}
+                    data-testid={`setting-${f.key}`}
+                  />
+                )}
               </div>
               <button onClick={() => updateSetting(f.key, settings[f.key] || '')} className="btn-premium btn-secondary text-sm h-[42px]" data-testid={`save-${f.key}`}>
                 <Save size={14} />

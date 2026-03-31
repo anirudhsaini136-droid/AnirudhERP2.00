@@ -47,7 +47,7 @@ function ModuleCheckbox({ mod, checked, onChange }) {
 const DEFAULT_FORM = {
   name: '', owner_name: '', email: '', phone: '', address: '', city: '', country: 'India',
   initial_days: 7, payment_method: 'cash', amount_paid: 0, notes: '',
-  monthly_amount: 399, modules: [], max_users: 5, max_invoices_month: 100, max_products: 50, max_employees: 10
+  monthly_amount: 499, modules: [], max_users: 5, max_invoices_month: 100, max_products: 50, max_employees: 10
 };
 
 export default function BusinessesPage() {
