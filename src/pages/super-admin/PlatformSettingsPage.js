@@ -25,6 +25,8 @@ export default function PlatformSettingsPage() {
 
   const settingFields = [
     { key: 'trial_days', label: 'Trial Duration (days)', type: 'number' },
+    { key: 'auto_delete_trial_accounts_enabled', label: 'Auto-delete expired trial accounts', type: 'checkbox' },
+    { key: 'auto_delete_trial_accounts_grace_days', label: 'Auto-delete grace period after expiry (days)', type: 'number' },
     { key: 'platform_upi_vpa', label: 'Platform UPI ID (VPA) for tenant renewals', type: 'text' },
     { key: 'platform_upi_payee_name', label: 'Payee name shown in UPI app', type: 'text' },
     { key: 'subscription_pay_before_days', label: 'Show pay CTA when expiry within (days)', type: 'number' },
@@ -52,8 +54,10 @@ export default function PlatformSettingsPage() {
               <div className="flex-1">
                 <Label className="text-gray-400 text-xs">{f.label}</Label>
                 <Input
-                  type={f.type} className="input-premium mt-1"
-                  value={settings[f.key] || ''} onChange={e => setSettings(s => ({ ...s, [f.key]: e.target.value }))}
+                  type={f.type === 'checkbox' ? 'checkbox' : f.type} className="input-premium mt-1"
+                  checked={f.type === 'checkbox' ? String(settings[f.key] || '').toLowerCase() === 'true' : undefined}
+                  value={f.type === 'checkbox' ? undefined : (settings[f.key] || '')}
+                  onChange={e => setSettings(s => ({ ...s, [f.key]: f.type === 'checkbox' ? (e.target.checked ? 'true' : 'false') : e.target.value }))}
                   data-testid={`setting-${f.key}`}
                 />
               </div>
