@@ -19,9 +19,6 @@ const BACKEND_ORIGIN =
   process.env.REACT_APP_BACKEND_URL ||
   process.env.REACT_APP_API_URL ||
   '';
-const ENV_ANDROID_APK =
-  (process.env.REACT_APP_ANDROID_APK_URL && String(process.env.REACT_APP_ANDROID_APK_URL).trim()) || '';
-const ANDROID_STATIC_FALLBACK = ENV_ANDROID_APK;
 
 const LoginPage = () => {
   const [email, setEmail] = useState('');
@@ -32,7 +29,7 @@ const LoginPage = () => {
   const [forgotEmail, setForgotEmail] = useState('');
   const [forgotLoading, setForgotLoading] = useState(false);
   const [forgotMsg, setForgotMsg] = useState('');
-  const [androidApkHref, setAndroidApkHref] = useState(ANDROID_STATIC_FALLBACK);
+  const [apkUrl, setApkUrl] = useState('');
   const [androidApkVersion, setAndroidApkVersion] = useState('');
   const [apkInfoLoading, setApkInfoLoading] = useState(true);
   const [authStep, setAuthStep] = useState('credentials');
@@ -61,10 +58,11 @@ const LoginPage = () => {
   }, []);
 
   useEffect(() => {
-    // APK link is controlled by REACT_APP_ANDROID_APK_URL.
-    setAndroidApkHref(ANDROID_STATIC_FALLBACK);
-    setApkInfoLoading(false);
-    return undefined;
+    fetch('/app-config.json')
+      .then(r => r.json())
+      .then(config => setApkUrl(config.android_apk_url))
+      .catch(() => setApkUrl('https://expo.dev/artifacts/eas/4ULH9wrZm1BXFjTuELTEy9.apk'))
+      .finally(() => setApkInfoLoading(false));
   }, []);
 
   const navigateAfterLogin = (user) => {
@@ -191,7 +189,7 @@ const LoginPage = () => {
             </div>
             <div className="flex shrink-0 items-center gap-2">
               <a
-                href={androidApkHref}
+                href={apkUrl}
                 download="NexaERP.apk"
                 className="inline-flex h-9 items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-gold-500 to-gold-600 px-3.5 text-sm font-semibold text-[#111] shadow-md shadow-gold-500/20 no-underline transition hover:brightness-105 active:scale-[0.98] sm:h-10 sm:px-4"
               >
@@ -410,8 +408,7 @@ const LoginPage = () => {
             {process.env.NODE_ENV === 'development' ? (
               <p className="text-[10px] text-gray-600 mt-6 font-mono leading-relaxed">
                 Dev: place <code className="text-gray-500">NexaERP.apk</code> in{' '}
-                <code className="text-gray-500">public/downloads/</code> or set{' '}
-                <code className="text-gray-500">REACT_APP_ANDROID_APK_URL</code>.
+                <code className="text-gray-500">public/app-config.json</code>.
               </p>
             ) : null}
 
