@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import {
   Animated,
   Alert,
+  Linking,
   Modal,
   RefreshControl,
   ScrollView,
@@ -67,6 +68,12 @@ export default function BusinessSettingsScreen() {
   const [selectedBillingCycle, setSelectedBillingCycle] = useState("monthly"); // 'monthly' | 'yearly'
   const [razorpayBusy, setRazorpayBusy] = useState(false);
   const [toggleW, setToggleW] = useState(0);
+  const [paymentDialog, setPaymentDialog] = useState({
+    visible: false,
+    title: "",
+    message: "",
+    mode: "info", // success | cancelled | failed
+  });
   const toggleAnim = useRef(new Animated.Value(0)).current;
   const togglePad = 4;
   const highlightW = Math.max(0, (toggleW - togglePad * 2) / 2);
@@ -179,6 +186,43 @@ export default function BusinessSettingsScreen() {
     Number(selectedAmount || 0) > 0 &&
     (selectedBillingCycle === "yearly" ? paymentOffer?.can_pay_yearly : paymentOffer?.can_pay_monthly);
 
+  const openPaymentDialog = useCallback((title, message, mode) => {
+    setPaymentDialog({ visible: true, title, message, mode });
+  }, []);
+
+  const closePaymentDialog = useCallback(() => {
+    setPaymentDialog((d) => ({ ...d, visible: false }));
+  }, []);
+
+  const retryPaymentFromDialog = useCallback(() => {
+    closePaymentDialog();
+    setTimeout(() => {
+      handlePayWithRazorpay();
+    }, 180);
+  }, [closePaymentDialog]);
+
+  const contactSupport = useCallback(async () => {
+    closePaymentDialog();
+    const supportMail = "mailto:support@nexaerp.com?subject=Payment%20Support%20Request";
+    try {
+      const canOpen = await Linking.canOpenURL(supportMail);
+      if (canOpen) await Linking.openURL(supportMail);
+      else Alert.alert("Support", "Please contact support at support@nexaerp.com");
+    } catch {
+      Alert.alert("Support", "Please contact support at support@nexaerp.com");
+    }
+  }, [closePaymentDialog]);
+
+  const mapRazorpayErrorCode = (err) => {
+    const rawCode =
+      err?.code ||
+      err?.error?.code ||
+      err?.details?.code ||
+      err?.reason ||
+      "";
+    return String(rawCode || "").toUpperCase();
+  };
+
   const handlePayWithRazorpay = async () => {
     if (!canPayWithRazorpay) {
       Alert.alert("Payment", "Razorpay payment is not available right now.");
@@ -225,21 +269,55 @@ export default function BusinessSettingsScreen() {
               billing_cycle: selectedBillingCycle,
             });
 
-            const expiry = verifyRes?.new_expiry_date ? new Date(verifyRes.new_expiry_date).toLocaleDateString("en-IN") : null;
-            Alert.alert("Payment successful", expiry ? `Subscription extended till ${expiry}` : "Subscription extended.");
+            if (!verifyRes?.new_expiry_date) {
+              // Keep this branch strict to avoid a success dialog without verified extension.
+              throw new Error("Subscription extension confirmation missing");
+            }
+            openPaymentDialog(
+              "🎉 Payment Successful!",
+              "Your subscription has been extended. Enjoy NexaERP!",
+              "success"
+            );
             await load();
           } catch (e) {
-            Alert.alert("Payment verification failed", e?.message || "Could not verify payment");
+            openPaymentDialog(
+              "Payment Failed",
+              "Your payment could not be processed. Please try again or use a different payment method.",
+              "failed"
+            );
           } finally {
             setRazorpayBusy(false);
           }
         })
         .catch((err) => {
-          Alert.alert("Razorpay", err?.description || err?.message || "Payment cancelled/failed");
+          const code = mapRazorpayErrorCode(err);
+          if (code === "PAYMENT_CANCELLED") {
+            openPaymentDialog(
+              "Payment Cancelled",
+              "You cancelled the payment. No amount was charged.",
+              "cancelled"
+            );
+          } else if (code === "BAD_REQUEST_ERROR") {
+            openPaymentDialog(
+              "Payment Failed",
+              "Your payment could not be processed. Please try again or use a different payment method.",
+              "failed"
+            );
+          } else {
+            openPaymentDialog(
+              "Payment Failed",
+              "Your payment could not be processed. Please try again or use a different payment method.",
+              "failed"
+            );
+          }
           setRazorpayBusy(false);
         });
     } catch (e) {
-      Alert.alert("Payment", e?.message || "Could not start payment");
+      openPaymentDialog(
+        "Payment Failed",
+        "Your payment could not be processed. Please try again or use a different payment method.",
+        "failed"
+      );
       setRazorpayBusy(false);
     }
   };
@@ -557,6 +635,93 @@ export default function BusinessSettingsScreen() {
               ))}
             </ScrollView>
             <SecondaryButton title="Done" onPress={() => setStatePickerOpen(false)} />
+          </View>
+        </View>
+      </Modal>
+
+      <Modal
+        transparent
+        visible={paymentDialog.visible}
+        animationType="fade"
+        onRequestClose={closePaymentDialog}
+      >
+        <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.55)", justifyContent: "flex-end" }}>
+          <TouchableOpacity style={{ flex: 1 }} activeOpacity={1} onPress={closePaymentDialog} />
+          <View
+            style={[
+              S.card,
+              {
+                marginHorizontal: 14,
+                marginBottom: 16,
+                borderColor: T.goldMuted,
+                borderWidth: 1.5,
+                shadowColor: T.gold,
+                shadowOpacity: 0.22,
+                shadowRadius: 20,
+                elevation: 14,
+              },
+            ]}
+          >
+            <Text style={{ color: T.gold, fontSize: 18, fontWeight: "900" }}>{paymentDialog.title}</Text>
+            <Text style={{ color: T.textSecondary, marginTop: 8, lineHeight: 21, fontWeight: "600" }}>
+              {paymentDialog.message}
+            </Text>
+
+            {paymentDialog.mode === "success" ? (
+              <TouchableOpacity
+                activeOpacity={0.9}
+                onPress={closePaymentDialog}
+                style={{
+                  marginTop: 16,
+                  borderRadius: 999,
+                  paddingVertical: 13,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  backgroundColor: T.gold,
+                  borderWidth: 1,
+                  borderColor: T.goldMuted,
+                }}
+              >
+                <Text style={{ color: "#0b1223", fontWeight: "900", fontSize: 15 }}>Continue</Text>
+              </TouchableOpacity>
+            ) : (
+              <View style={{ flexDirection: "row", gap: 10, marginTop: 16 }}>
+                <TouchableOpacity
+                  activeOpacity={0.9}
+                  onPress={retryPaymentFromDialog}
+                  style={{
+                    flex: 1,
+                    borderRadius: 999,
+                    paddingVertical: 13,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    backgroundColor: T.gold,
+                    borderWidth: 1,
+                    borderColor: T.goldMuted,
+                  }}
+                >
+                  <Text style={{ color: "#0b1223", fontWeight: "900", fontSize: 15 }}>Try Again</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  activeOpacity={0.9}
+                  onPress={paymentDialog.mode === "failed" ? contactSupport : closePaymentDialog}
+                  style={{
+                    flex: 1,
+                    borderRadius: 999,
+                    paddingVertical: 13,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    backgroundColor: T.cardBg,
+                    borderWidth: 1,
+                    borderColor: T.border,
+                  }}
+                >
+                  <Text style={{ color: T.textSecondary, fontWeight: "800", fontSize: 14 }}>
+                    {paymentDialog.mode === "failed" ? "Contact Support" : "Maybe Later"}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            )}
           </View>
         </View>
       </Modal>

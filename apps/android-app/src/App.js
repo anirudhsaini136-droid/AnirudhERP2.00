@@ -9,7 +9,7 @@ import {
 } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
-import { SafeAreaProvider } from "react-native-safe-area-context";
+import { SafeAreaProvider, useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Updates from "expo-updates";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import { ShellProvider, useShell } from "./context/ShellContext";
@@ -221,8 +221,10 @@ export default function App() {
 function ThemedNavigation() {
   const { tokens: T, effectiveMode } = useTheme();
   const { user, business } = useAuth();
+  const insets = useSafeAreaInsets();
   const checkingRef = React.useRef(false);
   const trialNavGen = React.useRef(0);
+  const [otaStatus, setOtaStatus] = React.useState("idle"); // idle | downloading | ready
 
   const onTrialNavStateChange = React.useCallback(() => {
     if (!navigationRef.isReady()) return;
@@ -240,32 +242,25 @@ function ThemedNavigation() {
   }, [user, business]);
 
   const checkForOtaUpdate = React.useCallback(async () => {
-    if (__DEV__ || checkingRef.current) return;
+    if (__DEV__ || checkingRef.current || otaStatus === "ready") return;
     checkingRef.current = true;
     try {
       const update = await Updates.checkForUpdateAsync();
       if (update.isAvailable) {
-        Alert.alert("Update available", "A new version is ready. Update now?", [
-          { text: "Later", style: "cancel" },
-          {
-            text: "Update now",
-            onPress: async () => {
-              try {
-                await Updates.fetchUpdateAsync();
-                await Updates.reloadAsync();
-              } catch {
-                Alert.alert("Update", "Could not apply update right now. Please try again later.");
-              }
-            },
-          },
-        ]);
+        setOtaStatus("downloading");
+        try {
+          await Updates.fetchUpdateAsync();
+          setOtaStatus("ready");
+        } catch {
+          setOtaStatus("idle");
+        }
       }
     } catch {
       // Ignore update check failures silently.
     } finally {
       checkingRef.current = false;
     }
-  }, []);
+  }, [otaStatus]);
 
   React.useEffect(() => {
     checkForOtaUpdate();
@@ -291,13 +286,72 @@ function ThemedNavigation() {
     },
   };
   return (
-    <NavigationContainer
-      ref={navigationRef}
-      key={`nav-${effectiveMode}`}
-      theme={navTheme}
-      onStateChange={onTrialNavStateChange}
-    >
-      <RootNavigator />
-    </NavigationContainer>
+    <>
+      <NavigationContainer
+        ref={navigationRef}
+        key={`nav-${effectiveMode}`}
+        theme={navTheme}
+        onStateChange={onTrialNavStateChange}
+      >
+        <RootNavigator />
+      </NavigationContainer>
+      {otaStatus !== "idle" && (
+        <View
+          pointerEvents="box-none"
+          style={{
+            position: "absolute",
+            top: Math.max(insets.top, 8),
+            left: 12,
+            right: 12,
+            zIndex: 9999,
+          }}
+        >
+          <View
+            style={{
+              backgroundColor: T.cardBg,
+              borderWidth: 1.2,
+              borderColor: otaStatus === "ready" ? T.gold : T.border,
+              borderRadius: 14,
+              paddingHorizontal: 12,
+              paddingVertical: 10,
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "space-between",
+              shadowColor: T.gold,
+              shadowOpacity: otaStatus === "ready" ? 0.24 : 0.14,
+              shadowRadius: 10,
+              elevation: 8,
+            }}
+          >
+            <Text style={{ color: T.textPrimary, fontWeight: "800", flex: 1, marginRight: 10 }}>
+              {otaStatus === "downloading" ? "Update downloading..." : "Update ready! Restart to apply"}
+            </Text>
+            {otaStatus === "ready" ? (
+              <Pressable
+                onPress={async () => {
+                  try {
+                    await Updates.reloadAsync();
+                  } catch {
+                    Alert.alert("Update", "Could not restart right now. Please try again.");
+                  }
+                }}
+                style={{
+                  backgroundColor: T.gold,
+                  borderRadius: 999,
+                  paddingHorizontal: 12,
+                  paddingVertical: 7,
+                  borderWidth: 1,
+                  borderColor: T.goldMuted,
+                }}
+              >
+                <Text style={{ color: "#0b1223", fontWeight: "900", fontSize: 12 }}>Restart</Text>
+              </Pressable>
+            ) : (
+              <ActivityIndicator size="small" color={T.gold} />
+            )}
+          </View>
+        </View>
+      )}
+    </>
   );
 }
