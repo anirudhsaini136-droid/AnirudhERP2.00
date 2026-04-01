@@ -68,7 +68,12 @@ export default function BusinessDashboard() {
   if (loading) return <DashboardLayout><div className="flex items-center justify-center h-64"><div className="w-8 h-8 border-2 border-gold-500 border-t-transparent rounded-full animate-spin" /></div></DashboardLayout>;
 
   const s = data?.stats || {};
-  const isTrialOrExpired = ['trial', 'expired', 'suspended'].includes((business?.status || '').toLowerCase());
+  const statusLower = (business?.status || '').toLowerCase();
+  const daysRemaining = Number(business?.days_remaining ?? 0);
+  const showUpgradeWarning =
+    statusLower === 'expired' ||
+    statusLower === 'suspended' ||
+    daysRemaining < 10;
   const amount =
     billingCycle === 'yearly'
       ? paymentOffer?.yearly_payable_amount ?? 399 * 12
@@ -254,7 +259,7 @@ export default function BusinessDashboard() {
           </div>
         )}
 
-        {isTrialOrExpired && (
+        {showUpgradeWarning && (
           <div className="glass-card rounded-2xl p-4 border border-amber-500/30 bg-gradient-to-r from-amber-500/10 to-rose-500/5">
             <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
               <div className="flex items-start gap-3">
@@ -264,7 +269,7 @@ export default function BusinessDashboard() {
                 <div>
                 <h2 className="font-display text-lg text-white">Warning: Upgrade Required</h2>
                 <p className="text-sm text-gray-400 mt-1">
-                  {business?.status === 'trial'
+                  {statusLower === 'trial'
                     ? `Only ${business?.days_remaining ?? 0} days left in trial. Upgrade now to avoid service interruption.`
                     : 'Your account is restricted. Upgrade now to reactivate all features.'}
                 </p>
