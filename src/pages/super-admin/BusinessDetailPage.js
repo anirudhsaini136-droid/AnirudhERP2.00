@@ -6,7 +6,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Input } from '../../components/ui/input';
 import { Label } from '../../components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../components/ui/tabs';
-import { ArrowLeft, CreditCard, Ban, ChevronUp, LogIn, Eye, EyeOff, FlaskConical, Unlock, Sparkles } from 'lucide-react';
+import { ArrowLeft, CreditCard, Ban, ChevronUp, LogIn, Eye, EyeOff, FlaskConical, Unlock, Sparkles, Download, Upload } from 'lucide-react';
 import { toast } from 'sonner';
 
 const fmt = (n) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(n || 0);
@@ -194,6 +194,8 @@ export default function BusinessDetailPage() {
   const [resetting, setResetting] = useState(false);
   const [trialSaving, setTrialSaving] = useState(false);
   const [processingPaymentId, setProcessingPaymentId] = useState(null);
+  const [importSummary, setImportSummary] = useState(null);
+  const [importing, setImporting] = useState(false);
 
   const fetchData = async () => {
     try {
@@ -287,6 +289,45 @@ export default function BusinessDetailPage() {
       fetchData();
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Failed to grant special access');
+    }
+  };
+
+  const handleExportData = async () => {
+    try {
+      const res = await api.get(`/super-admin/businesses/${id}/export`, { responseType: 'blob' });
+      const url = window.URL.createObjectURL(new Blob([res.data], { type: 'application/zip' }));
+      const link = document.createElement('a');
+      const dateTag = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+      link.href = url;
+      link.download = `NexaERP_Export_${(b?.name || 'Business').replace(/[^a-zA-Z0-9._-]+/g, '_')}_${dateTag}.zip`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+      toast.success('Export downloaded');
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to export');
+    }
+  };
+
+  const handleImportData = async (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+    const form = new FormData();
+    form.append('file', file);
+    setImporting(true);
+    try {
+      const res = await api.post(`/super-admin/businesses/${id}/import`, form, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      setImportSummary(res.data || null);
+      toast.success('Import completed');
+      fetchData();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Import failed');
+    } finally {
+      setImporting(false);
     }
   };
 
@@ -418,6 +459,13 @@ export default function BusinessDetailPage() {
             <button onClick={() => setShowExtend(true)} className="btn-premium btn-primary text-sm">
               <CreditCard size={15} /> Adjust subscription
             </button>
+            <button onClick={handleExportData} className="btn-premium btn-primary text-sm">
+              <Download size={15} /> Export Data
+            </button>
+            <label className={`btn-premium btn-secondary text-sm cursor-pointer ${importing ? 'opacity-60 pointer-events-none' : ''}`}>
+              <Upload size={15} /> {importing ? 'Importing...' : 'Import Data'}
+              <input type="file" accept=".zip,application/zip" className="hidden" onChange={handleImportData} />
+            </label>
             <button onClick={handleGrantSpecialAccess} className="btn-premium text-sm bg-gold-500/10 border border-gold-500/30 text-gold-300 hover:bg-gold-500/20">
               <Sparkles size={15} /> Special Access
             </button>
@@ -717,6 +765,33 @@ export default function BusinessDetailPage() {
               </DialogFooter>
             </form>
           )}
+        </DialogContent>
+      </Dialog>
+      <Dialog open={!!importSummary} onOpenChange={(open) => { if (!open) setImportSummary(null); }}>
+        <DialogContent className="bg-void border-white/10 max-w-xl">
+          <DialogHeader><DialogTitle className="font-display text-white">Import summary</DialogTitle></DialogHeader>
+          <div className="space-y-3 text-sm">
+            <div className="glass-card rounded-xl p-3 border border-emerald-500/20">
+              <p className="text-emerald-300 font-semibold">Imported</p>
+              <p className="text-gray-300 mt-1">
+                {Object.entries(importSummary?.imported || {}).map(([k, v]) => `${v} ${k}`).join(', ') || '0'}
+              </p>
+            </div>
+            <div className="glass-card rounded-xl p-3 border border-amber-500/20">
+              <p className="text-amber-300 font-semibold">Skipped</p>
+              <p className="text-gray-300 mt-1">
+                {Object.entries(importSummary?.skipped || {}).map(([k, v]) => `${v} ${k}`).join(', ') || '0'}
+              </p>
+            </div>
+            <div className="glass-card rounded-xl p-3 border border-rose-500/20">
+              <p className="text-rose-300 font-semibold">Errors: {(importSummary?.errors || []).length}</p>
+              {(importSummary?.errors || []).length > 0 && (
+                <div className="mt-2 max-h-36 overflow-auto text-xs text-rose-200 space-y-1">
+                  {(importSummary.errors || []).slice(0, 20).map((err, idx) => (<p key={idx}>- {String(err)}</p>))}
+                </div>
+              )}
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
     </DashboardLayout>
