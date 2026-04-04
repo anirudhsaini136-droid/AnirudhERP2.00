@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import NexaerpPublicFooter from '../../components/public/NexaerpPublicFooter';
+import InvoiceRenderer from './InvoiceRenderer';
+import { downloadElementAsPdf } from '../../utils/exportInvoicePdf';
 
 const API_BASE =
   process.env.REACT_APP_API_URL || process.env.REACT_APP_BACKEND_URL || 'https://anirudherp-backend-production.up.railway.app';
@@ -33,6 +35,8 @@ export default function PublicCustomerPayPage() {
   const [payload, setPayload] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [downloadingId, setDownloadingId] = useState(null);
+  const [pdfJob, setPdfJob] = useState(null);
 
   const load = useCallback(
     async (silent) => {
@@ -70,9 +74,54 @@ export default function PublicCustomerPayPage() {
     return () => clearInterval(id);
   }, [token, load]);
 
+  useEffect(() => {
+    if (!pdfJob) return undefined;
+    let cancelled = false;
+    const waitMs = 1800;
+    const t = window.setTimeout(async () => {
+      try {
+        const el = document.getElementById('invoice-print');
+        if (!el || cancelled) return;
+        await downloadElementAsPdf(el, pdfJob.filename);
+      } catch (e) {
+        if (!cancelled) {
+          console.error(e);
+          window.alert(
+            'Could not build the PDF (often due to a blocked logo image). Open View and use Print → Save as PDF instead.'
+          );
+        }
+      } finally {
+        if (!cancelled) {
+          setPdfJob(null);
+          setDownloadingId(null);
+        }
+      }
+    }, waitMs);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(t);
+    };
+  }, [pdfJob]);
+
   const openInvoice = (invoiceId) => {
     const origin = window.location.origin;
     window.open(`${origin}/invoice/${invoiceId}`, '_blank', 'noopener,noreferrer');
+  };
+
+  const downloadInvoicePdf = async (invoiceId, invoiceNumber) => {
+    setDownloadingId(invoiceId);
+    try {
+      const res = await fetch(`${API_BASE}/api/finance/invoices/${encodeURIComponent(invoiceId)}/public`, {
+        cache: 'no-store',
+      });
+      if (!res.ok) throw new Error('Could not load invoice');
+      const data = await res.json();
+      const safe = String(invoiceNumber || invoiceId || 'invoice').replace(/[^\w.\-]+/g, '_');
+      setPdfJob({ data, filename: safe });
+    } catch (e) {
+      setDownloadingId(null);
+      window.alert(e.message || 'Download failed');
+    }
   };
 
   if (loading) {
@@ -141,6 +190,26 @@ export default function PublicCustomerPayPage() {
 
   return (
     <div style={{ minHeight: '100vh', background: '#0a0a0f', color: '#e5e7eb', display: 'flex', flexDirection: 'column' }}>
+      {pdfJob ? (
+        <div
+          aria-hidden
+          className="pay-pdf-capture"
+          style={{
+            position: 'absolute',
+            left: -9999,
+            top: 0,
+            width: 800,
+            overflow: 'visible',
+            pointerEvents: 'none',
+          }}
+        >
+          <InvoiceRenderer
+            invoice={pdfJob.data}
+            items={pdfJob.data.items || []}
+            business={pdfJob.data.business || null}
+          />
+        </div>
+      ) : null}
       <style>{`
         * { box-sizing: border-box; }
         body { margin: 0; font-family: 'Segoe UI', system-ui, sans-serif; }
@@ -152,6 +221,7 @@ export default function PublicCustomerPayPage() {
         }
         .pay-btn:hover { background: rgba(212,175,55,0.2); }
         .pay-btn-secondary { border-color: rgba(255,255,255,0.15); background: rgba(255,255,255,0.06); color: #d1d5db; }
+        .pay-btn:disabled { opacity: 0.55; cursor: wait; }
         @media print {
           .pay-no-print { display: none !important; }
           .pub-footer { display: none !important; }
@@ -303,8 +373,13 @@ export default function PublicCustomerPayPage() {
                     <button type="button" className="pay-btn pay-btn-secondary" onClick={() => openInvoice(inv.id)}>
                       View
                     </button>
-                    <button type="button" className="pay-btn" onClick={() => openInvoice(inv.id)}>
-                      Download PDF
+                    <button
+                      type="button"
+                      className="pay-btn"
+                      disabled={downloadingId === inv.id}
+                      onClick={() => downloadInvoicePdf(inv.id, inv.invoice_number)}
+                    >
+                      {downloadingId === inv.id ? 'Preparing…' : 'Download PDF'}
                     </button>
                   </div>
                 </div>
@@ -314,7 +389,7 @@ export default function PublicCustomerPayPage() {
         )}
 
         <p className="pay-no-print" style={{ fontSize: 12, color: '#52525b', marginTop: 32, lineHeight: 1.5 }}>
-          Use View or Download PDF to open the invoice in a new tab, then print or save as PDF from your browser.
+          View opens the invoice in a new tab. Download PDF saves a file to your device (same layout as the invoice page).
         </p>
       </main>
 
