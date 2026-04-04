@@ -26,17 +26,20 @@ import {
   ClientSearch,
   ProductSearch,
   DateInput,
+  filterInvoiceItemsForSave,
+  padInvoiceItemsTrailingBlank,
 } from './invoiceFormPrimitives';
 
-function computeEffectiveTaxRate(form) {
-  const sub = (form.items || []).reduce((s, i) => {
+function computeEffectiveTaxRate(form, lineItems) {
+  const items = lineItems || form.items || [];
+  const sub = items.reduce((s, i) => {
     const qty = Number(i.quantity) || 0;
     const rate = Number(i.unit_price) || 0;
     const disc = Number(i.item_discount) || 0;
     return s + (qty * rate - disc);
   }, 0);
   if (!form.per_item_tax) return Number(form.tax_rate) || 0;
-  const lineTax = (form.items || []).reduce((s, i) => {
+  const lineTax = items.reduce((s, i) => {
     const qty = Number(i.quantity) || 0;
     const rate = Number(i.unit_price) || 0;
     const disc = Number(i.item_discount) || 0;
@@ -93,6 +96,7 @@ export default function CreateInvoicePage() {
   const [activeDraftId, setActiveDraftId] = useState(null);
   const [invoiceClosePrompt, setInvoiceClosePrompt] = useState(false);
   const [invoiceBiz, setInvoiceBiz] = useState(null);
+  const [showPreview, setShowPreview] = useState(() => getSavedPref('invPreview', true));
 
   useEffect(() => {
     const on = () => setOfflineNow(!navigator.onLine);
@@ -159,16 +163,18 @@ export default function CreateInvoicePage() {
       currency: inv.currency || 'INR',
       buyer_state: inv.buyer_state || '',
       per_item_tax: Boolean(inv.per_item_tax),
-      items: (inv.items || []).length
-        ? inv.items.map((i) => ({
-            ...emptyItem,
-            ...i,
-            line_tax_rate: Number(i.line_tax_rate) || 0,
-            amount:
-              Number(i.total) ||
-              (Number(i.quantity) || 0) * (Number(i.unit_price) || 0) - (Number(i.item_discount) || 0),
-          }))
-        : [{ ...emptyItem }],
+      items: padInvoiceItemsTrailingBlank(
+        (inv.items || []).length
+          ? inv.items.map((i) => ({
+              ...emptyItem,
+              ...i,
+              line_tax_rate: Number(i.line_tax_rate) || 0,
+              amount:
+                Number(i.total) ||
+                (Number(i.quantity) || 0) * (Number(i.unit_price) || 0) - (Number(i.item_discount) || 0),
+            }))
+          : [{ ...emptyItem }]
+      ),
       custom_fields: Array.isArray(inv.custom_fields) ? inv.custom_fields : [],
     });
   }, [draftIdParam, business?.id, today]);
@@ -183,7 +189,8 @@ export default function CreateInvoicePage() {
     if (!business?.id) return false;
     if (!canSaveInvoiceDraft(form)) return false;
     const nowIso = new Date().toISOString();
-    const subtotal = (form.items || []).reduce((s, i) => {
+    const counted = filterInvoiceItemsForSave(form.items);
+    const subtotal = counted.reduce((s, i) => {
       const qty = Number(i.quantity) || 0;
       const rate = Number(i.unit_price) || 0;
       const disc = Number(i.item_discount) || 0;
@@ -191,7 +198,7 @@ export default function CreateInvoicePage() {
     }, 0);
     let taxAmount = subtotal * ((Number(form.tax_rate) || 0) / 100);
     if (form.per_item_tax) {
-      taxAmount = (form.items || []).reduce((s, i) => {
+      taxAmount = counted.reduce((s, i) => {
         const qty = Number(i.quantity) || 0;
         const rate = Number(i.unit_price) || 0;
         const disc = Number(i.item_discount) || 0;
@@ -201,7 +208,7 @@ export default function CreateInvoicePage() {
     }
     const totalAmount = subtotal + taxAmount - (Number(form.discount_amount) || 0);
     const localId = activeDraftId || `draft-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-    const effRate = computeEffectiveTaxRate(form);
+    const effRate = computeEffectiveTaxRate(form, counted);
     const draftInvoice = {
       id: localId,
       local_invoice_id: localId,
@@ -252,7 +259,7 @@ export default function CreateInvoicePage() {
   }, [activeDraftId, business?.id, form, today]);
 
   const updateItem = (idx, field, value) => {
-    const items = [...form.items];
+    let items = [...form.items];
     items[idx] = { ...items[idx], [field]: value };
     const qty = Number(items[idx].quantity) || 0;
     const price = Number(items[idx].unit_price) || 0;
@@ -261,11 +268,17 @@ export default function CreateInvoicePage() {
     if (field === 'quantity' && items[idx].available_stock !== null && qty > Number(items[idx].available_stock)) {
       toast.error(`Insufficient stock. Available: ${items[idx].available_stock}`);
     }
+    items = padInvoiceItemsTrailingBlank(items);
     setForm({ ...form, items });
   };
 
   const addItem = () => setForm({ ...form, items: [...form.items, { ...emptyItem }] });
-  const removeItem = (idx) => setForm({ ...form, items: form.items.filter((_, i) => i !== idx) });
+  const removeItem = (idx) => {
+    let next = form.items.filter((_, i) => i !== idx);
+    if (next.length === 0) next = [{ ...emptyItem }];
+    next = padInvoiceItemsTrailingBlank(next);
+    setForm({ ...form, items: next });
+  };
 
   const addCustomField = () => setForm({ ...form, custom_fields: [...form.custom_fields, { label: '', value: '' }] });
   const updateCustomField = (idx, key, val) => {
@@ -287,9 +300,11 @@ export default function CreateInvoicePage() {
     }
   };
 
-  const subtotal = form.items.reduce((s, i) => s + (Number(i.amount) || 0), 0);
+  const countedItems = useMemo(() => filterInvoiceItemsForSave(form.items), [form.items]);
+
+  const subtotal = countedItems.reduce((s, i) => s + (Number(i.amount) || 0), 0);
   const taxAmount = form.per_item_tax
-    ? form.items.reduce(
+    ? countedItems.reduce(
         (s, i) => s + (Number(i.amount) || 0) * ((Number(i.line_tax_rate) || 0) / 100),
         0
       )
@@ -326,7 +341,7 @@ export default function CreateInvoicePage() {
 
   const previewItems = useMemo(
     () =>
-      (form.items || []).map((i) => ({
+      countedItems.map((i) => ({
         description: i.description || '—',
         quantity: Number(i.quantity) || 0,
         unit_price: Number(i.unit_price) || 0,
@@ -334,7 +349,7 @@ export default function CreateInvoicePage() {
         item_discount: Number(i.item_discount) || 0,
         total: Number(i.amount) || 0,
       })),
-    [form.items]
+    [countedItems]
   );
 
   const previewBusiness = useMemo(() => {
@@ -375,7 +390,12 @@ export default function CreateInvoicePage() {
       toast.error('Due date is required');
       return;
     }
-    if (form.items.some((i) => !i.description)) {
+    const linesForSave = filterInvoiceItemsForSave(form.items);
+    if (!linesForSave.length) {
+      toast.error('Add at least one line item with a description');
+      return;
+    }
+    if (linesForSave.some((i) => !String(i.description || '').trim())) {
       toast.error('All items need a description');
       return;
     }
@@ -399,7 +419,7 @@ export default function CreateInvoicePage() {
       }
 
       const { client_gstin: _omitGstin, per_item_tax: _pit, items: _it, ...formWithoutGstin } = form;
-      const effRate = computeEffectiveTaxRate(form);
+      const effRate = computeEffectiveTaxRate(form, linesForSave);
       const res = await api.post('/finance/invoices', {
         ...formWithoutGstin,
         tax_rate: effRate,
@@ -407,7 +427,7 @@ export default function CreateInvoicePage() {
         buyer_state: form.buyer_state || null,
         place_of_supply: form.buyer_state || null,
         custom_fields: form.custom_fields.filter((f) => f.label && f.value),
-        items: form.items.map((i) => ({
+        items: linesForSave.map((i) => ({
           product_id: i.product_id || null,
           description: i.description,
           hsn_code: i.hsn_code || null,
@@ -480,23 +500,40 @@ export default function CreateInvoicePage() {
   return (
     <DashboardLayout>
       <div className="space-y-4 pb-10">
-        <div className="flex items-center gap-3">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <button
             type="button"
             onClick={requestGoBack}
-            className="inline-flex items-center gap-2 text-gray-400 hover:text-white transition-colors text-sm"
+            className="inline-flex items-center gap-2 text-gray-400 hover:text-white transition-colors text-sm w-fit"
           >
             <ArrowLeft size={18} />
             Back
           </button>
+          <label className="flex items-center gap-2 text-sm text-gray-300 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              className="rounded border-white/20 bg-white/5 text-gold-500 focus:ring-gold-500/40"
+              checked={showPreview}
+              onChange={(e) => {
+                const v = e.target.checked;
+                setShowPreview(v);
+                savePref('invPreview', v);
+              }}
+            />
+            Show preview
+          </label>
         </div>
         <div>
           <h1 className="font-display text-2xl text-white">Create Invoice</h1>
-          <p className="text-sm text-gray-500 font-sans mt-1">Live preview updates as you type</p>
+          {showPreview ? (
+            <p className="text-sm text-gray-500 font-sans mt-1">Live preview updates as you type</p>
+          ) : null}
         </div>
 
         <div className="flex flex-col xl:flex-row gap-6 xl:items-start">
-          <div className="w-full xl:w-[60%] min-w-0 glass-card rounded-2xl p-5 border border-white/10">
+          <div
+            className={`w-full min-w-0 glass-card rounded-2xl p-5 border border-white/10 ${showPreview ? 'xl:w-[60%]' : ''}`}
+          >
             <form onSubmit={handleCreate} className="space-y-4">
               <div className="grid grid-cols-2 gap-3">
                 <div>
@@ -759,7 +796,7 @@ export default function CreateInvoicePage() {
                             amount:
                               (items[idx].quantity * product.unit_price) - (items[idx].item_discount || 0),
                           };
-                          setForm({ ...form, items });
+                          setForm({ ...form, items: padInvoiceItemsTrailingBlank(items) });
                           if (!showHSN && product.hsn_code) {
                             setShowHSN(true);
                             savePref('hsn', true);
@@ -871,12 +908,14 @@ export default function CreateInvoicePage() {
             </form>
           </div>
 
-          <div className="w-full xl:w-[40%] min-w-0 xl:sticky xl:top-24 max-h-[calc(100vh-8rem)] overflow-y-auto rounded-2xl border border-white/10 bg-[#0d0d12] p-3">
-            <p className="text-xs text-gray-500 uppercase tracking-wider mb-3">Preview</p>
-            <div className="origin-top scale-[0.92] sm:scale-100">
-              <InvoiceRenderer invoice={previewInvoice} items={previewItems} business={previewBusiness} />
+          {showPreview ? (
+            <div className="w-full xl:w-[40%] min-w-0 xl:sticky xl:top-24 max-h-[calc(100vh-8rem)] overflow-y-auto rounded-2xl border border-white/10 bg-[#0d0d12] p-3">
+              <p className="text-xs text-gray-500 uppercase tracking-wider mb-3">Preview</p>
+              <div className="origin-top scale-[0.92] sm:scale-100">
+                <InvoiceRenderer invoice={previewInvoice} items={previewItems} business={previewBusiness} />
+              </div>
             </div>
-          </div>
+          ) : null}
         </div>
       </div>
 

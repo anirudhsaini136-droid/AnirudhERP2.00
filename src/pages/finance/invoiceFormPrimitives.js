@@ -20,6 +20,36 @@ export function normalizePartyGstin(s) {
   return (s || '').trim().toUpperCase();
 }
 
+/** Line items included in totals, preview, and API (must have description). */
+export function filterInvoiceItemsForSave(items) {
+  return (items || []).filter((i) => String(i?.description || '').trim());
+}
+
+/** True if the row is not a pristine blank buffer (default qty 1, rest empty). */
+export function itemRowHasDraftSignal(i) {
+  if (!i) return false;
+  if (String(i.description || '').trim()) return true;
+  if (Number(i.unit_price || 0) > 0) return true;
+  if (Number(i.item_discount || 0) > 0) return true;
+  if (Number(i.line_tax_rate || 0) > 0) return true;
+  if (String(i.hsn_code || '').trim()) return true;
+  if (Number(i.quantity) !== 1) return true;
+  return false;
+}
+
+/** After the last filled row, ensure one empty row exists (convenience for typing next line). */
+export function padInvoiceItemsTrailingBlank(items) {
+  const list =
+    Array.isArray(items) && items.length
+      ? items.map((x) => ({ ...emptyItem, ...x }))
+      : [{ ...emptyItem }];
+  const last = list[list.length - 1];
+  if (String(last.description || '').trim()) {
+    list.push({ ...emptyItem });
+  }
+  return list;
+}
+
 export function hasInvoiceFormAnyData(f) {
   if (!f) return false;
   if ((f.client_name || '').trim()) return true;
@@ -32,14 +62,7 @@ export function hasInvoiceFormAnyData(f) {
   if (Number(f.tax_rate || 0) > 0 || Number(f.discount_amount || 0) > 0) return true;
   if (f.per_item_tax) return true;
   if ((f.custom_fields || []).some((cf) => (cf?.label || '').trim() || (cf?.value || '').trim())) return true;
-  return (f.items || []).some(
-    (i) =>
-      (i.description || '').trim() ||
-      Number(i.quantity || 0) > 0 ||
-      Number(i.unit_price || 0) > 0 ||
-      Number(i.item_discount || 0) > 0 ||
-      Number(i.line_tax_rate || 0) > 0
-  );
+  return (f.items || []).some((i) => itemRowHasDraftSignal(i));
 }
 
 export function canSaveInvoiceDraft(f) {

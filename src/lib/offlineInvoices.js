@@ -198,7 +198,9 @@ export function buildLocalInvoiceFromForm({ business, form, localInvoiceId, invo
   const issueDate = form.issue_date || new Date().toISOString().split("T")[0];
   const dueDate = form.due_date || null;
 
-  const items = (form.items || []).map((it) => {
+  const rawLines = (form.items || []).filter((it) => String(it?.description || "").trim());
+
+  const items = rawLines.map((it) => {
     const qty = Number(it.quantity) || 0;
     const unitPrice = Number(it.unit_price) || 0;
     const disc = Number(it.item_discount) || 0;
@@ -220,7 +222,7 @@ export function buildLocalInvoiceFromForm({ business, form, localInvoiceId, invo
   let taxRate = Number(form.tax_rate) || 0;
   let lineTaxSum = 0;
   if (perItem) {
-    lineTaxSum = (form.items || []).reduce((s, raw, idx) => {
+    lineTaxSum = rawLines.reduce((s, raw, idx) => {
       const lineTotal = Number(items[idx]?.total) || 0;
       const r = Number(raw?.line_tax_rate) || 0;
       return s + Math.round(lineTotal * (r / 100) * 100) / 100;
@@ -332,7 +334,7 @@ export function createLocalInvoiceAndQueue({ businessId, business, form }) {
   // Payload to send to backend when syncing.
   const cg = clientGstinFromForm(form);
   const { client_gstin: _omitGstin, per_item_tax: _pit, items: _formItems, ...formRest } = form;
-  const lineItems = form.items || [];
+  const lineItems = (form.items || []).filter((i) => String(i?.description || "").trim());
   const subtotalP = lineItems.reduce(
     (s, i) => s + (Number(i.quantity) || 0) * (Number(i.unit_price) || 0) - (Number(i.item_discount) || 0),
     0
