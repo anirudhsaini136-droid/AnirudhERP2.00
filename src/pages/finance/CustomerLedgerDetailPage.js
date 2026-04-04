@@ -59,6 +59,10 @@ export default function CustomerLedgerDetailPage() {
   const [paying, setPaying] = useState(false);
   const [businessName, setBusinessName] = useState('');
   const [lastAdjustments, setLastAdjustments] = useState(null);
+  const [reminderOpen, setReminderOpen] = useState(false);
+  const [reminderBusy, setReminderBusy] = useState(false);
+  const [reminderText, setReminderText] = useState('');
+  const [reminderLinkNote, setReminderLinkNote] = useState(null);
 
   const today = new Date().toISOString().split('T')[0];
   const [bulkForm, setBulkForm] = useState({
@@ -92,6 +96,61 @@ export default function CustomerLedgerDetailPage() {
       .catch(() => {});
   }, [api]);
 
+  useEffect(() => {
+    if (!reminderOpen || !data?.customer) return undefined;
+    let cancelled = false;
+    (async () => {
+      setReminderBusy(true);
+      setReminderLinkNote(null);
+      setReminderText('');
+      const pendingInvoices = (data.invoices || []).filter(
+        (i) => ['sent', 'partially_paid', 'overdue'].includes(i.status) && Number(i.balance_due) > 0
+      );
+      const count = pendingInvoices.length;
+      const nm = businessName || 'Our Store';
+      const total = Number(data.customer.total_outstanding || 0);
+      const rupees = `₹${total.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`;
+      let payUrl = '';
+      if (data.customer.id && count > 0) {
+        try {
+          const r = await api.post(`/finance/customers/${data.customer.id}/payment-link`);
+          payUrl = r.data?.url || '';
+        } catch (e) {
+          if (!cancelled) {
+            setReminderLinkNote(e.response?.data?.detail || 'Payment link could not be created.');
+          }
+        }
+      } else if (!data.customer.id && count > 0) {
+        if (!cancelled) {
+          setReminderLinkNote('Create an invoice for this customer so they are saved in CRM to enable the payment link.');
+        }
+      }
+      if (cancelled) return;
+      const lines = [
+        `Dear ${data.customer.name},`,
+        '',
+        `You have ${count} unpaid invoice(s) with ${nm}.`,
+        '',
+        `Total Outstanding: ${rupees}`,
+        '',
+      ];
+      if (payUrl) {
+        lines.push('View & Download all invoices:');
+        lines.push(payUrl);
+        lines.push('');
+      }
+      lines.push('Please make payment at your earliest convenience.');
+      lines.push('');
+      lines.push('Thank you!');
+      lines.push(nm);
+      setReminderText(lines.join('\n'));
+      setReminderBusy(false);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [reminderOpen, data, businessName, api]);
+
   const handleBulkPayment = async (e) => {
     e.preventDefault();
     if (bulkForm.amount <= 0) { toast.error('Amount must be greater than 0'); return; }
@@ -110,37 +169,24 @@ export default function CustomerLedgerDetailPage() {
     setPaying(false);
   };
 
-  const sendReminder = () => {
-    if (!data?.customer) return;
-    const phone = (data.customer.phone || '').replace(/[^0-9]/g, '');
-    const storeName = businessName || 'Our Store';
-
-    const pendingInvoices = data.invoices?.filter(i =>
-      ['sent', 'partially_paid', 'overdue'].includes(i.status) && Number(i.balance_due) > 0
-    ) || [];
-
-    const invoiceLines = pendingInvoices.map((inv, i) =>
-      `${i + 1}. ${inv.invoice_number} - Rs. ${Number(inv.balance_due).toLocaleString('en-IN')} (Due: ${fmtDate(inv.due_date)})`
-    ).join('\n');
-
-    const message = [
-      `Hello ${data.customer.name}!`,
-      '',
-      `This is a gentle reminder from *${storeName}* regarding your pending payments.`,
-      '',
-      `Total Outstanding: Rs. ${Number(data.customer.total_outstanding || 0).toLocaleString('en-IN')}`,
-      '',
-      invoiceLines ? `Pending Invoices:\n${invoiceLines}` : `Pending Invoices: ${pendingInvoices.length}`,
-      '',
-      `Kindly arrange the payment at your earliest convenience.`,
-      `Thank you for your business!`
-    ].join('\n');
-
+  const openWhatsAppReminder = () => {
+    if (!reminderText) return;
+    const phone = (data?.customer?.phone || '').replace(/\D/g, '');
     const waUrl = phone
-      ? `https://wa.me/${phone}?text=${encodeURIComponent(message)}`
-      : `https://wa.me/?text=${encodeURIComponent(message)}`;
-    window.open(waUrl, '_blank');
-    toast.success('WhatsApp reminder opened!', { duration: 3000 });
+      ? `https://wa.me/${phone}?text=${encodeURIComponent(reminderText)}`
+      : `https://wa.me/?text=${encodeURIComponent(reminderText)}`;
+    window.open(waUrl, '_blank', 'noopener,noreferrer');
+    toast.success('WhatsApp opened', { duration: 2000 });
+  };
+
+  const copyReminderMessage = async () => {
+    if (!reminderText) return;
+    try {
+      await navigator.clipboard.writeText(reminderText);
+      toast.success('Message copied');
+    } catch {
+      toast.error('Could not copy');
+    }
   };
 
   if (loading) return (
@@ -175,15 +221,14 @@ export default function CustomerLedgerDetailPage() {
           <div className="flex gap-2">
             {customer.total_outstanding > 0 && (
               <>
-                {customer.phone && (
-                  <button
-                    onClick={sendReminder}
-                    className="btn-premium text-sm flex items-center gap-2 px-4 py-2 rounded-xl border"
-                    style={{ background: 'rgba(37,211,102,0.1)', borderColor: 'rgba(37,211,102,0.3)', color: '#25d366' }}
-                  >
-                    <MessageCircle size={15} /> Remind
-                  </button>
-                )}
+                <button
+                  type="button"
+                  onClick={() => setReminderOpen(true)}
+                  className="btn-premium text-sm flex items-center gap-2 px-4 py-2 rounded-xl border"
+                  style={{ background: 'rgba(37,211,102,0.1)', borderColor: 'rgba(37,211,102,0.3)', color: '#25d366' }}
+                >
+                  <MessageCircle size={15} /> Remind
+                </button>
                 <button
                   onClick={() => setShowBulkPayment(true)}
                   className="btn-premium btn-primary text-sm flex items-center gap-2"
@@ -306,6 +351,61 @@ export default function CustomerLedgerDetailPage() {
           </div>
         </div>
       </div>
+
+      <Dialog
+        open={reminderOpen}
+        onOpenChange={(open) => {
+          setReminderOpen(open);
+          if (!open) {
+            setReminderText('');
+            setReminderLinkNote(null);
+            setReminderBusy(false);
+          }
+        }}
+      >
+        <DialogContent className="bg-void border-white/10 max-w-lg max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="font-display text-white">WhatsApp reminder</DialogTitle>
+          </DialogHeader>
+          <p className="text-xs text-gray-500">
+            A payment portal link is created automatically (valid 30 days). Copy the message or open WhatsApp.
+          </p>
+          {reminderLinkNote ? (
+            <p className="text-xs text-amber-400/90 bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-2">{reminderLinkNote}</p>
+          ) : null}
+          {reminderBusy ? (
+            <div className="flex items-center justify-center py-12">
+              <div className="w-8 h-8 border-2 border-gold-500 border-t-transparent rounded-full animate-spin" />
+            </div>
+          ) : (
+            <pre className="text-xs text-gray-300 whitespace-pre-wrap font-sans bg-white/[0.04] border border-white/10 rounded-xl p-4 max-h-[45vh] overflow-y-auto">
+              {reminderText || '—'}
+            </pre>
+          )}
+          <DialogFooter className="flex-col sm:flex-row gap-2">
+            <button type="button" className="btn-premium btn-secondary w-full sm:w-auto" onClick={() => setReminderOpen(false)}>
+              Close
+            </button>
+            <button
+              type="button"
+              className="btn-premium btn-secondary w-full sm:w-auto"
+              disabled={reminderBusy || !reminderText}
+              onClick={copyReminderMessage}
+            >
+              Copy message
+            </button>
+            <button
+              type="button"
+              className="btn-premium w-full sm:w-auto"
+              style={{ background: 'rgba(37,211,102,0.15)', borderColor: 'rgba(37,211,102,0.35)', color: '#25d366' }}
+              disabled={reminderBusy || !reminderText}
+              onClick={openWhatsAppReminder}
+            >
+              Open WhatsApp
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Bulk Payment Dialog */}
       <Dialog open={showBulkPayment} onOpenChange={setShowBulkPayment}>

@@ -8,6 +8,7 @@ import LoginPage from './pages/LoginPage';
 import SignupPage from './pages/SignupPage';
 import ResetPasswordPage from './pages/ResetPasswordPage';
 import PublicInvoicePage from './pages/finance/PublicInvoicePage';
+import PublicCustomerPayPage from './pages/finance/PublicCustomerPayPage';
 import SuperAdminDashboard from './pages/super-admin/SuperAdminDashboard';
 import BusinessesPage from './pages/super-admin/BusinessesPage';
 import BusinessDetailPage from './pages/super-admin/BusinessDetailPage';
@@ -148,6 +149,7 @@ function AppRoutes() {
       <Route path="/signup" element={<RedirectAuth><SignupPage /></RedirectAuth>} />
       <Route path="/reset-password" element={<ResetPasswordPage />} />
       <Route path="/invoice/:id" element={<PublicInvoicePage />} />
+      <Route path="/pay/:token" element={<PublicCustomerPayPage />} />
 
       <Route path="/super-admin" element={<RequireAuth allowedRoles={['super_admin']}><SuperAdminDashboard /></RequireAuth>} />
       <Route path="/super-admin/businesses" element={<RequireAuth allowedRoles={['super_admin']}><BusinessesPage /></RequireAuth>} />
