@@ -107,22 +107,23 @@ export default function CustomerLedgerDetailPage() {
         (i) => ['sent', 'partially_paid', 'overdue'].includes(i.status) && Number(i.balance_due) > 0
       );
       const count = pendingInvoices.length;
-      const nm = businessName || 'Our Store';
+      const nm = (data.business_name || businessName || 'Our Store').trim() || 'Our Store';
       const total = Number(data.customer.total_outstanding || 0);
       const rupees = `₹${total.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`;
       let payUrl = '';
-      if (data.customer.id && count > 0) {
+      if (count > 0) {
         try {
-          const r = await api.post(`/finance/customers/${data.customer.id}/payment-link`);
-          payUrl = r.data?.url || '';
+          const payload = { client_name: decodeURIComponent(clientName || '') };
+          if (ledgerPhone !== undefined) payload.phone = ledgerPhone;
+          const r = await api.post('/finance/customers/ledger-payment-link', payload);
+          payUrl = (r.data && r.data.url) || '';
+          if (!payUrl && !cancelled) {
+            setReminderLinkNote('Payment link was not returned. Try again or contact support.');
+          }
         } catch (e) {
           if (!cancelled) {
             setReminderLinkNote(e.response?.data?.detail || 'Payment link could not be created.');
           }
-        }
-      } else if (!data.customer.id && count > 0) {
-        if (!cancelled) {
-          setReminderLinkNote('Create an invoice for this customer so they are saved in CRM to enable the payment link.');
         }
       }
       if (cancelled) return;
@@ -149,7 +150,7 @@ export default function CustomerLedgerDetailPage() {
     return () => {
       cancelled = true;
     };
-  }, [reminderOpen, data, businessName, api]);
+  }, [reminderOpen, data, businessName, api, clientName, ledgerPhone]);
 
   const handleBulkPayment = async (e) => {
     e.preventDefault();
