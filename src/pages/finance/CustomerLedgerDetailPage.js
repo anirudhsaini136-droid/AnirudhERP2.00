@@ -7,6 +7,7 @@ import { Input } from '../../components/ui/input';
 import { Label } from '../../components/ui/label';
 import { ArrowLeft, MessageCircle, Wallet, Eye, CheckCircle } from 'lucide-react';
 import { toast } from 'sonner';
+import { toastAfterWhatsAppOpen } from '../../utils/whatsappToast';
 
 function formatApiDetail(detail) {
   if (detail == null) return '';
@@ -198,7 +199,7 @@ export default function CustomerLedgerDetailPage() {
       ? `https://wa.me/${phone}?text=${encodeURIComponent(reminderText)}`
       : `https://wa.me/?text=${encodeURIComponent(reminderText)}`;
     window.open(waUrl, '_blank', 'noopener,noreferrer');
-    toast.success('WhatsApp opened', { duration: 2000 });
+    toastAfterWhatsAppOpen('WhatsApp opened');
   };
 
   const copyReminderMessage = async () => {

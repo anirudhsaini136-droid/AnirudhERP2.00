@@ -5,6 +5,7 @@ import { ArrowLeft, Printer, MessageCircle, ShieldCheck, Truck, X } from 'lucide
 import { Input } from '../../components/ui/input';
 import { Button } from '../../components/ui/button';
 import { toast } from 'sonner';
+import { toastAfterWhatsAppOpen } from '../../utils/whatsappToast';
 import InvoiceRenderer from './InvoiceRenderer';
 import { getLocalInvoice, upsertLocalInvoiceDetail } from '../../lib/offlineInvoices';
 import { parseEnabledModules, effectiveModuleEnabled } from '../../shared-core/modules';
@@ -155,7 +156,7 @@ export default function InvoiceViewPage() {
       ? `https://wa.me/${phone}?text=${encodeURIComponent(message)}`
       : `https://wa.me/?text=${encodeURIComponent(message)}`;
     window.open(waUrl, '_blank');
-    toast.success('WhatsApp opened!');
+    toastAfterWhatsAppOpen('WhatsApp opened!');
   };
 
   const reloadInvoice = async () => {

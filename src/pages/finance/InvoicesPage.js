@@ -7,6 +7,7 @@ import { Input } from '../../components/ui/input';
 import { Label } from '../../components/ui/label';
 import { Plus, Search, Eye, CheckCircle, Trash2, Bell, ChevronDown, ChevronUp, X } from 'lucide-react';
 import { toast } from 'sonner';
+import { toastAfterWhatsAppOpen } from '../../utils/whatsappToast';
 import {
   loadLocalInvoices,
   reconcileServerInvoiceCache,
@@ -1029,7 +1030,7 @@ export default function InvoicesPage() {
       ? `https://wa.me/${phone}?text=${encodeURIComponent(message)}`
       : `https://wa.me/?text=${encodeURIComponent(message)}`;
     window.open(waUrl, '_blank');
-    toast.success('WhatsApp reminder opened!');
+    toastAfterWhatsAppOpen('WhatsApp reminder opened!');
   };
 
   const sendAllReminders = async () => {
@@ -1085,7 +1086,7 @@ export default function InvoicesPage() {
         await new Promise((resolve) => setTimeout(resolve, 1200));
       }
     }
-    toast.success(`Opened ${candidates.length} WhatsApp reminder(s)`);
+    toastAfterWhatsAppOpen(`Opened ${candidates.length} WhatsApp reminder(s)`);
   };
 
   return (

@@ -249,7 +249,7 @@ function App() {
       <ThemeProvider>
         <AuthProvider>
           <AppRoutes />
-          <Toaster richColors position="top-right" />
+          <Toaster richColors position="top-right" duration={3000} />
         </AuthProvider>
       </ThemeProvider>
     </BrowserRouter>
