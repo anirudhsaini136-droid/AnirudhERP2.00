@@ -8,6 +8,20 @@ import { Label } from '../../components/ui/label';
 import { ArrowLeft, MessageCircle, Wallet, Eye, CheckCircle } from 'lucide-react';
 import { toast } from 'sonner';
 
+function formatApiDetail(detail) {
+  if (detail == null) return '';
+  if (typeof detail === 'string') return detail;
+  if (Array.isArray(detail)) {
+    return detail.map((x) => (typeof x === 'object' && x?.msg ? x.msg : String(x))).join('. ');
+  }
+  if (typeof detail === 'object' && detail.msg) return detail.msg;
+  try {
+    return JSON.stringify(detail);
+  } catch {
+    return 'Request failed';
+  }
+}
+
 const fmt = (n) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(n || 0);
 const fmtDate = (d) => d ? new Date(d).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : '-';
 
@@ -113,7 +127,13 @@ export default function CustomerLedgerDetailPage() {
       let payUrl = '';
       if (count > 0) {
         try {
-          const payload = { client_name: decodeURIComponent(clientName || '') };
+          let nameForScope = (data.customer.name || clientName || '').trim();
+          try {
+            nameForScope = decodeURIComponent(nameForScope);
+          } catch {
+            /* keep */
+          }
+          const payload = { client_name: nameForScope };
           if (ledgerPhone !== undefined) payload.phone = ledgerPhone;
           const r = await api.post('/finance/customers/ledger-payment-link', payload);
           payUrl = (r.data && r.data.url) || '';
@@ -122,7 +142,8 @@ export default function CustomerLedgerDetailPage() {
           }
         } catch (e) {
           if (!cancelled) {
-            setReminderLinkNote(e.response?.data?.detail || 'Payment link could not be created.');
+            const msg = formatApiDetail(e.response?.data?.detail) || e.message || 'Payment link could not be created.';
+            setReminderLinkNote(msg);
           }
         }
       }
