@@ -41,6 +41,32 @@ function isOnline() {
   return navigator.onLine;
 }
 
+const DRAFT_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+
+/** Remove local-only drafts older than 24h. Returns how many were removed. */
+export function pruneExpiredLocalDrafts(businessId) {
+  if (!businessId) return 0;
+  const all = loadLocalInvoices(businessId);
+  const cutoff = Date.now() - DRAFT_MAX_AGE_MS;
+  const next = all.filter((inv) => {
+    if (inv.sync_status !== "local_draft") return true;
+    const t = Date.parse(inv.created_at || inv.updated_at || 0);
+    if (Number.isNaN(t)) return false;
+    return t >= cutoff;
+  });
+  const removed = all.length - next.length;
+  if (removed) upsertLocalInvoices(businessId, next);
+  return removed;
+}
+
+/** Count invoices that are drafts (local or synced cache). Does not prune. */
+export function countDraftInvoices(businessId) {
+  if (!businessId) return 0;
+  return loadLocalInvoices(businessId).filter(
+    (inv) => inv.status === "draft" || inv.sync_status === "local_draft"
+  ).length;
+}
+
 export function loadLocalInvoices(businessId) {
   const raw = localStorage.getItem(getInvoicesKey(businessId));
   const invoices = safeJsonParse(raw, []);

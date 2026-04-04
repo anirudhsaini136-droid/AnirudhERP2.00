@@ -5,7 +5,7 @@ import DashboardLayout from '../../components/layout/DashboardLayout';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../../components/ui/dialog';
 import { Input } from '../../components/ui/input';
 import { Label } from '../../components/ui/label';
-import { Plus, Search, Eye, CheckCircle, Trash2, Bell, ChevronDown, ChevronUp } from 'lucide-react';
+import { Plus, Search, Eye, CheckCircle, Trash2, Bell, ChevronDown, ChevronUp, X } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   loadLocalInvoices,
@@ -16,6 +16,8 @@ import {
   syncOfflineInvoiceQueue,
   upsertServerInvoices,
   dedupeInvoicesForOffline,
+  pruneExpiredLocalDrafts,
+  countDraftInvoices,
 } from '../../lib/offlineInvoices';
 
 const fmt = (n) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(n || 0);
@@ -30,6 +32,38 @@ const emptyItem = { product_id: null, available_stock: null, minimum_stock: null
 const PARTY_GSTIN_RE = /^[A-Z0-9]{15}$/;
 function normalizePartyGstin(s) {
   return (s || '').trim().toUpperCase();
+}
+
+/** Any field touched — used for “close modal” confirmation. */
+function hasInvoiceFormAnyData(f) {
+  if (!f) return false;
+  if ((f.client_name || '').trim()) return true;
+  if ((f.client_phone || '').trim()) return true;
+  if ((f.client_email || '').trim()) return true;
+  if ((f.client_address || '').trim()) return true;
+  if ((f.client_gstin || '').trim()) return true;
+  if ((f.notes || '').trim()) return true;
+  if ((f.buyer_state || '').trim()) return true;
+  if (Number(f.tax_rate || 0) > 0 || Number(f.discount_amount || 0) > 0) return true;
+  if ((f.custom_fields || []).some((cf) => (cf?.label || '').trim() || (cf?.value || '').trim())) return true;
+  return (f.items || []).some((i) =>
+    (i.description || '').trim() ||
+    Number(i.quantity || 0) > 0 ||
+    Number(i.unit_price || 0) > 0 ||
+    Number(i.item_discount || 0) > 0
+  );
+}
+
+/** Minimum bar to persist a draft: client name + ≥1 line with description and line total > 0. */
+function canSaveInvoiceDraft(f) {
+  if (!f || !(f.client_name || '').trim()) return false;
+  return (f.items || []).some((i) => {
+    if (!(i.description || '').trim()) return false;
+    const qty = Number(i.quantity) || 0;
+    const rate = Number(i.unit_price) || 0;
+    const disc = Number(i.item_discount) || 0;
+    return qty * rate - disc > 0;
+  });
 }
 
 function safeJsonParse(v, fallback) {
@@ -376,6 +410,7 @@ export default function InvoicesPage() {
   const [offlineNow, setOfflineNow] = useState(typeof navigator !== 'undefined' ? !navigator.onLine : true);
   const [selectedInvoiceIds, setSelectedInvoiceIds] = useState([]);
   const [activeDraftId, setActiveDraftId] = useState(null);
+  const [invoiceClosePrompt, setInvoiceClosePrompt] = useState(false);
 
   useEffect(() => {
     const on = () => setOfflineNow(!navigator.onLine);
@@ -408,25 +443,6 @@ export default function InvoicesPage() {
     custom_fields: [] // [{label: '', value: ''}]
   });
 
-  const isDraftFormDirty = useCallback((f) => {
-    if (!f) return false;
-    if ((f.client_name || '').trim()) return true;
-    if ((f.client_phone || '').trim()) return true;
-    if ((f.client_email || '').trim()) return true;
-    if ((f.client_address || '').trim()) return true;
-    if ((f.client_gstin || '').trim()) return true;
-    if ((f.notes || '').trim()) return true;
-    if ((f.buyer_state || '').trim()) return true;
-    if (Number(f.tax_rate || 0) > 0 || Number(f.discount_amount || 0) > 0) return true;
-    if ((f.custom_fields || []).some((cf) => (cf?.label || '').trim() || (cf?.value || '').trim())) return true;
-    return (f.items || []).some((i) =>
-      (i.description || '').trim() ||
-      Number(i.quantity || 0) > 0 ||
-      Number(i.unit_price || 0) > 0 ||
-      Number(i.item_discount || 0) > 0
-    );
-  }, []);
-
   const removeLocalInvoiceById = useCallback((localId) => {
     if (!business?.id || !localId) return;
     const all = loadLocalInvoices(business.id);
@@ -435,7 +451,7 @@ export default function InvoicesPage() {
 
   const saveDraftFromForm = useCallback(() => {
     if (!business?.id) return false;
-    if (!isDraftFormDirty(form)) return false;
+    if (!canSaveInvoiceDraft(form)) return false;
 
     const nowIso = new Date().toISOString();
     const subtotal = (form.items || []).reduce((s, i) => {
@@ -455,7 +471,7 @@ export default function InvoicesPage() {
       sync_status: 'local_draft',
       status: 'draft',
       invoice_number: `DRAFT-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-${localId.slice(-4).toUpperCase()}`,
-      client_name: form.client_name || 'Draft',
+      client_name: form.client_name.trim(),
       client_email: form.client_email || null,
       client_address: form.client_address || null,
       client_phone: form.client_phone || null,
@@ -493,7 +509,7 @@ export default function InvoicesPage() {
     else all.unshift(draftInvoice);
     upsertLocalInvoices(business.id, all);
     return true;
-  }, [activeDraftId, business?.id, form, isDraftFormDirty, today]);
+  }, [activeDraftId, business?.id, form, today]);
 
   const [paymentForm, setPaymentForm] = useState({
     amount: 0, payment_date: today, payment_method: 'cash', reference: '', notes: ''
@@ -505,6 +521,7 @@ export default function InvoicesPage() {
     const offlineNow = typeof navigator !== 'undefined' ? !navigator.onLine : true;
     const limit = 15;
 
+    if (bizId) pruneExpiredLocalDrafts(bizId);
     const localAll = bizId ? loadLocalInvoices(bizId) : [];
     const q = (search || '').trim().toLowerCase();
     const matchSearch = (inv) => {
@@ -784,19 +801,65 @@ export default function InvoicesPage() {
   };
 
   const handleCreateDialogOpenChange = (open) => {
-    if (open) {
-      setShowCreate(true);
-      return;
-    }
-    if (!creating && saveDraftFromForm()) {
-      toast.success('Draft saved');
-    }
+    if (open) setShowCreate(true);
+  };
+
+  const closeCreateModalClean = () => {
+    setInvoiceClosePrompt(false);
     setShowCreate(false);
     setActiveDraftId(null);
     resetForm();
   };
 
+  /** X button: always discard, no confirmation; remove active local draft if editing one. */
+  const discardCreateViaX = () => {
+    if (creating) return;
+    if (activeDraftId && business?.id) removeLocalInvoiceById(activeDraftId);
+    setInvoiceClosePrompt(false);
+    setShowCreate(false);
+    setActiveDraftId(null);
+    resetForm();
+    fetchInvoices();
+  };
+
+  /** Overlay / Cancel / Escape: empty form closes; otherwise prompt Save draft / Discard. */
+  const requestCloseCreateModal = () => {
+    if (creating) return;
+    if (!hasInvoiceFormAnyData(form)) {
+      closeCreateModalClean();
+      return;
+    }
+    setInvoiceClosePrompt(true);
+  };
+
+  const confirmSaveDraftAndClose = () => {
+    if (!canSaveInvoiceDraft(form)) {
+      toast.error('Add client name and at least one line item with description and amount greater than 0 to save a draft.');
+      return;
+    }
+    if (saveDraftFromForm()) {
+      toast.success('Draft saved');
+      setInvoiceClosePrompt(false);
+      setShowCreate(false);
+      setActiveDraftId(null);
+      resetForm();
+      fetchInvoices();
+    } else {
+      toast.error('Could not save draft.');
+    }
+  };
+
+  const confirmDiscardAndClose = () => {
+    if (activeDraftId && business?.id) removeLocalInvoiceById(activeDraftId);
+    setInvoiceClosePrompt(false);
+    setShowCreate(false);
+    setActiveDraftId(null);
+    resetForm();
+    fetchInvoices();
+  };
+
   const openDraftForEdit = (inv) => {
+    setInvoiceClosePrompt(false);
     setActiveDraftId(inv.id);
     setForm({
       client_name: inv.client_name || '',
@@ -855,6 +918,8 @@ export default function InvoicesPage() {
     fetchInvoices();
     toast.success(`${deleted} invoice(s) deleted`);
   };
+
+  const draftCount = business?.id ? countDraftInvoices(business.id) : 0;
 
   const openPayment = (inv) => {
     setPaymentInvoice(inv);
@@ -1014,11 +1079,28 @@ export default function InvoicesPage() {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
             <h1 className="font-display text-2xl text-white">Invoices</h1>
-            <p className="text-sm text-gray-500 font-sans">{total} invoices</p>
+            <p className="text-sm text-gray-500 font-sans flex flex-wrap items-center gap-2">
+              <span>{total} invoices</span>
+              {draftCount > 0 ? (
+                <span className="inline-flex items-center rounded-full border border-amber-500/35 bg-amber-500/10 px-2.5 py-0.5 text-xs font-semibold text-amber-400">
+                  {draftCount} draft{draftCount === 1 ? '' : 's'}
+                </span>
+              ) : null}
+            </p>
           </div>
-          {user?.role !== "ca_admin" && <button onClick={() => { setActiveDraftId(null); resetForm(); setShowCreate(true); }} className="btn-premium btn-primary">
-            <Plus size={16} /> Create Invoice
-          </button>}
+          {user?.role !== "ca_admin" && (
+            <button
+              onClick={() => {
+                setInvoiceClosePrompt(false);
+                setActiveDraftId(null);
+                resetForm();
+                setShowCreate(true);
+              }}
+              className="btn-premium btn-primary"
+            >
+              <Plus size={16} /> Create Invoice
+            </button>
+          )}
         </div>
 
         <div className="flex flex-wrap gap-3">
@@ -1166,11 +1248,56 @@ export default function InvoicesPage() {
         </DialogContent>
       </Dialog>
 
+      {/* Save vs discard when closing create modal with unsaved data */}
+      <Dialog open={invoiceClosePrompt} onOpenChange={(o) => { if (!o) setInvoiceClosePrompt(false); }}>
+        <DialogContent className="bg-void border-white/10 max-w-md">
+          <DialogHeader>
+            <DialogTitle className="font-display text-white text-lg">Save as draft or discard?</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-gray-400">Your invoice isn&apos;t finished. Choose what to do with it.</p>
+          <DialogFooter className="gap-2 sm:gap-2">
+            <button type="button" onClick={() => setInvoiceClosePrompt(false)} className="btn-premium btn-secondary">
+              Keep editing
+            </button>
+            <button type="button" onClick={confirmDiscardAndClose} className="btn-premium border border-rose-500/30 text-rose-400 hover:bg-rose-500/10">
+              Discard
+            </button>
+            <button
+              type="button"
+              onClick={confirmSaveDraftAndClose}
+              disabled={!canSaveInvoiceDraft(form)}
+              className="btn-premium btn-primary disabled:opacity-40 disabled:pointer-events-none"
+            >
+              Save draft
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Create Invoice Dialog */}
       <Dialog open={showCreate} onOpenChange={handleCreateDialogOpenChange}>
-        <DialogContent className="bg-void border-white/10 max-w-3xl max-h-[92vh] overflow-y-auto">
-          <DialogHeader>
+        <DialogContent
+          hideCloseButton
+          className="bg-void border-white/10 max-w-3xl max-h-[92vh] overflow-y-auto"
+          onPointerDownOutside={(e) => {
+            e.preventDefault();
+            requestCloseCreateModal();
+          }}
+          onEscapeKeyDown={(e) => {
+            e.preventDefault();
+            requestCloseCreateModal();
+          }}
+        >
+          <DialogHeader className="flex flex-row items-start justify-between gap-4 pr-10">
             <DialogTitle className="font-display text-white">Create Invoice</DialogTitle>
+            <button
+              type="button"
+              onClick={discardCreateViaX}
+              className="rounded-lg p-1.5 text-gray-400 transition hover:bg-white/10 hover:text-white"
+              aria-label="Close and discard"
+            >
+              <X className="h-5 w-5" />
+            </button>
           </DialogHeader>
           <form onSubmit={handleCreate} className="space-y-4">
 
@@ -1380,7 +1507,7 @@ export default function InvoicesPage() {
             </div>
 
             <DialogFooter>
-              <button type="button" onClick={() => handleCreateDialogOpenChange(false)} className="btn-premium btn-secondary">Cancel</button>
+              <button type="button" onClick={requestCloseCreateModal} className="btn-premium btn-secondary">Cancel</button>
               <button type="submit" disabled={creating} className="btn-premium btn-primary">{creating ? 'Creating...' : 'Create Invoice'}</button>
             </DialogFooter>
           </form>

@@ -1,6 +1,9 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Alert, Modal, ScrollView, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { useRoute } from "@react-navigation/native";
 import { getCustomers, getProducts, postInvoice } from "../api";
+import { useAuth } from "../context/AuthContext";
+import { getInvoiceDraftById, removeInvoiceDraft, upsertInvoiceDraft } from "../lib/localInvoiceDrafts";
 import { ContentPanel, HeroBand, PageHeader, PrimaryButton, SecondaryButton } from "../components/NexaUi";
 import * as T from "../theme/tokens";
 import { S } from "../theme/screenStyles";
@@ -12,6 +15,81 @@ function todayStr() {
 const PARTY_GSTIN_RE = /^[A-Z0-9]{15}$/;
 function normalizePartyGstin(s) {
   return (s || "").trim().toUpperCase();
+}
+
+function hasAndroidInvoiceAnyData(s) {
+  if (!s) return false;
+  if ((s.clientName || "").trim()) return true;
+  if ((s.clientPhone || "").trim()) return true;
+  if ((s.clientEmail || "").trim()) return true;
+  if ((s.clientAddress || "").trim()) return true;
+  if ((s.clientGstin || "").trim()) return true;
+  if ((s.notes || "").trim()) return true;
+  if ((s.buyerState || "").trim()) return true;
+  if (Number(s.taxRate || 0) > 0 || Number(s.discountAmount || 0) > 0) return true;
+  if ((s.customFields || []).some((cf) => (cf?.label || "").trim() || (cf?.value || "").trim())) return true;
+  return (s.items || []).some((it) => {
+    const qty = Number(it.quantity) || 0;
+    const price = Number(it.unit_price) || 0;
+    const disc = s.showItemDiscount ? Number(it.item_discount) || 0 : 0;
+    return (
+      (it.description || "").trim() ||
+      qty > 0 ||
+      price > 0 ||
+      disc > 0 ||
+      qty * price - disc > 0
+    );
+  });
+}
+
+function canSaveAndroidInvoiceDraft(s) {
+  if (!s || !(s.clientName || "").trim()) return false;
+  return (s.items || []).some((it) => {
+    if (!(it.description || "").trim()) return false;
+    const qty = Number(it.quantity) || 0;
+    const price = Number(it.unit_price) || 0;
+    const disc = s.showItemDiscount ? Number(it.item_discount) || 0 : 0;
+    return qty * price - disc > 0;
+  });
+}
+
+async function saveDraftFromSnapshot(s, businessId) {
+  const id = s.linkingDraftId || `draft-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+  const items = s.items || [];
+  let subtotal = 0;
+  for (const it of items) {
+    const qty = Number(it.quantity) || 0;
+    const price = Number(it.unit_price) || 0;
+    const disc = s.showItemDiscount ? Number(it.item_discount) || 0 : 0;
+    subtotal += qty * price - disc;
+  }
+  const tr = Number(s.taxRate) || 0;
+  const taxAmount = subtotal * (tr / 100);
+  const totalAmount = subtotal + taxAmount - (Number(s.discountAmount) || 0);
+  const suffix = id.slice(-4).toUpperCase();
+  const gst = normalizePartyGstin(s.clientGstin || "").replace(/[^A-Z0-9]/g, "").slice(0, 15);
+  await upsertInvoiceDraft(businessId, {
+    id,
+    invoice_number: `DRAFT-${new Date().toISOString().slice(0, 10).replace(/-/g, "")}-${suffix}`,
+    client_name: s.clientName.trim(),
+    client_phone: s.clientPhone || "",
+    client_email: s.clientEmail || "",
+    client_address: s.clientAddress || "",
+    client_gstin: PARTY_GSTIN_RE.test(gst) ? gst : "",
+    buyer_state: s.buyerState || "",
+    issue_date: s.issueDate,
+    due_date: s.dueDate,
+    tax_rate: tr,
+    discount_amount: Number(s.discountAmount) || 0,
+    subtotal,
+    tax_amount: taxAmount,
+    total_amount: totalAmount,
+    notes: s.notes || "",
+    items: items.map((it) => ({ ...it })),
+    custom_fields: s.showCustomFields
+      ? (s.customFields || []).filter((f) => (f.label || "").trim() && (f.value || "").trim())
+      : [],
+  });
 }
 
 const INDIAN_STATES = [
@@ -54,6 +132,10 @@ const INDIAN_STATES = [
 ];
 
 export default function InvoiceCreateScreen({ navigation }) {
+  const route = useRoute();
+  const { business } = useAuth();
+  const [linkingDraftId, setLinkingDraftId] = useState(null);
+
   const [saving, setSaving] = useState(false);
 
   const [clientName, setClientName] = useState("");
@@ -101,6 +183,137 @@ export default function InvoiceCreateScreen({ navigation }) {
   const [productQuery, setProductQuery] = useState("");
 
   const [buyerDropdownOpen, setBuyerDropdownOpen] = useState(false);
+
+  const snapshotRef = useRef({});
+  snapshotRef.current = {
+    clientName,
+    clientPhone,
+    clientEmail,
+    clientAddress,
+    clientGstin,
+    buyerState,
+    issueDate,
+    dueDate,
+    taxRate,
+    discountAmount,
+    notes,
+    items,
+    customFields,
+    showItemDiscount,
+    showCustomFields,
+    linkingDraftId,
+    saving,
+  };
+
+  useEffect(() => {
+    const draftId = route.params?.draftId;
+    const bid = business?.id;
+    if (!draftId || !bid) return;
+    let cancelled = false;
+    (async () => {
+      const d = await getInvoiceDraftById(bid, draftId);
+      if (cancelled || !d) return;
+      setLinkingDraftId(d.id);
+      setClientName(d.client_name || "");
+      setClientPhone(d.client_phone || "");
+      setClientEmail(d.client_email || "");
+      setClientAddress(d.client_address || "");
+      setClientGstin((d.client_gstin || "").toString().toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 15));
+      setBuyerState(d.buyer_state || "");
+      setIssueDate(d.issue_date || todayStr());
+      setDueDate(d.due_date || todayStr());
+      setTaxRate(String(d.tax_rate ?? 0));
+      setDiscountAmount(String(d.discount_amount ?? 0));
+      setNotes(d.notes || "");
+      const rawItems = Array.isArray(d.items) && d.items.length ? d.items : null;
+      if (rawItems) {
+        setItems(
+          rawItems.map((it) => ({
+            product_id: it.product_id || null,
+            description: it.description || "",
+            hsn_code: it.hsn_code || "",
+            quantity: String(it.quantity ?? 1),
+            unit_price: String(it.unit_price ?? ""),
+            item_discount: String(it.item_discount ?? 0),
+            available_stock: it.available_stock ?? null,
+            minimum_stock: it.minimum_stock ?? null,
+          }))
+        );
+      }
+      if (Array.isArray(d.custom_fields) && d.custom_fields.length) {
+        setShowCustomFields(true);
+        setCustomFields(d.custom_fields.map((x) => ({ label: x.label || "", value: x.value || "" })));
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [route.params?.draftId, business?.id]);
+
+  useEffect(() => {
+    return navigation.addListener("beforeRemove", (e) => {
+      const s = snapshotRef.current;
+      if (s.saving) return;
+      if (!hasAndroidInvoiceAnyData(s)) return;
+      e.preventDefault();
+      const bid = business?.id;
+      Alert.alert("Save as draft or discard?", "Your invoice isn't finished.", [
+        { text: "Keep editing", style: "cancel" },
+        {
+          text: "Discard",
+          style: "destructive",
+          onPress: () => {
+            if (bid && s.linkingDraftId) removeInvoiceDraft(bid, s.linkingDraftId);
+            navigation.dispatch(e.data.action);
+          },
+        },
+        {
+          text: "Save draft",
+          onPress: async () => {
+            if (!canSaveAndroidInvoiceDraft(s)) {
+              Alert.alert(
+                "Draft",
+                "Add client name and at least one line item with description and amount greater than 0."
+              );
+              return;
+            }
+            if (!bid) {
+              navigation.dispatch(e.data.action);
+              return;
+            }
+            try {
+              await saveDraftFromSnapshot(s, bid);
+            } catch {
+              Alert.alert("Draft", "Could not save draft.");
+              return;
+            }
+            navigation.dispatch(e.data.action);
+          },
+        },
+      ]);
+    });
+  }, [navigation, business?.id]);
+
+  const discardViaX = useCallback(async () => {
+    if (saving) return;
+    const bid = business?.id;
+    if (bid && linkingDraftId) await removeInvoiceDraft(bid, linkingDraftId);
+    navigation.goBack();
+  }, [saving, business?.id, linkingDraftId, navigation]);
+
+  useLayoutEffect(() => {
+    navigation.setOptions({
+      headerRight: () => (
+        <TouchableOpacity
+          onPress={discardViaX}
+          style={{ paddingHorizontal: 14, paddingVertical: 8 }}
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+        >
+          <Text style={{ color: T.rose, fontSize: 20, fontWeight: "900" }}>✕</Text>
+        </TouchableOpacity>
+      ),
+    });
+  }, [navigation, discardViaX]);
 
   const subtotal = useMemo(() => {
     return items.reduce((s, it) => {
@@ -260,6 +473,8 @@ export default function InvoiceCreateScreen({ navigation }) {
       };
 
       const res = await postInvoice(payload);
+      const bid = business?.id;
+      if (bid && linkingDraftId) await removeInvoiceDraft(bid, linkingDraftId);
       Alert.alert("Invoice", res.message || "Invoice created");
       navigation.replace("InvoiceDetail", { invoiceId: res.id });
     } catch (e) {

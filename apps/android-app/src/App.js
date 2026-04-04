@@ -129,7 +129,7 @@ function AuthedStack() {
         <Stack.Screen name="HrPayroll" component={HrPayrollScreen} />
         <Stack.Screen name="FinanceDashboard" component={FinanceDashboardScreen} />
         <Stack.Screen name="Invoices" component={InvoicesScreen} />
-        <Stack.Screen name="InvoiceCreate" component={InvoiceCreateScreen} />
+        <Stack.Screen name="InvoiceCreate" component={InvoiceCreateScreen} options={{ unmountOnBlur: true }} />
         <Stack.Screen name="InvoiceDetail" component={InvoiceDetailScreen} />
         <Stack.Screen name="Customers" component={CustomersScreen} />
         <Stack.Screen name="CustomerLedger" component={CustomerLedgerScreen} />
