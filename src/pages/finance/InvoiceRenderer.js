@@ -2,6 +2,7 @@
 // Props: invoice, items, business, payments
 import React from 'react';
 import QRCode from 'qrcode';
+import { splitGstTotal } from '../../shared-core';
 
 const fmt = (n) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 2 }).format(n || 0);
 const fmtDate = (d) => d ? new Date(d).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' }) : '-';
@@ -107,11 +108,49 @@ export default function InvoiceRenderer({ invoice, items, business, payments }) 
     overdue: '#ef4444', partially_paid: '#f59e0b'
   }[invoice.status] || '#6b7280';
 
-  const getLineTotal = (item) =>
-    Number(item.total || item.amount || ((item.quantity || 0) * (item.unit_price || 0)) || 0);
+  const getLineTaxable = (item) => {
+    const t = Number(item.total ?? item.amount);
+    if (Number.isFinite(t) && !Number.isNaN(t)) return t;
+    return (
+      (Number(item.quantity) || 0) * (Number(item.unit_price) || 0) - (Number(item.item_discount) || 0)
+    );
+  };
 
-  const hasHSN = items.some(i => i.hsn_code);
-  const hasItemDiscount = items.some(i => Number(i.item_discount) > 0);
+  const lineRows = items.map((item) => {
+    const taxable = getLineTaxable(item);
+    const hdr = Number(invoice.tax_rate || 0);
+    let pct = Number(item.line_tax_rate);
+    if (!Number.isFinite(pct)) pct = 0;
+    const storedRaw = item.line_tax_amount;
+    const storedDefined = storedRaw !== undefined && storedRaw !== null && storedRaw !== '';
+    let taxAmt;
+    if (storedDefined) {
+      taxAmt = Number(storedRaw);
+      if ((!pct || pct === 0) && taxable > 0 && taxAmt > 0) {
+        pct = Math.round((taxAmt / taxable) * 10000) / 100;
+      }
+    } else if (pct > 0) {
+      taxAmt = Math.round(taxable * (pct / 100) * 100) / 100;
+    } else if (hdr > 0) {
+      pct = hdr;
+      taxAmt = Math.round(taxable * (hdr / 100) * 100) / 100;
+    } else {
+      const sub = Number(invoice.subtotal || 0);
+      const ttot = Number(invoice.tax_amount || 0);
+      if (sub > 0 && ttot > 0) {
+        taxAmt = Math.round(ttot * (taxable / sub) * 100) / 100;
+        pct = taxable > 0 && taxAmt > 0 ? Math.round((taxAmt / taxable) * 10000) / 100 : 0;
+      } else {
+        taxAmt = 0;
+        pct = 0;
+      }
+    }
+    const gross = taxable + taxAmt;
+    return { item, taxable, pct, taxAmt, gross };
+  });
+
+  const hasHSN = items.some((i) => i.hsn_code);
+  const showTaxCols = lineRows.some((r) => r.pct > 0 || r.taxAmt > 0) || Number(invoice.tax_amount || 0) > 0;
 
   // Parse custom fields
   let customFields = [];
@@ -124,7 +163,7 @@ export default function InvoiceRenderer({ invoice, items, business, payments }) 
   } catch { customFields = []; }
   customFields = customFields.filter(f => f.label && f.value);
 
-  const computedSubtotal = items.reduce((s, i) => s + getLineTotal(i), 0);
+  const computedSubtotal = lineRows.reduce((s, r) => s + r.taxable, 0);
   const total = Number(invoice.total_amount || 0);
   const paid = Number(invoice.amount_paid || 0);
   const balance = Number(invoice.balance_due || Math.max(0, total - paid));
@@ -198,8 +237,14 @@ export default function InvoiceRenderer({ invoice, items, business, payments }) 
                 ['Invoice Date', fmtDate(invoice.issue_date)],
                 ['Due Date', fmtDate(invoice.due_date)],
                 invoice.payment_terms ? ['Payment Terms', invoice.payment_terms] : null,
-                    invoice.place_of_supply ? ['Place of Supply', invoice.place_of_supply] : null,
-                    invoice.supply_type === 'interstate' ? ['Supply Type', 'Inter-State (IGST)'] : (invoice.supply_type === 'intrastate' ? ['Supply Type', 'Intra-State (CGST+SGST)'] : null),
+                    invoice.place_of_supply || invoice.buyer_state
+                      ? ['Place of Supply', invoice.place_of_supply || invoice.buyer_state]
+                      : null,
+                    invoice.supply_type === 'interstate'
+                      ? ['Supply Type', 'Inter-State (IGST)']
+                      : invoice.supply_type === 'intrastate'
+                        ? ['Supply Type', 'Intra-State (CGST + SGST)']
+                        : null,
                     ...customFields.map(f => [f.label, f.value])
               ].filter(Boolean).map(([label, value]) => (
                 <React.Fragment key={label}>
@@ -213,29 +258,33 @@ export default function InvoiceRenderer({ invoice, items, business, payments }) 
       </div>
 
       {/* ── ITEMS TABLE ── */}
-      <div style={{ padding: '0 48px', marginTop: 28 }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+      <div style={{ padding: '0 48px', marginTop: 28, overflowX: 'auto' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: showTaxCols ? 640 : 400 }}>
           <thead>
             <tr style={{ borderBottom: '2px solid #111827' }}>
-              <th style={{ textAlign: 'center', padding: '8px 4px', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px', color: '#374151', width: 28 }}>No.</th>
-              <th style={{ textAlign: 'left', padding: '8px 8px', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px', color: '#374151' }}>Description</th>
-              {hasHSN && <th style={{ textAlign: 'center', padding: '8px 4px', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px', color: '#374151', width: 70 }}>HSN/SAC</th>}
-              <th style={{ textAlign: 'center', padding: '8px 4px', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px', color: '#374151', width: 50 }}>Qty</th>
-              <th style={{ textAlign: 'right', padding: '8px 8px', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px', color: '#374151', width: 90 }}>Rate</th>
-              {hasItemDiscount && <th style={{ textAlign: 'right', padding: '8px 8px', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px', color: '#374151', width: 80 }}>Discount</th>}
-              <th style={{ textAlign: 'right', padding: '8px 0', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px', color: '#374151', width: 90 }}>Amount</th>
+              <th style={{ textAlign: 'center', padding: '8px 4px', fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px', color: '#374151', width: 26 }}>No.</th>
+              <th style={{ textAlign: 'left', padding: '8px 6px', fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px', color: '#374151' }}>Description</th>
+              {hasHSN && <th style={{ textAlign: 'center', padding: '8px 4px', fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px', color: '#374151', width: 64 }}>HSN/SAC</th>}
+              <th style={{ textAlign: 'center', padding: '8px 4px', fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px', color: '#374151', width: 44 }}>Qty</th>
+              <th style={{ textAlign: 'right', padding: '8px 6px', fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px', color: '#374151', width: 82 }}>Rate</th>
+              <th style={{ textAlign: 'right', padding: '8px 6px', fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px', color: '#374151', width: 82 }}>Taxable Amt</th>
+              {showTaxCols && <th style={{ textAlign: 'right', padding: '8px 4px', fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px', color: '#374151', width: 52 }}>Tax%</th>}
+              {showTaxCols && <th style={{ textAlign: 'right', padding: '8px 6px', fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px', color: '#374151', width: 78 }}>Tax Amt</th>}
+              <th style={{ textAlign: 'right', padding: '8px 4px', fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px', color: '#374151', width: 86 }}>Amount</th>
             </tr>
           </thead>
           <tbody>
-            {items.map((item, i) => (
+            {lineRows.map((row, i) => (
               <tr key={i} style={{ borderBottom: '1px solid #f3f4f6' }}>
-                <td style={{ padding: '12px 4px', fontSize: 13, color: '#9ca3af', textAlign: 'center' }}>{i + 1}</td>
-                <td style={{ padding: '12px 8px', fontSize: 14, color: '#111827', fontWeight: 500 }}>{item.description}</td>
-                {hasHSN && <td style={{ padding: '12px 4px', fontSize: 13, color: '#6b7280', textAlign: 'center' }}>{item.hsn_code || '—'}</td>}
-                <td style={{ padding: '12px 4px', fontSize: 13, color: '#6b7280', textAlign: 'center' }}>{item.quantity}</td>
-                <td style={{ padding: '12px 8px', fontSize: 13, color: '#6b7280', textAlign: 'right' }}>{fmt(item.unit_price)}</td>
-                {hasItemDiscount && <td style={{ padding: '12px 8px', fontSize: 13, color: '#ef4444', textAlign: 'right' }}>{Number(item.item_discount) > 0 ? fmt(item.item_discount) : '—'}</td>}
-                <td style={{ padding: '12px 0', fontSize: 14, color: '#111827', fontWeight: 600, textAlign: 'right' }}>{fmt(getLineTotal(item))}</td>
+                <td style={{ padding: '10px 4px', fontSize: 12, color: '#9ca3af', textAlign: 'center' }}>{i + 1}</td>
+                <td style={{ padding: '10px 6px', fontSize: 13, color: '#111827', fontWeight: 500 }}>{row.item.description}</td>
+                {hasHSN && <td style={{ padding: '10px 4px', fontSize: 12, color: '#6b7280', textAlign: 'center' }}>{row.item.hsn_code || '—'}</td>}
+                <td style={{ padding: '10px 4px', fontSize: 12, color: '#6b7280', textAlign: 'center' }}>{row.item.quantity}</td>
+                <td style={{ padding: '10px 6px', fontSize: 12, color: '#6b7280', textAlign: 'right' }}>{fmt(row.item.unit_price)}</td>
+                <td style={{ padding: '10px 6px', fontSize: 12, color: '#6b7280', textAlign: 'right' }}>{fmt(row.taxable)}</td>
+                {showTaxCols && <td style={{ padding: '10px 4px', fontSize: 12, color: '#6b7280', textAlign: 'right' }}>{row.pct > 0 ? `${row.pct}%` : '—'}</td>}
+                {showTaxCols && <td style={{ padding: '10px 6px', fontSize: 12, color: '#6b7280', textAlign: 'right' }}>{row.taxAmt > 0 ? fmt(row.taxAmt) : '—'}</td>}
+                <td style={{ padding: '10px 4px', fontSize: 13, color: '#111827', fontWeight: 600, textAlign: 'right' }}>{fmt(row.gross)}</td>
               </tr>
             ))}
           </tbody>
@@ -244,31 +293,49 @@ export default function InvoiceRenderer({ invoice, items, business, payments }) 
 
       {/* ── TOTALS ── */}
       <div style={{ padding: '20px 48px', display: 'flex', justifyContent: 'flex-end' }}>
-        <div style={{ width: 290 }}>
+        <div style={{ width: 320 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', padding: '5px 0', fontSize: 13, color: '#6b7280' }}>
             <span>Subtotal</span><span>{fmt(invoice.subtotal || computedSubtotal)}</span>
           </div>
-          {/* GST Breakdown — show CGST+SGST or IGST */}
-          {Number(invoice.cgst_amount) > 0 && (
-            <>
-              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', fontSize: 12, color: '#6b7280' }}>
-                <span>CGST ({invoice.cgst_rate}%)</span><span>{fmt(invoice.cgst_amount)}</span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', fontSize: 12, color: '#6b7280' }}>
-                <span>SGST ({invoice.sgst_rate}%)</span><span>{fmt(invoice.sgst_amount)}</span>
-              </div>
-            </>
-          )}
-          {Number(invoice.igst_amount) > 0 && (
-            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', fontSize: 12, color: '#6b7280' }}>
-              <span>IGST ({invoice.igst_rate}%)</span><span>{fmt(invoice.igst_amount)}</span>
-            </div>
-          )}
-          {Number(invoice.tax_rate) > 0 && !Number(invoice.cgst_amount) && !Number(invoice.igst_amount) && (
-            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', fontSize: 12, color: '#6b7280' }}>
-              <span>GST ({invoice.tax_rate}%)</span><span>{fmt(invoice.tax_amount)}</span>
-            </div>
-          )}
+          {(() => {
+            let cgst = Number(invoice.cgst_amount || 0);
+            let sgst = Number(invoice.sgst_amount || 0);
+            let igst = Number(invoice.igst_amount || 0);
+            const totalTax = Number(invoice.tax_amount || 0);
+            if (totalTax > 0 && cgst === 0 && sgst === 0 && igst === 0) {
+              const fb = splitGstTotal(
+                totalTax,
+                business?.state || '',
+                invoice.buyer_state || invoice.place_of_supply || ''
+              );
+              cgst = fb.cgst_amount;
+              sgst = fb.sgst_amount;
+              igst = fb.igst_amount;
+            }
+            return (
+              <>
+                {(cgst > 0 || sgst > 0) && (
+                  <>
+                    {cgst > 0 && (
+                      <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', fontSize: 12, color: '#6b7280' }}>
+                        <span>CGST</span><span>{fmt(cgst)}</span>
+                      </div>
+                    )}
+                    {sgst > 0 && (
+                      <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', fontSize: 12, color: '#6b7280' }}>
+                        <span>SGST</span><span>{fmt(sgst)}</span>
+                      </div>
+                    )}
+                  </>
+                )}
+                {igst > 0 && !(cgst > 0 || sgst > 0) && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', fontSize: 12, color: '#6b7280' }}>
+                    <span>IGST</span><span>{fmt(igst)}</span>
+                  </div>
+                )}
+              </>
+            );
+          })()}
           {Number(invoice.discount_amount) > 0 && (
             <div style={{ display: 'flex', justifyContent: 'space-between', padding: '5px 0', fontSize: 13, color: '#ef4444' }}>
               <span>Discount</span><span>-{fmt(invoice.discount_amount)}</span>

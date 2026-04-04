@@ -2,8 +2,18 @@ function round2(n) {
   return Math.round(Number(n) * 100) / 100;
 }
 
-export function calculateGstSplit(taxRate, subtotal, sellerState, buyerState) {
-  if (!taxRate || Number(taxRate) === 0) {
+export function normalizeStateForGst(raw) {
+  if (!raw) return "";
+  return String(raw)
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ");
+}
+
+/** Split total tax rupees into CGST+SGST (intra) or IGST (inter). No averaged % on invoice. */
+export function splitGstTotal(taxAmount, sellerState, buyerState) {
+  const ta = round2(taxAmount);
+  if (!ta || ta <= 0) {
     return {
       supply_type: "intrastate",
       cgst_rate: 0,
@@ -15,22 +25,20 @@ export function calculateGstSplit(taxRate, subtotal, sellerState, buyerState) {
       tax_amount: 0,
     };
   }
-
-  const from = (sellerState || "").trim().toLowerCase();
-  const to = (buyerState || "").trim().toLowerCase();
-  const taxAmount = round2((Number(subtotal) * Number(taxRate)) / 100);
-  if (from && to && from === to) {
-    const halfRate = round2(Number(taxRate) / 2);
-    const halfAmount = round2(taxAmount / 2);
+  const s1 = normalizeStateForGst(sellerState);
+  const s2 = normalizeStateForGst(buyerState);
+  if (s1 && s2 && s1 === s2) {
+    const half = round2(ta / 2);
+    const other = round2(ta - half);
     return {
       supply_type: "intrastate",
-      cgst_rate: halfRate,
-      cgst_amount: halfAmount,
-      sgst_rate: halfRate,
-      sgst_amount: halfAmount,
+      cgst_rate: 0,
+      cgst_amount: half,
+      sgst_rate: 0,
+      sgst_amount: other,
       igst_rate: 0,
       igst_amount: 0,
-      tax_amount: taxAmount,
+      tax_amount: ta,
     };
   }
   return {
@@ -39,8 +47,18 @@ export function calculateGstSplit(taxRate, subtotal, sellerState, buyerState) {
     cgst_amount: 0,
     sgst_rate: 0,
     sgst_amount: 0,
-    igst_rate: Number(taxRate),
-    igst_amount: taxAmount,
-    tax_amount: taxAmount,
+    igst_rate: 0,
+    igst_amount: ta,
+    tax_amount: ta,
   };
+}
+
+/** Legacy: compute tax from single rate × subtotal, then split (used where line tax not modeled). */
+export function calculateGstSplit(taxRate, subtotal, sellerState, buyerState) {
+  const tr = Number(taxRate) || 0;
+  if (!tr) {
+    return splitGstTotal(0, sellerState, buyerState);
+  }
+  const taxAmount = round2((Number(subtotal) * tr) / 100);
+  return splitGstTotal(taxAmount, sellerState, buyerState);
 }

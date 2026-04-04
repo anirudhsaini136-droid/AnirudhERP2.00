@@ -1,6 +1,6 @@
 // Offline MVP storage for invoices + payments (Part 1).
 // MVP uses localStorage (simple + reliable for small data). Can be migrated to IndexedDB later.
-import { calculateGstSplit, safeJsonParse } from "../shared-core";
+import { splitGstTotal, safeJsonParse } from "../shared-core";
 
 const PARTY_GSTIN_RE = /^[A-Z0-9]{15}$/;
 function clientGstinFromForm(form) {
@@ -188,10 +188,6 @@ export function dedupeInvoicesForOffline(invoices) {
   return Array.from(map.values());
 }
 
-function calculateGstLocal(taxRate, subtotal, sellerState, buyerState) {
-  return calculateGstSplit(taxRate, subtotal, sellerState, buyerState);
-}
-
 // Builds a local invoice object shaped like backend serialize_model output (enough for InvoiceRenderer).
 export function buildLocalInvoiceFromForm({ business, form, localInvoiceId, invoiceNumber }) {
   const yyyyMm = new Date().toISOString().slice(0, 7).replace("-", "");
@@ -200,11 +196,15 @@ export function buildLocalInvoiceFromForm({ business, form, localInvoiceId, invo
 
   const rawLines = (form.items || []).filter((it) => String(it?.description || "").trim());
 
+  const headerTaxRate = Number(form.tax_rate) || 0;
+  const perItem = Boolean(form.per_item_tax);
   const items = rawLines.map((it) => {
     const qty = Number(it.quantity) || 0;
     const unitPrice = Number(it.unit_price) || 0;
     const disc = Number(it.item_discount) || 0;
-    const total = qty * unitPrice - disc;
+    const taxable = Math.round((qty * unitPrice - disc) * 100) / 100;
+    const tr = perItem ? Number(it.line_tax_rate) || 0 : headerTaxRate;
+    const lineTaxAmount = tr ? Math.round(taxable * (tr / 100) * 100) / 100 : 0;
     return {
       product_id: it.product_id || null,
       description: it.description,
@@ -212,25 +212,18 @@ export function buildLocalInvoiceFromForm({ business, form, localInvoiceId, invo
       quantity: qty,
       unit_price: unitPrice,
       item_discount: disc,
-      total,
+      total: taxable,
+      line_tax_rate: tr,
+      line_tax_amount: lineTaxAmount,
     };
   });
 
   const subtotal = items.reduce((s, i) => s + (Number(i.total) || 0), 0);
   const discountAmount = Number(form.discount_amount) || 0;
-  const perItem = Boolean(form.per_item_tax);
-  let taxRate = Number(form.tax_rate) || 0;
-  let lineTaxSum = 0;
-  if (perItem) {
-    lineTaxSum = rawLines.reduce((s, raw, idx) => {
-      const lineTotal = Number(items[idx]?.total) || 0;
-      const r = Number(raw?.line_tax_rate) || 0;
-      return s + Math.round(lineTotal * (r / 100) * 100) / 100;
-    }, 0);
-    taxRate = subtotal > 0 ? Math.round((lineTaxSum / subtotal) * 10000) / 100 : 0;
-  }
-  const gst = calculateGstLocal(taxRate, subtotal, business?.state || "", form.buyer_state || "");
-  const taxAmountFinal = perItem ? lineTaxSum : gst.tax_amount;
+  const lineTaxSum = items.reduce((s, i) => s + (Number(i.line_tax_amount) || 0), 0);
+  const taxAmountFinal = Math.round(lineTaxSum * 100) / 100;
+  const gst = splitGstTotal(taxAmountFinal, business?.state || "", form.buyer_state || "");
+  const storedHeaderTaxRate = perItem ? 0 : headerTaxRate;
   const totalAmount = subtotal + taxAmountFinal - discountAmount;
 
   const customFieldsFiltered = (form.custom_fields || [])
@@ -259,7 +252,7 @@ export function buildLocalInvoiceFromForm({ business, form, localInvoiceId, invo
     due_date: dueDate,
 
     subtotal,
-    tax_rate: taxRate,
+    tax_rate: storedHeaderTaxRate,
     tax_amount: taxAmountFinal,
     discount_amount: discountAmount,
 
@@ -335,36 +328,31 @@ export function createLocalInvoiceAndQueue({ businessId, business, form }) {
   const cg = clientGstinFromForm(form);
   const { client_gstin: _omitGstin, per_item_tax: _pit, items: _formItems, ...formRest } = form;
   const lineItems = (form.items || []).filter((i) => String(i?.description || "").trim());
-  const subtotalP = lineItems.reduce(
-    (s, i) => s + (Number(i.quantity) || 0) * (Number(i.unit_price) || 0) - (Number(i.item_discount) || 0),
-    0
-  );
-  let effTaxRate = Number(form.tax_rate) || 0;
-  if (form.per_item_tax) {
-    const lt = lineItems.reduce((s, raw) => {
-      const lineT =
-        (Number(raw.quantity) || 0) * (Number(raw.unit_price) || 0) - (Number(raw.item_discount) || 0);
-      return s + Math.round(lineT * ((Number(raw.line_tax_rate) || 0) / 100) * 100) / 100;
-    }, 0);
-    effTaxRate = subtotalP > 0 ? Math.round((lt / subtotalP) * 10000) / 100 : 0;
-  }
+  const headerTr = Number(form.tax_rate) || 0;
+  const perItem = Boolean(form.per_item_tax);
   const invoicePayload = {
     ...formRest,
-    tax_rate: effTaxRate,
+    tax_rate: perItem ? 0 : headerTr,
     ...(cg ? { client_gstin: cg } : {}),
     buyer_state: form.buyer_state || null,
     place_of_supply: form.buyer_state || null,
     custom_fields: (form.custom_fields || [])
       .filter((f) => f && f.label && f.value)
       .map((f) => ({ label: f.label, value: f.value })),
-    items: lineItems.map((i) => ({
-      product_id: i.product_id || null,
-      description: i.description,
-      hsn_code: i.hsn_code || null,
-      quantity: Number(i.quantity),
-      unit_price: Number(i.unit_price),
-      item_discount: Number(i.item_discount) || 0,
-    })),
+    items: lineItems.map((i) => {
+      const base = {
+        product_id: i.product_id || null,
+        description: i.description,
+        hsn_code: i.hsn_code || null,
+        quantity: Number(i.quantity),
+        unit_price: Number(i.unit_price),
+        item_discount: Number(i.item_discount) || 0,
+      };
+      if (perItem) {
+        return { ...base, line_tax_rate: Number(i.line_tax_rate) || 0 };
+      }
+      return base;
+    }),
   };
 
   enqueueCreateInvoice({ businessId, localInvoiceId, payload: invoicePayload });

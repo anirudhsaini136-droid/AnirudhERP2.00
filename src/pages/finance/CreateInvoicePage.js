@@ -29,25 +29,7 @@ import {
   filterInvoiceItemsForSave,
   padInvoiceItemsTrailingBlank,
 } from './invoiceFormPrimitives';
-
-function computeEffectiveTaxRate(form, lineItems) {
-  const items = lineItems || form.items || [];
-  const sub = items.reduce((s, i) => {
-    const qty = Number(i.quantity) || 0;
-    const rate = Number(i.unit_price) || 0;
-    const disc = Number(i.item_discount) || 0;
-    return s + (qty * rate - disc);
-  }, 0);
-  if (!form.per_item_tax) return Number(form.tax_rate) || 0;
-  const lineTax = items.reduce((s, i) => {
-    const qty = Number(i.quantity) || 0;
-    const rate = Number(i.unit_price) || 0;
-    const disc = Number(i.item_discount) || 0;
-    const lt = qty * rate - disc;
-    return s + (lt * (Number(i.line_tax_rate) || 0)) / 100;
-  }, 0);
-  return sub > 0 ? Math.round((lineTax / sub) * 10000) / 100 : 0;
-}
+import { splitGstTotal } from '../../shared-core';
 
 export default function CreateInvoicePage() {
   const { api, business, user } = useAuth();
@@ -208,7 +190,8 @@ export default function CreateInvoicePage() {
     }
     const totalAmount = subtotal + taxAmount - (Number(form.discount_amount) || 0);
     const localId = activeDraftId || `draft-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-    const effRate = computeEffectiveTaxRate(form, counted);
+    const gstDraft = splitGstTotal(taxAmount, business?.state || '', form.buyer_state || '');
+    const headerTaxStored = form.per_item_tax ? 0 : Number(form.tax_rate) || 0;
     const draftInvoice = {
       id: localId,
       local_invoice_id: localId,
@@ -226,27 +209,39 @@ export default function CreateInvoicePage() {
       })(),
       buyer_state: form.buyer_state || null,
       place_of_supply: form.buyer_state || null,
+      supply_type: gstDraft.supply_type,
       issue_date: form.issue_date || today,
       due_date: form.due_date || null,
       subtotal,
-      tax_rate: effRate,
+      tax_rate: headerTaxStored,
       tax_amount: taxAmount,
+      cgst_amount: gstDraft.cgst_amount,
+      sgst_amount: gstDraft.sgst_amount,
+      igst_amount: gstDraft.igst_amount,
       discount_amount: Number(form.discount_amount) || 0,
       total_amount: totalAmount,
       amount_paid: 0,
       balance_due: totalAmount,
       per_item_tax: form.per_item_tax,
-      items: (form.items || []).map((i) => ({
-        product_id: i.product_id || null,
-        description: i.description,
-        hsn_code: i.hsn_code || null,
-        quantity: Number(i.quantity) || 0,
-        unit_price: Number(i.unit_price) || 0,
-        item_discount: Number(i.item_discount) || 0,
-        line_tax_rate: Number(i.line_tax_rate) || 0,
-        total:
-          (Number(i.quantity) || 0) * (Number(i.unit_price) || 0) - (Number(i.item_discount) || 0),
-      })),
+      items: (form.items || []).map((i) => {
+        const qty = Number(i.quantity) || 0;
+        const rate = Number(i.unit_price) || 0;
+        const disc = Number(i.item_discount) || 0;
+        const lineTaxable = qty * rate - disc;
+        const tr = form.per_item_tax ? Number(i.line_tax_rate) || 0 : Number(form.tax_rate) || 0;
+        const lta = Math.round(lineTaxable * (tr / 100) * 100) / 100;
+        return {
+          product_id: i.product_id || null,
+          description: i.description,
+          hsn_code: i.hsn_code || null,
+          quantity: qty,
+          unit_price: rate,
+          item_discount: disc,
+          line_tax_rate: tr,
+          line_tax_amount: lta,
+          total: lineTaxable,
+        };
+      }),
       created_at: nowIso,
       updated_at: nowIso,
     };
@@ -256,7 +251,7 @@ export default function CreateInvoicePage() {
     else all.unshift(draftInvoice);
     upsertLocalInvoices(business.id, all);
     return true;
-  }, [activeDraftId, business?.id, form, today]);
+  }, [activeDraftId, business?.id, business?.state, form, today]);
 
   const updateItem = (idx, field, value) => {
     let items = [...form.items];
@@ -303,19 +298,22 @@ export default function CreateInvoicePage() {
   const countedItems = useMemo(() => filterInvoiceItemsForSave(form.items), [form.items]);
 
   const subtotal = countedItems.reduce((s, i) => s + (Number(i.amount) || 0), 0);
-  const taxAmount = form.per_item_tax
-    ? countedItems.reduce(
-        (s, i) => s + (Number(i.amount) || 0) * ((Number(i.line_tax_rate) || 0) / 100),
-        0
-      )
-    : subtotal * ((Number(form.tax_rate) || 0) / 100);
+  const taxAmount = Math.round(
+    (form.per_item_tax
+      ? countedItems.reduce(
+          (s, i) => s + (Number(i.amount) || 0) * ((Number(i.line_tax_rate) || 0) / 100),
+          0
+        )
+      : subtotal * ((Number(form.tax_rate) || 0) / 100)) * 100
+  ) / 100;
   const totalAmount = subtotal + taxAmount - (Number(form.discount_amount) || 0);
 
   const previewInvoice = useMemo(() => {
     const customFieldsFiltered = (form.custom_fields || [])
       .filter((f) => f && f.label && f.value)
       .map((f) => ({ label: f.label, value: f.value }));
-    const effRate = subtotal > 0 && taxAmount > 0 ? (taxAmount / subtotal) * 100 : Number(form.tax_rate) || 0;
+    const sellerState = invoiceBiz?.state || business?.state || '';
+    const gst = splitGstTotal(taxAmount, sellerState, form.buyer_state || '');
     return {
       invoice_number: 'PREVIEW',
       client_name: form.client_name || 'Customer name',
@@ -323,33 +321,45 @@ export default function CreateInvoicePage() {
       client_email: form.client_email,
       client_address: form.client_address,
       client_gstin: form.client_gstin,
+      buyer_state: form.buyer_state || null,
+      place_of_supply: form.buyer_state || null,
       issue_date: form.issue_date,
       due_date: form.due_date || form.issue_date,
       status: 'draft',
       subtotal,
-      tax_rate: effRate,
+      tax_rate: form.per_item_tax ? 0 : Number(form.tax_rate) || 0,
       tax_amount: taxAmount,
+      cgst_amount: gst.cgst_amount,
+      sgst_amount: gst.sgst_amount,
+      igst_amount: gst.igst_amount,
       discount_amount: Number(form.discount_amount) || 0,
       total_amount: totalAmount,
       amount_paid: 0,
       balance_due: totalAmount,
       custom_fields: customFieldsFiltered.length ? JSON.stringify(customFieldsFiltered) : null,
       payment_terms: null,
-      supply_type: 'intrastate',
+      supply_type: gst.supply_type,
     };
-  }, [form, subtotal, taxAmount, totalAmount]);
+  }, [form, business?.state, invoiceBiz?.state, subtotal, taxAmount, totalAmount]);
 
   const previewItems = useMemo(
     () =>
-      countedItems.map((i) => ({
-        description: i.description || '—',
-        quantity: Number(i.quantity) || 0,
-        unit_price: Number(i.unit_price) || 0,
-        hsn_code: i.hsn_code || '',
-        item_discount: Number(i.item_discount) || 0,
-        total: Number(i.amount) || 0,
-      })),
-    [countedItems]
+      countedItems.map((i) => {
+        const taxable = Number(i.amount) || 0;
+        const tr = form.per_item_tax ? Number(i.line_tax_rate) || 0 : Number(form.tax_rate) || 0;
+        const lta = Math.round(taxable * (tr / 100) * 100) / 100;
+        return {
+          description: i.description || '—',
+          quantity: Number(i.quantity) || 0,
+          unit_price: Number(i.unit_price) || 0,
+          hsn_code: i.hsn_code || '',
+          item_discount: Number(i.item_discount) || 0,
+          total: taxable,
+          line_tax_rate: tr,
+          line_tax_amount: lta,
+        };
+      }),
+    [countedItems, form.per_item_tax, form.tax_rate]
   );
 
   const previewBusiness = useMemo(() => {
@@ -371,6 +381,7 @@ export default function CreateInvoicePage() {
       upi_name: ib.upi_name || '',
       city: ib.city || b.city || '',
       country: ib.country || b.country || '',
+      state: ib.state || b.state || '',
     };
   }, [business, invoiceBiz]);
 
@@ -419,22 +430,27 @@ export default function CreateInvoicePage() {
       }
 
       const { client_gstin: _omitGstin, per_item_tax: _pit, items: _it, ...formWithoutGstin } = form;
-      const effRate = computeEffectiveTaxRate(form, linesForSave);
       const res = await api.post('/finance/invoices', {
         ...formWithoutGstin,
-        tax_rate: effRate,
+        tax_rate: form.per_item_tax ? 0 : Number(form.tax_rate) || 0,
         ...(partyGstin ? { client_gstin: partyGstin } : {}),
         buyer_state: form.buyer_state || null,
         place_of_supply: form.buyer_state || null,
         custom_fields: form.custom_fields.filter((f) => f.label && f.value),
-        items: linesForSave.map((i) => ({
-          product_id: i.product_id || null,
-          description: i.description,
-          hsn_code: i.hsn_code || null,
-          quantity: Number(i.quantity),
-          unit_price: Number(i.unit_price),
-          item_discount: Number(i.item_discount) || 0,
-        })),
+        items: linesForSave.map((i) => {
+          const base = {
+            product_id: i.product_id || null,
+            description: i.description,
+            hsn_code: i.hsn_code || null,
+            quantity: Number(i.quantity),
+            unit_price: Number(i.unit_price),
+            item_discount: Number(i.item_discount) || 0,
+          };
+          if (form.per_item_tax) {
+            return { ...base, line_tax_rate: Number(i.line_tax_rate) || 0 };
+          }
+          return base;
+        }),
       });
       toast.success('Invoice created');
       if (activeDraftId) removeLocalInvoiceByIdCb(activeDraftId);
