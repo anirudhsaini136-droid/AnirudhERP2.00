@@ -86,6 +86,7 @@ export default function MobileInvoiceRenderer({ invoice, items, business, qrUrl,
           {!!invoice?.client_email && <Text style={styles.metaV}>{invoice.client_email}</Text>}
           {!!invoice?.client_phone && <Text style={styles.metaV}>{invoice.client_phone}</Text>}
           {!!invoice?.client_address && <Text style={styles.metaV}>{invoice.client_address}</Text>}
+          {!!invoice?.client_gstin && <Text style={styles.metaV}>Party GSTIN: {invoice.client_gstin}</Text>}
         </View>
         <View style={{ flex: 1 }}>
           <View style={styles.metaRow}><Text style={styles.metaK}>Invoice Date</Text><Text style={styles.metaStrong}>{fmtDate(invoice?.issue_date)}</Text></View>

@@ -2,6 +2,12 @@
 // MVP uses localStorage (simple + reliable for small data). Can be migrated to IndexedDB later.
 import { calculateGstSplit, safeJsonParse } from "../shared-core";
 
+const PARTY_GSTIN_RE = /^[A-Z0-9]{15}$/;
+function clientGstinFromForm(form) {
+  const g = (form?.client_gstin || "").trim().toUpperCase();
+  return g && PARTY_GSTIN_RE.test(g) ? g : null;
+}
+
 const PREFIX = "nexa_offline_v1";
 
 function getBusinessKey(businessId) {
@@ -205,6 +211,7 @@ export function buildLocalInvoiceFromForm({ business, form, localInvoiceId, invo
     client_email: form.client_email || null,
     client_address: form.client_address || null,
     client_phone: form.client_phone || null,
+    client_gstin: clientGstinFromForm(form),
     buyer_state: form.buyer_state || null,
     place_of_supply: form.buyer_state || null,
     supply_type: gst.supply_type,
@@ -286,8 +293,11 @@ export function createLocalInvoiceAndQueue({ businessId, business, form }) {
   upsertLocalInvoices(businessId, invoices);
 
   // Payload to send to backend when syncing.
+  const cg = clientGstinFromForm(form);
+  const { client_gstin: _omitGstin, ...formRest } = form;
   const invoicePayload = {
-    ...form,
+    ...formRest,
+    ...(cg ? { client_gstin: cg } : {}),
     buyer_state: form.buyer_state || null,
     place_of_supply: form.buyer_state || null,
     custom_fields: (form.custom_fields || [])

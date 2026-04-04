@@ -9,6 +9,11 @@ function todayStr() {
   return new Date().toISOString().slice(0, 10);
 }
 
+const PARTY_GSTIN_RE = /^[A-Z0-9]{15}$/;
+function normalizePartyGstin(s) {
+  return (s || "").trim().toUpperCase();
+}
+
 const INDIAN_STATES = [
   "Andhra Pradesh",
   "Arunachal Pradesh",
@@ -55,6 +60,7 @@ export default function InvoiceCreateScreen({ navigation }) {
   const [clientPhone, setClientPhone] = useState("");
   const [clientEmail, setClientEmail] = useState("");
   const [clientAddress, setClientAddress] = useState("");
+  const [clientGstin, setClientGstin] = useState("");
   const [buyerState, setBuyerState] = useState("");
 
   const [issueDate, setIssueDate] = useState(todayStr());
@@ -191,6 +197,11 @@ export default function InvoiceCreateScreen({ navigation }) {
       Alert.alert("Invoice", "Select a customer and at least one product line item (with quantity & rate).");
       return;
     }
+    const partyGstin = normalizePartyGstin(clientGstin);
+    if (partyGstin && !PARTY_GSTIN_RE.test(partyGstin)) {
+      Alert.alert("Invoice", "Party GSTIN must be exactly 15 letters or digits.");
+      return;
+    }
     try {
       setSaving(true);
 
@@ -199,6 +210,7 @@ export default function InvoiceCreateScreen({ navigation }) {
         client_email: clientEmail.trim() || null,
         client_address: clientAddress.trim() || null,
         client_phone: clientPhone.trim() || null,
+        ...(partyGstin ? { client_gstin: partyGstin } : {}),
         buyer_state: buyerState.trim() || null,
         place_of_supply: buyerState.trim() || null,
         issue_date: issueDate,
@@ -272,6 +284,16 @@ export default function InvoiceCreateScreen({ navigation }) {
         <TextInput style={S.input} placeholder="Client Phone" placeholderTextColor={T.textMuted} value={clientPhone} onChangeText={setClientPhone} keyboardType="phone-pad" />
         <TextInput style={S.input} placeholder="Client Email" placeholderTextColor={T.textMuted} value={clientEmail} onChangeText={setClientEmail} autoCapitalize="none" keyboardType="email-address" />
         <TextInput style={S.input} placeholder="Client Address" placeholderTextColor={T.textMuted} value={clientAddress} onChangeText={setClientAddress} />
+        <Text style={{ color: T.textMuted, fontSize: 12, fontWeight: "700", marginTop: 4 }}>Party GSTIN (Optional)</Text>
+        <TextInput
+          style={[S.input, { fontFamily: "monospace" }]}
+          placeholder="e.g. 27AAPFU0939F1ZV"
+          placeholderTextColor={T.textMuted}
+          value={clientGstin}
+          onChangeText={(v) => setClientGstin(v.toUpperCase().replace(/[^A-Z0-9]/g, ""))}
+          maxLength={15}
+          autoCapitalize="characters"
+        />
       </ContentPanel>
 
       <ContentPanel>

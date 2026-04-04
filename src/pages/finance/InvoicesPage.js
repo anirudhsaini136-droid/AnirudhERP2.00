@@ -26,6 +26,12 @@ const STATUS_COLORS = {
 };
 const emptyItem = { product_id: null, available_stock: null, minimum_stock: null, description: '', hsn_code: '', quantity: 1, unit_price: 0, item_discount: 0, amount: 0 };
 
+/** Optional party/buyer GSTIN: exactly 15 alphanumeric chars when provided. */
+const PARTY_GSTIN_RE = /^[A-Z0-9]{15}$/;
+function normalizePartyGstin(s) {
+  return (s || '').trim().toUpperCase();
+}
+
 function safeJsonParse(v, fallback) {
   try { return JSON.parse(v); } catch { return fallback; }
 }
@@ -342,7 +348,7 @@ export default function InvoicesPage() {
   const today = new Date().toISOString().split('T')[0];
 
   const [form, setForm] = useState({
-    client_name: '', client_email: '', client_address: '', client_phone: '',
+    client_name: '', client_email: '', client_address: '', client_phone: '', client_gstin: '',
     issue_date: today, due_date: '', tax_rate: 0, discount_amount: 0,
     notes: '', currency: 'INR',
     buyer_state: '',
@@ -356,6 +362,7 @@ export default function InvoicesPage() {
     if ((f.client_phone || '').trim()) return true;
     if ((f.client_email || '').trim()) return true;
     if ((f.client_address || '').trim()) return true;
+    if ((f.client_gstin || '').trim()) return true;
     if ((f.notes || '').trim()) return true;
     if ((f.buyer_state || '').trim()) return true;
     if (Number(f.tax_rate || 0) > 0 || Number(f.discount_amount || 0) > 0) return true;
@@ -400,6 +407,10 @@ export default function InvoicesPage() {
       client_email: form.client_email || null,
       client_address: form.client_address || null,
       client_phone: form.client_phone || null,
+      client_gstin: (() => {
+        const g = normalizePartyGstin(form.client_gstin);
+        return g && PARTY_GSTIN_RE.test(g) ? g : null;
+      })(),
       buyer_state: form.buyer_state || null,
       place_of_supply: form.buyer_state || null,
       issue_date: form.issue_date || today,
@@ -581,7 +592,7 @@ export default function InvoicesPage() {
     setShowItemDiscount(itemDisc);
     setShowCustomFields(hasCF);
     setForm({
-      client_name: '', client_email: '', client_address: '', client_phone: '',
+      client_name: '', client_email: '', client_address: '', client_phone: '', client_gstin: '',
       issue_date: today, due_date: '', tax_rate: 0, discount_amount: 0,
       notes: '', currency: 'INR', buyer_state: '',
       items: [{ ...emptyItem }], custom_fields: restoredCF
@@ -630,6 +641,11 @@ export default function InvoicesPage() {
     e.preventDefault();
     if (!form.due_date) { toast.error('Due date is required'); return; }
     if (form.items.some(i => !i.description)) { toast.error('All items need a description'); return; }
+    const partyGstin = normalizePartyGstin(form.client_gstin);
+    if (partyGstin && !PARTY_GSTIN_RE.test(partyGstin)) {
+      toast.error('Party GSTIN must be exactly 15 letters or digits');
+      return;
+    }
     setCreating(true);
     const offlineNow = typeof navigator !== 'undefined' ? !navigator.onLine : true;
     try {
@@ -646,8 +662,10 @@ export default function InvoicesPage() {
         return;
       }
 
+      const { client_gstin: _omitGstin, ...formWithoutGstin } = form;
       const res = await api.post('/finance/invoices', {
-        ...form,
+        ...formWithoutGstin,
+        ...(partyGstin ? { client_gstin: partyGstin } : {}),
         buyer_state: form.buyer_state || null,
         place_of_supply: form.buyer_state || null,
         custom_fields: form.custom_fields.filter(f => f.label && f.value),
@@ -733,6 +751,7 @@ export default function InvoicesPage() {
       client_email: inv.client_email || '',
       client_address: inv.client_address || '',
       client_phone: inv.client_phone || '',
+      client_gstin: inv.client_gstin || '',
       issue_date: inv.issue_date || today,
       due_date: inv.due_date || '',
       tax_rate: Number(inv.tax_rate) || 0,
@@ -1135,6 +1154,16 @@ export default function InvoicesPage() {
                 <Label className="text-gray-400 text-xs">Client Address</Label>
                 <Input className="input-premium mt-1" value={form.client_address} onChange={e => setForm({...form, client_address: e.target.value})} />
               </div>
+            </div>
+            <div>
+              <Label className="text-gray-400 text-xs">Party GSTIN (Optional)</Label>
+              <Input
+                className="input-premium mt-1 font-mono uppercase"
+                placeholder="e.g. 27AAPFU0939F1ZV"
+                maxLength={15}
+                value={form.client_gstin}
+                onChange={(e) => setForm({ ...form, client_gstin: e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '') })}
+              />
             </div>
 
             {/* Dates + Tax */}
