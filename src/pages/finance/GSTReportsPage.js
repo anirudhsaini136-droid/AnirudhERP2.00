@@ -4,6 +4,7 @@ import DashboardLayout from '../../components/layout/DashboardLayout';
 import { FileText, Download, TrendingUp, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 import { loadLocalInvoices, syncOfflineInvoiceQueue } from '../../lib/offlineInvoices';
+import { computeGstr3bComponentRows } from '../../shared-core';
 
 const fmt = (n) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 2 }).format(n || 0);
 
@@ -293,6 +294,9 @@ export default function GSTReportsPage() {
   };
 
   const s = summary?.summary;
+  const g3b = summary
+    ? computeGstr3bComponentRows(s || {}, itc?.itc || { cgst: 0, sgst: 0, igst: 0 })
+    : null;
 
   return (
     <DashboardLayout>
@@ -564,19 +568,40 @@ export default function GSTReportsPage() {
                 <div><p className="text-[10px] text-gray-500 uppercase tracking-wider">Net GST Payable</p><p className="text-xl font-bold text-gold-400 mt-1">{fmt(Math.max(0, s.total_tax - (itc?.itc?.total || 0)))}</p></div>
               </div>
               <div className="grid grid-cols-3 gap-3">
-                {[
-                  { label: 'CGST', output: s.total_cgst, itc_val: itc?.itc?.cgst || 0 },
-                  { label: 'SGST', output: s.total_sgst, itc_val: itc?.itc?.sgst || 0 },
-                  { label: 'IGST', output: s.total_igst, itc_val: itc?.itc?.igst || 0 },
-                ].map(row => (
-                  <div key={row.label} className="p-3 rounded-xl bg-white/[0.02] border border-white/5">
-                    <p className="text-xs font-semibold text-gray-400 mb-2">{row.label}</p>
-                    <div className="flex justify-between text-xs"><span className="text-gray-500">Output</span><span className="text-rose-400">{fmt(row.output)}</span></div>
-                    <div className="flex justify-between text-xs mt-1"><span className="text-gray-500">ITC</span><span className="text-emerald-400">-{fmt(row.itc_val)}</span></div>
-                    <div className="flex justify-between text-xs mt-1 pt-1 border-t border-white/5 font-bold"><span className="text-white">Net</span><span className="text-gold-400">{fmt(Math.max(0, row.output - row.itc_val))}</span></div>
-                  </div>
-                ))}
+                {g3b &&
+                  [
+                    { label: 'CGST', row: g3b.cgst },
+                    { label: 'SGST', row: g3b.sgst },
+                    { label: 'IGST', row: g3b.igst, cross: true },
+                  ].map(({ label, row, cross }) => (
+                    <div key={label} className="p-3 rounded-xl bg-white/[0.02] border border-white/5">
+                      <p className="text-xs font-semibold text-gray-400 mb-2">{label}</p>
+                      <div className="flex justify-between text-xs">
+                        <span className="text-gray-500">Output</span>
+                        <span className="text-rose-400">{fmt(row.output)}</span>
+                      </div>
+                      <div className="flex justify-between text-xs mt-1">
+                        <span className="text-gray-500">ITC</span>
+                        <span className="text-emerald-400">{row.itc > 0 ? `-${fmt(row.itc)}` : fmt(0)}</span>
+                      </div>
+                      {cross && row.itc > (itc?.itc?.igst || 0) + 1e-6 && (
+                        <p className="text-[10px] text-gray-500 mt-1 leading-snug">
+                          Includes CGST/SGST ITC set off against IGST output (Rule 88A).
+                        </p>
+                      )}
+                      <div className="flex justify-between text-xs mt-1 pt-1 border-t border-white/5 font-bold">
+                        <span className="text-white">Net</span>
+                        <span className="text-gold-400">{fmt(row.net)}</span>
+                      </div>
+                    </div>
+                  ))}
               </div>
+              {g3b && (
+                <p className="text-[10px] text-gray-500 mt-3 leading-relaxed">
+                  CGST/SGST ITC may be cross-utilized against IGST output as per GST rules. Net GST Payable above is unchanged
+                  (total output tax minus total ITC).
+                </p>
+              )}
             </div>
         )}
           </>

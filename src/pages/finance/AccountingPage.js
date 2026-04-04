@@ -289,6 +289,14 @@ export default function AccountingPage() {
         {/* ── CHART OF ACCOUNTS ── */}
         {activeTab === 'Chart of Accounts' && (
           <div className="space-y-4">
+            <div className="glass-card rounded-xl p-3 border border-white/10 bg-white/[0.02]">
+              <p className="text-xs text-gray-400 leading-relaxed">
+                <span className="text-gold-400/90 font-medium">Income &amp; expense balances: </span>
+                After a period close, ledger balances on income (e.g. 4001 Sales) and expense (e.g. 5002 Purchases) reset
+                to ₹0 — that is normal. Use <span className="text-white font-medium">P&amp;L</span> for totals in the
+                closed period, or run Trial Balance excluding closing entries to see operating balances.
+              </p>
+            </div>
             {['asset', 'liability', 'equity', 'income', 'expense'].map(type => {
               const typeAccounts = accounts.filter(a => a.account_type === type);
               if (typeAccounts.length === 0) return null;
