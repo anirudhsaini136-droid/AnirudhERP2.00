@@ -189,7 +189,13 @@ function ClientSearch({ value, onChange, onSelect, api, businessId, offline }) {
           {!searching && results.length === 0 && (
             <div style={{ padding: '12px 14px', fontSize: 13, color: '#6b7280' }}>No customers found — continue typing to add manually</div>
           )}
-          {results.map((c, idx) => (
+          {results.map((c, idx) => {
+            const lineCity =
+              c.city ||
+              c.state ||
+              ((c.address || '').toString().trim().split(',')[0] || '').trim().slice(0, 40) ||
+              '—';
+            return (
             <button
               key={c.id || `${c.name}-${c.phone || idx}`}
               type="button"
@@ -212,11 +218,13 @@ function ClientSearch({ value, onChange, onSelect, api, businessId, offline }) {
               }}
             >
               <div style={{ minWidth: 0 }}>
-                <p style={{ color: '#111827', fontSize: 14, fontWeight: 600, margin: 0 }}>{c.name}</p>
-                <p style={{ color: '#4b5563', fontSize: 12, margin: '4px 0 0 0' }}>{c.phone || '—'}</p>
+                <p style={{ color: '#111827', fontSize: 13, fontWeight: 600, margin: 0, lineHeight: 1.35 }}>
+                  {[c.name, c.phone || '—', lineCity].join(' • ')}
+                </p>
               </div>
             </button>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>

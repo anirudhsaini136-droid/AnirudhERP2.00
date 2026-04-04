@@ -138,6 +138,19 @@ function matchIndianStateAndroid(raw) {
   return m || t;
 }
 
+function customerAutocompleteLine(c) {
+  const city =
+    c.city ||
+    c.state ||
+    (() => {
+      const addr = (c.address || "").toString().trim();
+      if (!addr) return "—";
+      const first = addr.split(",")[0].trim();
+      return first.slice(0, 40) || "—";
+    })();
+  return [c.name || "—", c.phone || "—", city].join(" • ");
+}
+
 export default function InvoiceCreateScreen({ navigation }) {
   const route = useRoute();
   const { business } = useAuth();
@@ -554,8 +567,7 @@ export default function InvoiceCreateScreen({ navigation }) {
                     backgroundColor: "#ffffff",
                   }}
                 >
-                  <Text style={{ color: "#111827", fontWeight: "800", fontSize: 15 }}>{c.name}</Text>
-                  <Text style={{ color: "#4b5563", marginTop: 4, fontSize: 13 }}>{c.phone || "—"}</Text>
+                  <Text style={{ color: "#111827", fontWeight: "800", fontSize: 13, lineHeight: 18 }}>{customerAutocompleteLine(c)}</Text>
                 </TouchableOpacity>
               ))
             )}
