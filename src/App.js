@@ -30,6 +30,7 @@ import ExpensesPage from './pages/finance/ExpensesPage';
 import ReportsPage from './pages/finance/ReportsPage';
 import GSTReportsPage from './pages/finance/GSTReportsPage';
 import PurchasesPage from './pages/purchases/PurchasesPage';
+import CreatePurchaseBillPage from './pages/purchases/CreatePurchaseBillPage';
 import CAPortalPage from './pages/ca/CAPortalPage';
 import AccountingPage from './pages/finance/AccountingPage';
 import CustomersLedgerPage from './pages/finance/CustomersLedgerPage';
@@ -202,6 +203,14 @@ function AppRoutes() {
         element={
           <BizRoute allowedRoles={['finance_admin', 'business_owner', 'inventory_admin', 'ca_admin']} modules={['purchases_itc']}>
             <PurchasesPage />
+          </BizRoute>
+        }
+      />
+      <Route
+        path="/purchases/create"
+        element={
+          <BizRoute allowedRoles={['finance_admin', 'business_owner', 'inventory_admin']} modules={['purchases_itc']}>
+            <CreatePurchaseBillPage />
           </BizRoute>
         }
       />

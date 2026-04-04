@@ -71,6 +71,7 @@ export function getRequiredModuleSpecForNavPath(path) {
   if (exact) return exact;
   if (path.startsWith('/finance/invoices')) return { all: ['invoices_finance'] };
   if (path.startsWith('/finance/customers')) return { all: ['customer_ledger'] };
+  if (path.startsWith('/purchases')) return { all: ['purchases_itc'] };
   return null;
 }
 
