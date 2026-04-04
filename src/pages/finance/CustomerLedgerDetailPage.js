@@ -49,6 +49,8 @@ function DateInput({ value, onChange, className, required, placeholder }) {
 
 export default function CustomerLedgerDetailPage() {
   const { clientName } = useParams();
+  const [searchParams] = useSearchParams();
+  const ledgerPhone = searchParams.has('phone') ? searchParams.get('phone') ?? '' : undefined;
   const { api } = useAuth();
   const navigate = useNavigate();
   const [data, setData] = useState(null);
