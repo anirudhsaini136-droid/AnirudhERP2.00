@@ -35,7 +35,7 @@ export default function CustomersScreen({ navigation }) {
       style={{ flex: 1, backgroundColor: T.screenBg }}
       contentContainerStyle={S.scrollContent}
       data={rows}
-      keyExtractor={(c, i) => (c.name || "") + String(i)}
+      keyExtractor={(c) => c.id || `${c.name || ""}__${c.phone || ""}`}
       refreshControl={<RefreshControl refreshing={loading} onRefresh={load} tintColor={T.gold} />}
       ListHeaderComponent={
         <View style={{ marginBottom: 6 }}>
@@ -50,7 +50,9 @@ export default function CustomersScreen({ navigation }) {
           subtitle={`${item.invoice_count ?? 0} invoices`}
           meta={`Outstanding ${fmtInr(item.total_outstanding)}`}
           badge="Ledger"
-          onPress={() => navigation.navigate("CustomerLedger", { clientName: item.name })}
+          onPress={() =>
+            navigation.navigate("CustomerLedger", { clientName: item.name, clientPhone: item.phone ?? "" })
+          }
         />
       )}
       ListEmptyComponent={<EmptyState message="No customers" />}

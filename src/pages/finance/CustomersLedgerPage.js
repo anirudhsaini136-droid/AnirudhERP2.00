@@ -29,6 +29,8 @@ export default function CustomersLedgerPage() {
   const [mergeQuery, setMergeQuery] = React.useState('');
   const [mergeLoadingTargets, setMergeLoadingTargets] = React.useState(false);
   const [mergeSubmitting, setMergeSubmitting] = React.useState(false);
+  const [mergeStep, setMergeStep] = React.useState('pick');
+  const [mergeTargetRow, setMergeTargetRow] = React.useState(null);
 
   const load = React.useCallback(
     async ({ nextPage = page, nextSearch = search } = {}) => {
@@ -64,23 +66,32 @@ export default function CustomersLedgerPage() {
     load({ nextPage: 1, nextSearch: s });
   };
 
-  const openCustomer = (name) => {
+  const customerDetailHref = (name, phone) => {
+    if (!name) return '/finance/customers';
+    const q = new URLSearchParams();
+    q.set('phone', phone || '');
+    return `/finance/customers/${encodeURIComponent(name)}?${q.toString()}`;
+  };
+
+  const openCustomer = (name, phone) => {
     if (!name) return;
-    navigate(`/finance/customers/${encodeURIComponent(name)}`);
+    navigate(customerDetailHref(name, phone));
   };
 
   const openMerge = async (c) => {
     if (!c?.id) {
-      toast.error('Merge is only available for saved customers (with a CRM record).');
+      toast.error('Merge needs a saved CRM customer. Create an invoice for this contact first.');
       return;
     }
     setMergeSource(c);
+    setMergeStep('pick');
+    setMergeTargetRow(null);
     setMergeOpen(true);
     setMergeIntoId('');
     setMergeQuery('');
     setMergeLoadingTargets(true);
     try {
-      const res = await api.get('/customers', { params: { limit: 500, page: 1 } });
+      const res = await api.get('/finance/customer-merge-options');
       const list = res.data?.customers || [];
       setMergeTargets(list.filter((x) => x.id && x.id !== c.id));
     } catch (e) {
@@ -112,12 +123,24 @@ export default function CustomersLedgerPage() {
       setMergeOpen(false);
       setMergeSource(null);
       setMergeIntoId('');
+      setMergeStep('pick');
+      setMergeTargetRow(null);
       setPage(1);
       await load({ nextPage: 1, nextSearch: search });
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Merge failed');
     }
     setMergeSubmitting(false);
+  };
+
+  const goConfirmMerge = () => {
+    const t = mergeTargets.find((x) => x.id === mergeIntoId);
+    if (!t) {
+      toast.error('Select a customer to merge into');
+      return;
+    }
+    setMergeTargetRow(t);
+    setMergeStep('confirm');
   };
 
   return (
@@ -161,7 +184,7 @@ export default function CustomersLedgerPage() {
                   className="flex items-center gap-3 px-4 py-3 hover:bg-white/[0.02]"
                 >
                   <div className="flex-1 min-w-0">
-                    <button type="button" onClick={() => openCustomer(c.name)} className="text-left w-full">
+                    <button type="button" onClick={() => openCustomer(c.name, c.phone)} className="text-left w-full">
                       <p className="text-sm font-semibold text-white truncate">{c.name || '-'}</p>
                       <p className="text-[11px] text-gray-500 mt-0.5 truncate">
                         {[c.phone, c.email].filter(Boolean).join(' · ') || 'No contact info'} · Last invoice:{' '}
@@ -187,16 +210,21 @@ export default function CustomersLedgerPage() {
                     <button
                       type="button"
                       onClick={() => openMerge(c)}
-                      className="p-2 text-amber-400/80 hover:text-amber-300 shrink-0"
+                      className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium text-amber-400/90 hover:text-amber-300 hover:bg-amber-500/10 shrink-0"
                       title="Merge into another customer"
                     >
-                      <GitMerge size={16} />
+                      <GitMerge size={14} />
+                      Merge
                     </button>
-                  ) : null}
+                  ) : (
+                    <span className="text-[10px] text-gray-600 shrink-0 px-1" title="No CRM id yet">
+                      —
+                    </span>
+                  )}
 
                   <button
                     type="button"
-                    onClick={() => openCustomer(c.name)}
+                    onClick={() => openCustomer(c.name, c.phone)}
                     className="p-2 text-gray-500 hover:text-white shrink-0"
                     title="View ledger"
                   >
@@ -241,65 +269,106 @@ export default function CustomersLedgerPage() {
         </div>
       </div>
 
-      <Dialog open={mergeOpen} onOpenChange={(o) => !mergeSubmitting && !o && setMergeOpen(false)}>
+      <Dialog
+        open={mergeOpen}
+        onOpenChange={(o) => {
+          if (mergeSubmitting) return;
+          if (!o) {
+            setMergeOpen(false);
+            setMergeStep('pick');
+            setMergeTargetRow(null);
+          }
+        }}
+      >
         <DialogContent className="bg-void border-white/10 max-w-lg max-h-[85vh] flex flex-col">
           <DialogHeader>
-            <DialogTitle className="font-display text-white">Merge customer</DialogTitle>
+            <DialogTitle className="font-display text-white">
+              {mergeStep === 'confirm' ? 'Confirm merge' : 'Merge customer'}
+            </DialogTitle>
           </DialogHeader>
-          <p className="text-sm text-gray-400">
-            Move all invoices for <span className="text-white font-medium">{mergeSource?.name}</span> into another
-            CRM customer. The source customer will be removed.
-          </p>
-          <div className="space-y-2 flex-1 min-h-0 flex flex-col">
-            <label className="text-xs text-gray-500">Select customer to merge into</label>
-            <Input
-              placeholder="Search by name, phone, email…"
-              value={mergeQuery}
-              onChange={(e) => setMergeQuery(e.target.value)}
-              className="bg-white/[0.03] border-white/[0.08] text-white"
-            />
-            <div className="rounded-xl border border-white/10 overflow-y-auto flex-1 max-h-[40vh]">
-              {mergeLoadingTargets ? (
-                <p className="text-sm text-gray-500 p-4">Loading…</p>
-              ) : filteredMergeTargets.length === 0 ? (
-                <p className="text-sm text-gray-500 p-4">No other customers found.</p>
-              ) : (
-                filteredMergeTargets.map((t) => (
-                  <button
-                    key={t.id}
-                    type="button"
-                    onClick={() => setMergeIntoId(t.id)}
-                    className={`w-full text-left px-3 py-2.5 text-sm border-b border-white/5 last:border-0 transition-colors ${
-                      mergeIntoId === t.id ? 'bg-amber-500/15 text-amber-200' : 'text-white hover:bg-white/[0.04]'
-                    }`}
-                  >
-                    <span className="font-medium">{t.name}</span>
-                    <span className="text-gray-500 text-xs block mt-0.5">
-                      {[t.phone, t.email].filter(Boolean).join(' · ') || '—'}
-                    </span>
-                  </button>
-                ))
-              )}
-            </div>
-          </div>
-          <DialogFooter className="gap-2 sm:gap-2">
-            <button
-              type="button"
-              className="btn-premium btn-secondary"
-              disabled={mergeSubmitting}
-              onClick={() => setMergeOpen(false)}
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              className="btn-premium btn-primary disabled:opacity-40"
-              disabled={mergeSubmitting || !mergeIntoId}
-              onClick={runMerge}
-            >
-              {mergeSubmitting ? 'Merging…' : 'Confirm merge'}
-            </button>
-          </DialogFooter>
+
+          {mergeStep === 'confirm' && mergeSource && mergeTargetRow ? (
+            <>
+              <p className="text-sm text-gray-300 leading-relaxed">
+                Merge <span className="text-white font-semibold">{mergeSource.name}</span> into{' '}
+                <span className="text-white font-semibold">{mergeTargetRow.name}</span>? All invoices and payments will
+                be moved to the selected customer. The duplicate CRM entry will be removed.
+              </p>
+              <DialogFooter className="gap-2 sm:gap-2">
+                <button
+                  type="button"
+                  className="btn-premium btn-secondary"
+                  disabled={mergeSubmitting}
+                  onClick={() => {
+                    setMergeStep('pick');
+                    setMergeTargetRow(null);
+                  }}
+                >
+                  Back
+                </button>
+                <button type="button" className="btn-premium btn-primary" disabled={mergeSubmitting} onClick={runMerge}>
+                  {mergeSubmitting ? 'Merging…' : 'Yes, merge'}
+                </button>
+              </DialogFooter>
+            </>
+          ) : (
+            <>
+              <p className="text-sm text-gray-400">
+                Select the customer to merge <span className="text-white font-medium">{mergeSource?.name}</span> into.
+                Only invoices that match this customer&apos;s name and phone will be moved.
+              </p>
+              <div className="space-y-2 flex-1 min-h-0 flex flex-col">
+                <label className="text-xs text-gray-500">Select customer to merge into</label>
+                <Input
+                  placeholder="Search by name, phone, email…"
+                  value={mergeQuery}
+                  onChange={(e) => setMergeQuery(e.target.value)}
+                  className="bg-white/[0.03] border-white/[0.08] text-white"
+                />
+                <div className="rounded-xl border border-white/10 overflow-y-auto flex-1 max-h-[40vh]">
+                  {mergeLoadingTargets ? (
+                    <p className="text-sm text-gray-500 p-4">Loading…</p>
+                  ) : filteredMergeTargets.length === 0 ? (
+                    <p className="text-sm text-gray-500 p-4">No other customers found.</p>
+                  ) : (
+                    filteredMergeTargets.map((t) => (
+                      <button
+                        key={t.id}
+                        type="button"
+                        onClick={() => setMergeIntoId(t.id)}
+                        className={`w-full text-left px-3 py-2.5 text-sm border-b border-white/5 last:border-0 transition-colors ${
+                          mergeIntoId === t.id ? 'bg-amber-500/15 text-amber-200' : 'text-white hover:bg-white/[0.04]'
+                        }`}
+                      >
+                        <span className="font-medium">{t.name}</span>
+                        <span className="text-gray-500 text-xs block mt-0.5">
+                          {[t.phone, t.email].filter(Boolean).join(' · ') || '—'}
+                        </span>
+                      </button>
+                    ))
+                  )}
+                </div>
+              </div>
+              <DialogFooter className="gap-2 sm:gap-2">
+                <button
+                  type="button"
+                  className="btn-premium btn-secondary"
+                  disabled={mergeSubmitting}
+                  onClick={() => setMergeOpen(false)}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="btn-premium btn-primary disabled:opacity-40"
+                  disabled={mergeSubmitting || !mergeIntoId}
+                  onClick={goConfirmMerge}
+                >
+                  Continue
+                </button>
+              </DialogFooter>
+            </>
+          )}
         </DialogContent>
       </Dialog>
     </DashboardLayout>

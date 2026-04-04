@@ -32,7 +32,7 @@ function fmtDate(d) {
 }
 
 export default function CustomerLedgerScreen({ route, navigation }) {
-  const { clientName } = route.params || {};
+  const { clientName, clientPhone } = route.params || {};
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [businessName, setBusinessName] = useState("");
@@ -50,14 +50,14 @@ export default function CustomerLedgerScreen({ route, navigation }) {
   const load = useCallback(async () => {
     if (!clientName) return;
     try {
-      const res = await getCustomerLedger(clientName);
+      const res = await getCustomerLedger(clientName, clientPhone);
       setData(res);
     } catch (e) {
       Alert.alert("Ledger", e.message);
     } finally {
       setLoading(false);
     }
-  }, [clientName]);
+  }, [clientName, clientPhone]);
 
   useFocusEffect(
     useCallback(() => {
@@ -307,13 +307,17 @@ export default function CustomerLedgerScreen({ route, navigation }) {
                   }
                   try {
                     setPaying(true);
-                    await postCustomerBulkPayment(clientName, {
-                      amount: amt,
-                      payment_method: bulkForm.payment_method,
-                      payment_date: bulkForm.payment_date || todayStr(),
-                      reference: bulkForm.reference || null,
-                      notes: bulkForm.notes || null,
-                    });
+                    await postCustomerBulkPayment(
+                      clientName,
+                      {
+                        amount: amt,
+                        payment_method: bulkForm.payment_method,
+                        payment_date: bulkForm.payment_date || todayStr(),
+                        reference: bulkForm.reference || null,
+                        notes: bulkForm.notes || null,
+                      },
+                      clientPhone
+                    );
                     Alert.alert("Payment", "Payment applied successfully.");
                     setShowPayment(false);
                     load();

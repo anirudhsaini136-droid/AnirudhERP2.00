@@ -270,14 +270,16 @@ export function getCustomers(params = {}) {
   return request(`/finance/customers?${q}`);
 }
 
-export function getCustomerLedger(clientName) {
+export function getCustomerLedger(clientName, phone) {
   const enc = encodeURIComponent(clientName);
-  return request(`/finance/customers/${enc}/ledger`);
+  const q = phone !== undefined && phone !== null ? `?phone=${encodeURIComponent(String(phone))}` : "";
+  return request(`/finance/customers/${enc}/ledger${q}`);
 }
 
-export function postCustomerBulkPayment(clientName, body) {
+export function postCustomerBulkPayment(clientName, body, phone) {
   const enc = encodeURIComponent(clientName);
-  return request(`/finance/customers/${enc}/bulk-payment`, {
+  const q = phone !== undefined && phone !== null ? `?phone=${encodeURIComponent(String(phone))}` : "";
+  return request(`/finance/customers/${enc}/bulk-payment${q}`, {
     method: "POST",
     body: JSON.stringify(body),
   });

@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import React, { useState, useEffect, useCallback } from 'react';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import DashboardLayout from '../../components/layout/DashboardLayout';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../../components/ui/dialog';
@@ -63,10 +63,12 @@ export default function CustomerLedgerDetailPage() {
     amount: 0, payment_method: 'cash', payment_date: today, reference: '', notes: ''
   });
 
-  const load = async () => {
+  const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await api.get(`/finance/customers/${encodeURIComponent(clientName)}/ledger`);
+      const res = await api.get(`/finance/customers/${encodeURIComponent(clientName)}/ledger`, {
+        params: ledgerPhone !== undefined ? { phone: ledgerPhone } : {},
+      });
       setData(res.data);
       setBulkForm(f => ({ ...f, amount: res.data.customer?.total_outstanding || 0 }));
     } catch (e) {
@@ -76,9 +78,11 @@ export default function CustomerLedgerDetailPage() {
       navigate('/finance/customers');
     }
     setLoading(false);
-  };
+  }, [api, clientName, ledgerPhone, navigate]);
 
-  useEffect(() => { load(); }, [clientName]);
+  useEffect(() => {
+    load();
+  }, [load]);
 
   useEffect(() => {
     api.get('/dashboard/settings')
@@ -91,7 +95,9 @@ export default function CustomerLedgerDetailPage() {
     if (bulkForm.amount <= 0) { toast.error('Amount must be greater than 0'); return; }
     setPaying(true);
     try {
-      const res = await api.post(`/finance/customers/${encodeURIComponent(clientName)}/bulk-payment`, bulkForm);
+      const res = await api.post(`/finance/customers/${encodeURIComponent(clientName)}/bulk-payment`, bulkForm, {
+        params: ledgerPhone !== undefined ? { phone: ledgerPhone } : {},
+      });
       toast.success(res.data.message, { duration: 4000 });
       setLastAdjustments(res.data.adjustments);
       setShowBulkPayment(false);
