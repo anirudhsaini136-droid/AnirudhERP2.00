@@ -24,6 +24,7 @@ import LeavePage from './pages/hr/LeavePage';
 import PayrollPage from './pages/hr/PayrollPage';
 import FinanceDashboard from './pages/finance/FinanceDashboard';
 import InvoicesPage from './pages/finance/InvoicesPage';
+import CreateInvoicePage from './pages/finance/CreateInvoicePage';
 import InvoiceViewPage from './pages/finance/InvoiceViewPage';
 import ExpensesPage from './pages/finance/ExpensesPage';
 import ReportsPage from './pages/finance/ReportsPage';
@@ -177,6 +178,14 @@ function AppRoutes() {
 
       <Route path="/finance" element={<BizRoute allowedRoles={['finance_admin', 'business_owner', 'ca_admin']} modules={['invoices_finance']}><FinanceDashboard /></BizRoute>} />
       <Route path="/finance/invoices" element={<BizRoute allowedRoles={['finance_admin', 'business_owner', 'ca_admin']} modules={['invoices_finance']}><InvoicesPage /></BizRoute>} />
+      <Route
+        path="/finance/invoices/create"
+        element={
+          <BizRoute allowedRoles={['finance_admin', 'business_owner', 'ca_admin']} modules={['invoices_finance']}>
+            <CreateInvoicePage />
+          </BizRoute>
+        }
+      />
       <Route
         path="/finance/invoices/:id"
         element={

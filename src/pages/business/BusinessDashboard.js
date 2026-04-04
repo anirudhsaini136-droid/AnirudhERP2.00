@@ -2,34 +2,28 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import DashboardLayout from '../../components/layout/DashboardLayout';
-import { parseEnabledModules, isNavPathAllowedForModules } from '../../shared-core/modules';
+import { parseEnabledModules, isNavPathAllowedForModules, effectiveModuleEnabled } from '../../shared-core/modules';
 import {
-  IndianRupee, Users, FileText, TrendingUp, AlertTriangle, Sparkles, Copy, QrCode, Smartphone, CreditCard,
-  ShieldCheck, Headphones, Clock3, CheckCircle2, UserCheck, BarChart3, FileSpreadsheet, Repeat,
-  Truck, BookUser, HardDriveDownload, Receipt, BookOpen, Package, ShoppingCart, ClipboardList,
+  IndianRupee, FileText, TrendingUp, AlertTriangle, Sparkles, Copy, QrCode, Smartphone, CreditCard,
+  ShieldCheck, Headphones, Clock3, CheckCircle2, BarChart3, FileSpreadsheet, Repeat,
+  Truck, BookUser, HardDriveDownload, Receipt, BookOpen, Package, ShoppingCart, ClipboardList, Landmark,
 } from 'lucide-react';
+import {
+  ResponsiveContainer,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip,
+  CartesianGrid,
+  PieChart,
+  Pie,
+  Cell,
+} from 'recharts';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../../components/ui/dialog';
 import { toast } from 'sonner';
 
 const fmt = (n) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(n || 0);
-
-const QUICK_ACCESS = [
-  { path: '/dashboard/users', label: 'Manage Users', icon: Users },
-  { path: '/hr', label: 'HR Dashboard', icon: UserCheck },
-  { path: '/finance', label: 'Finance Dashboard', icon: BarChart3 },
-  { path: '/finance/invoices', label: 'Invoices', icon: FileSpreadsheet },
-  { path: '/finance/recurring-invoices', label: 'Recurring Invoices', icon: Repeat },
-  { path: '/finance/eway-bills', label: 'E-Way Bills', icon: Truck },
-  { path: '/finance/customers', label: 'Customer Ledger', icon: BookUser },
-  { path: '/finance/migration', label: 'Import data', icon: HardDriveDownload },
-  { path: '/finance/expenses', label: 'Expenses', icon: Receipt },
-  { path: '/finance/reports', label: 'Reports', icon: BarChart3 },
-  { path: '/finance/gst', label: 'GST Reports', icon: IndianRupee },
-  { path: '/accounting', label: 'Accounting', icon: BookOpen },
-  { path: '/purchases', label: 'Purchases', icon: ClipboardList },
-  { path: '/inventory', label: 'Inventory', icon: Package },
-  { path: '/inventory/billing', label: 'Quick Bill', icon: ShoppingCart },
-];
 
 export default function BusinessDashboard() {
   const { api, business, user, refreshUser } = useAuth();
@@ -181,20 +175,34 @@ export default function BusinessDashboard() {
     }
   };
 
-  const statCards = [
-    canNav('/finance') && {
-      label: 'Monthly Revenue', value: fmt(s.monthly_revenue), icon: IndianRupee, color: 'text-gold-400', bg: 'from-gold-500/10',
-    },
-    canNav('/hr') && {
-      label: 'Employees', value: s.total_employees || 0, sub: `${s.new_employees || 0} new`, icon: Users, color: 'text-blue-400', bg: 'from-blue-500/10',
-    },
-    canNav('/finance/invoices') && {
-      label: 'Outstanding', value: fmt(s.outstanding_invoices), sub: `${s.overdue_count || 0} overdue`, icon: FileText, color: 'text-amber-400', bg: 'from-amber-500/10',
-    },
-    (canNav('/accounting') || canNav('/finance')) && {
-      label: 'Net Profit', value: fmt(s.net_profit), icon: TrendingUp, color: s.net_profit >= 0 ? 'text-emerald-400' : 'text-rose-400', bg: s.net_profit >= 0 ? 'from-emerald-500/10' : 'from-rose-500/10',
-    },
-  ].filter(Boolean);
+  const inventoryOn = Array.isArray(enabledModules) && effectiveModuleEnabled(enabledModules, 'inventory_billing');
+  const PIE_COLORS = ['#D4AF37', '#b8860b', '#9ca3af', '#6b7280', '#4b5563', '#f59e0b', '#10b981'];
+
+  const kpiRow = canNav('/finance')
+    ? [
+        { label: 'Monthly Revenue', value: fmt(s.monthly_revenue), icon: IndianRupee, color: 'text-gold-400', bg: 'from-gold-500/10' },
+        { label: 'Outstanding Amount', value: fmt(s.outstanding_invoices), icon: FileText, color: 'text-amber-400', bg: 'from-amber-500/10' },
+        { label: 'Net Profit', value: fmt(s.net_profit), icon: TrendingUp, color: s.net_profit >= 0 ? 'text-emerald-400' : 'text-rose-400', bg: s.net_profit >= 0 ? 'from-emerald-500/10' : 'from-rose-500/10' },
+        { label: 'Total Expenses', value: fmt(s.total_expenses), icon: Receipt, color: 'text-rose-400', bg: 'from-rose-500/10' },
+        { label: 'GST Payable', value: fmt(s.gst_payable ?? 0), icon: Landmark, color: 'text-violet-400', bg: 'from-violet-500/10' },
+      ]
+    : [];
+
+  const salesM = data?.sales_this_month || { total: 0, paid: 0, unpaid: 0 };
+  const purM = data?.purchases_this_month || { total: 0, paid: 0, unpaid: 0 };
+  const expensePie = (data?.expense_by_category || []).map((x) => ({ name: x.category || 'Other', value: x.amount }));
+  const topCust = data?.top_customers || [];
+  const stockAlerts = data?.stock_alerts || [];
+  const recentInv = data?.recent_invoices || [];
+
+  const paidSplitPct = (row) => {
+    const t = Number(row.total) || 0;
+    if (t <= 0) return { paid: 0, unpaid: 100 };
+    const p = Math.min(100, Math.round(((Number(row.paid) || 0) / t) * 100));
+    return { paid: p, unpaid: 100 - p };
+  };
+  const sp = paidSplitPct(salesM);
+  const pp = paidSplitPct(purM);
 
   return (
     <DashboardLayout>
@@ -287,74 +295,196 @@ export default function BusinessDashboard() {
           <p className="text-sm text-gray-500 font-sans mt-1">Business overview and key metrics</p>
         </div>
 
-        {QUICK_ACCESS.some((q) => canNav(q.path)) && (
-          <div>
-            <h2 className="font-display text-sm text-gray-400 uppercase tracking-wide mb-3">Quick access</h2>
-            <div className="flex flex-wrap gap-2">
-              {QUICK_ACCESS.filter((q) => canNav(q.path)).map((q) => (
-                <Link
-                  key={q.path}
-                  to={q.path}
-                  className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-sm text-gray-300 hover:bg-white/10 hover:border-gold-500/30 transition-colors"
-                >
-                  <q.icon size={16} className="text-gold-400 shrink-0" />
-                  {q.label}
-                </Link>
-              ))}
+        {/* ROW 1 — KPIs */}
+        {kpiRow.length > 0 && (
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+            {kpiRow.map((c) => (
+              <div key={c.label} className="stat-card" data-testid={`stat-${c.label.toLowerCase().replace(/\s+/g, '-')}`}>
+                <div className={`w-9 h-9 rounded-xl bg-gradient-to-br ${c.bg} to-transparent flex items-center justify-center mb-3`}>
+                  <c.icon size={17} className={c.color} />
+                </div>
+                <p className="text-xs text-gray-500 font-sans">{c.label}</p>
+                <p className={`text-lg sm:text-xl font-bold mt-0.5 font-sans ${c.color}`}>{c.value}</p>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* ROW 2 — Sales & Purchases this month */}
+        {canNav('/finance') && (
+          <div className="grid md:grid-cols-2 gap-5">
+            <div className="glass-card rounded-2xl p-5">
+              <h3 className="font-display text-lg text-white mb-1">Sales This Month</h3>
+              <p className="text-2xl font-bold text-gold-400 font-sans">{fmt(salesM.total)}</p>
+              <p className="text-xs text-gray-500 mt-2 mb-3">Paid vs unpaid (by amount recorded)</p>
+              <div className="h-3 rounded-full bg-white/[0.06] overflow-hidden flex">
+                <div className="h-full bg-emerald-500/80" style={{ width: `${sp.paid}%` }} title="Paid" />
+                <div className="h-full bg-amber-500/70" style={{ width: `${sp.unpaid}%` }} title="Unpaid" />
+              </div>
+              <div className="flex justify-between text-[11px] text-gray-500 mt-2">
+                <span className="text-emerald-400/90">Paid {fmt(salesM.paid)}</span>
+                <span className="text-amber-400/90">Unpaid {fmt(salesM.unpaid)}</span>
+              </div>
+            </div>
+            <div className="glass-card rounded-2xl p-5">
+              <h3 className="font-display text-lg text-white mb-1">Purchases This Month</h3>
+              <p className="text-2xl font-bold text-gold-400 font-sans">{fmt(purM.total)}</p>
+              <p className="text-xs text-gray-500 mt-2 mb-3">Paid vs unpaid (by amount recorded)</p>
+              <div className="h-3 rounded-full bg-white/[0.06] overflow-hidden flex">
+                <div className="h-full bg-emerald-500/80" style={{ width: `${pp.paid}%` }} />
+                <div className="h-full bg-amber-500/70" style={{ width: `${pp.unpaid}%` }} />
+              </div>
+              <div className="flex justify-between text-[11px] text-gray-500 mt-2">
+                <span className="text-emerald-400/90">Paid {fmt(purM.paid)}</span>
+                <span className="text-amber-400/90">Unpaid {fmt(purM.unpaid)}</span>
+              </div>
             </div>
           </div>
         )}
 
-        {/* Stats — one card per enabled module area */}
-        {statCards.length > 0 && (
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          {statCards.map((c) => (
-            <div key={c.label} className="stat-card" data-testid={`stat-${c.label.toLowerCase().replace(/\s+/g, '-')}`}>
-              <div className={`w-9 h-9 rounded-xl bg-gradient-to-br ${c.bg} to-transparent flex items-center justify-center mb-3`}>
-                <c.icon size={17} className={c.color} />
-              </div>
-              <p className="text-xs text-gray-500 font-sans">{c.label}</p>
-              <p className={`text-xl font-bold mt-0.5 font-sans ${c.color}`}>{c.value}</p>
-              {c.sub && <p className="text-xs text-gray-600 mt-1">{c.sub}</p>}
+        {/* ROW 3 — Charts */}
+        {canNav('/finance') && (
+          <div className="grid lg:grid-cols-2 gap-5">
+            <div className="glass-card rounded-2xl p-5 min-h-[300px]">
+              <h3 className="font-display text-lg text-white mb-4">Revenue Trend</h3>
+              {data?.chart_data?.length > 0 ? (
+                <div className="h-[240px] w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={data.chart_data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
+                      <XAxis dataKey="month" tick={{ fill: '#9ca3af', fontSize: 11 }} axisLine={{ stroke: 'rgba(255,255,255,0.1)' }} />
+                      <YAxis tick={{ fill: '#9ca3af', fontSize: 10 }} tickFormatter={(v) => (v >= 100000 ? `${(v / 100000).toFixed(1)}L` : `${(v / 1000).toFixed(0)}k`)} axisLine={{ stroke: 'rgba(255,255,255,0.1)' }} />
+                      <Tooltip
+                        contentStyle={{ background: '#111118', border: '1px solid rgba(212,175,55,0.25)', borderRadius: 8 }}
+                        labelStyle={{ color: '#e5e7eb' }}
+                        formatter={(value) => [fmt(value), 'Revenue']}
+                      />
+                      <Bar dataKey="revenue" fill="#D4AF37" radius={[4, 4, 0, 0]} maxBarSize={40} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              ) : (
+                <p className="text-gray-500 text-sm text-center py-12">No revenue data yet</p>
+              )}
             </div>
-          ))}
-        </div>
+            <div className="glass-card rounded-2xl p-5 min-h-[300px]">
+              <h3 className="font-display text-lg text-white mb-4">Expenses Breakdown</h3>
+              {expensePie.length > 0 ? (
+                <div className="h-[240px] w-full flex items-center justify-center">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie data={expensePie} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={50} outerRadius={85} paddingAngle={2}>
+                        {expensePie.map((_, i) => (
+                          <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} stroke="rgba(0,0,0,0.2)" />
+                        ))}
+                      </Pie>
+                      <Tooltip
+                        contentStyle={{ background: '#111118', border: '1px solid rgba(212,175,55,0.25)', borderRadius: 8 }}
+                        formatter={(value) => fmt(value)}
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+              ) : (
+                <p className="text-gray-500 text-sm text-center py-12">No approved expenses this month</p>
+              )}
+            </div>
+          </div>
         )}
 
+        {/* ROW 4 — Stock & Recent invoices */}
         <div className="grid lg:grid-cols-2 gap-5">
-          {canNav('/finance') && (
-          <div className="glass-card rounded-2xl p-5">
-            <h3 className="font-display text-lg text-white mb-4">Revenue Trend</h3>
-            {data?.chart_data?.length > 0 ? (
-              <div className="space-y-2">
-                {data.chart_data.map((d, i) => (
-                  <div key={i} className="flex items-center gap-3">
-                    <span className="text-xs text-gray-500 w-10">{d.month}</span>
-                    <div className="flex-1 h-5 bg-white/[0.02] rounded overflow-hidden">
-                      <div className="h-full bg-gradient-gold rounded opacity-40" style={{ width: `${Math.max(5, (d.revenue / (Math.max(...data.chart_data.map(x => x.revenue)) || 1)) * 100)}%` }} />
-                    </div>
-                    <span className="text-xs text-gray-500 w-16 text-right">{fmt(d.revenue)}</span>
-                  </div>
-                ))}
-              </div>
-            ) : <p className="text-gray-500 text-sm text-center py-8">No revenue data yet</p>}
-          </div>
+          {inventoryOn ? (
+            <div className="glass-card rounded-2xl p-5">
+              <h3 className="font-display text-lg text-white mb-4">Stock Alerts</h3>
+              {stockAlerts.length > 0 ? (
+                <ul className="space-y-2 max-h-72 overflow-y-auto">
+                  {stockAlerts.map((p) => (
+                    <li
+                      key={p.id}
+                      className="flex items-center justify-between gap-3 py-2.5 px-3 rounded-xl bg-white/[0.03] border border-white/[0.06]"
+                    >
+                      <div className="min-w-0">
+                        <p className="text-sm text-white font-medium truncate">{p.name}</p>
+                        {p.sku ? <p className="text-[11px] text-gray-500 font-mono">{p.sku}</p> : null}
+                      </div>
+                      <span
+                        className={`shrink-0 text-[10px] font-bold uppercase px-2 py-1 rounded-md ${
+                          p.level === 'out' ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30' : 'bg-amber-500/15 text-amber-300 border border-amber-500/25'
+                        }`}
+                      >
+                        {p.level === 'out' ? 'Out' : 'Low'} · {p.current_stock}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-gray-500 text-sm text-center py-8">No low or out-of-stock items</p>
+              )}
+            </div>
+          ) : (
+            <div className="glass-card rounded-2xl p-5 flex items-center justify-center min-h-[200px]">
+              <p className="text-sm text-gray-500 text-center">Stock alerts appear when Inventory is enabled for your business.</p>
+            </div>
           )}
-
           <div className="glass-card rounded-2xl p-5">
-            <h3 className="font-display text-lg text-white mb-4">Recent Activity</h3>
-            {data?.recent_activity?.length > 0 ? (
-              <div className="space-y-2 max-h-64 overflow-y-auto">
-                {data.recent_activity.map((a, i) => (
-                  <div key={i} className="flex items-center gap-3 py-2 border-b border-white/[0.03] last:border-0">
-                    <div className="w-2 h-2 rounded-full bg-gold-500/50 shrink-0" />
-                    <p className="text-sm text-gray-400 flex-1">{a.description || a.action}</p>
-                  </div>
-                ))}
-              </div>
-            ) : <p className="text-gray-500 text-sm text-center py-8">No activity yet</p>}
+            <h3 className="font-display text-lg text-white mb-4">Recent Invoices</h3>
+            {recentInv.length > 0 ? (
+              <ul className="space-y-2">
+                {recentInv.map((inv) => {
+                  const unpaid = Number(inv.balance_due) > 0.5;
+                  return (
+                    <li key={inv.id} className="border-b border-white/[0.05] last:border-0 pb-3 last:pb-0">
+                      <Link to={`/finance/invoices/${inv.id}`} className="flex items-start justify-between gap-3 group">
+                        <div className="min-w-0">
+                          <p className="text-sm text-white group-hover:text-gold-400 transition-colors truncate">{inv.client_name}</p>
+                          <p className="text-[11px] text-gray-500 font-mono mt-0.5">{inv.invoice_number}</p>
+                        </div>
+                        <div className="text-right shrink-0">
+                          <p className="text-sm font-semibold text-gold-400">{fmt(inv.total_amount)}</p>
+                          <span
+                            className={`inline-block mt-1 text-[10px] uppercase font-bold px-2 py-0.5 rounded ${
+                              unpaid ? 'bg-amber-500/15 text-amber-300' : 'bg-emerald-500/15 text-emerald-300'
+                            }`}
+                          >
+                            {unpaid ? 'Unpaid' : 'Paid'}
+                          </span>
+                        </div>
+                      </Link>
+                    </li>
+                  );
+                })}
+              </ul>
+            ) : (
+              <p className="text-gray-500 text-sm text-center py-8">No invoices yet</p>
+            )}
           </div>
         </div>
+
+        {/* ROW 5 — Top customers */}
+        {canNav('/finance') && (
+          <div className="glass-card rounded-2xl p-5">
+            <h3 className="font-display text-lg text-white mb-4">Top 5 Customers (revenue)</h3>
+            {topCust.length > 0 ? (
+              <div className="h-[280px] w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart layout="vertical" data={topCust} margin={{ top: 8, right: 16, left: 8, bottom: 8 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" horizontal={false} />
+                    <XAxis type="number" tick={{ fill: '#9ca3af', fontSize: 10 }} tickFormatter={(v) => (v >= 100000 ? `₹${(v / 100000).toFixed(1)}L` : `₹${(v / 1000).toFixed(0)}k`)} axisLine={{ stroke: 'rgba(255,255,255,0.1)' }} />
+                    <YAxis type="category" dataKey="name" width={100} tick={{ fill: '#d1d5db', fontSize: 11 }} axisLine={{ stroke: 'rgba(255,255,255,0.1)' }} />
+                    <Tooltip
+                      contentStyle={{ background: '#111118', border: '1px solid rgba(212,175,55,0.25)', borderRadius: 8 }}
+                      formatter={(value) => [fmt(value), 'Revenue']}
+                    />
+                    <Bar dataKey="revenue" fill="#D4AF37" radius={[0, 6, 6, 0]} maxBarSize={28} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            ) : (
+              <p className="text-gray-500 text-sm text-center py-8">No paid-invoice revenue data yet</p>
+            )}
+          </div>
+        )}
       </div>
 
       <Dialog open={showUpgrade} onOpenChange={setShowUpgrade}>

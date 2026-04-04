@@ -35,7 +35,7 @@ const NAV_CONFIG = {
       { path: '/hr/leave', label: 'Leave', icon: FileText },
       { path: '/hr/payroll', label: 'Payroll', icon: CreditCard },
       { path: '/finance', label: 'Finance Dashboard', icon: BarChart3 },
-      { path: '/finance/invoices', label: 'Invoices', icon: FileSpreadsheet },
+      { path: '/finance/invoices', label: 'Sales Invoice', icon: FileSpreadsheet },
       { path: '/finance/recurring-invoices', label: 'Recurring Invoices', icon: Repeat },
       { path: '/finance/eway-bills', label: 'E-Way Bills', icon: Truck },
       { path: '/finance/customers', label: 'Customer Ledger', icon: BookUser },
@@ -44,7 +44,7 @@ const NAV_CONFIG = {
       { path: '/finance/reports', label: 'Reports', icon: BarChart3 },
       { path: '/finance/gst', label: 'GST Reports', icon: IndianRupee },
       { path: '/accounting', label: 'Accounting', icon: BookOpen },
-      { path: '/purchases', label: 'Purchases', icon: Truck },
+      { path: '/purchases', label: 'Purchase Invoice', icon: Truck },
       { path: '/inventory', label: 'Inventory', icon: Package },
       { path: '/inventory/billing', label: 'Quick Bill', icon: ShoppingCart },
       { path: '/dashboard/settings', label: 'Settings', icon: Settings },
@@ -66,7 +66,7 @@ const NAV_CONFIG = {
     icon: BarChart3,
     items: [
       { path: '/finance', label: 'Dashboard', icon: LayoutDashboard },
-      { path: '/finance/invoices', label: 'Invoices', icon: FileSpreadsheet },
+      { path: '/finance/invoices', label: 'Sales Invoice', icon: FileSpreadsheet },
       { path: '/finance/recurring-invoices', label: 'Recurring Invoices', icon: Repeat },
       { path: '/finance/eway-bills', label: 'E-Way Bills', icon: Truck },
       { path: '/finance/customers', label: 'Customer Ledger', icon: BookUser },
@@ -75,7 +75,7 @@ const NAV_CONFIG = {
       { path: '/finance/reports', label: 'Reports', icon: BarChart3 },
       { path: '/finance/gst', label: 'GST Reports', icon: IndianRupee },
       { path: '/accounting', label: 'Accounting', icon: BookOpen },
-      { path: '/purchases', label: 'Purchases', icon: Truck },
+      { path: '/purchases', label: 'Purchase Invoice', icon: Truck },
     ]
   },
   ca_admin: {
@@ -83,8 +83,8 @@ const NAV_CONFIG = {
     icon: BookOpen,
     items: [
       { path: '/ca', label: 'GST Reports', icon: IndianRupee },
-      { path: '/finance/invoices', label: 'Invoices', icon: FileSpreadsheet },
-      { path: '/purchases', label: 'Purchases', icon: Truck },
+      { path: '/finance/invoices', label: 'Sales Invoice', icon: FileSpreadsheet },
+      { path: '/purchases', label: 'Purchase Invoice', icon: Truck },
     ]
   },
   inventory_admin: {
@@ -236,8 +236,6 @@ export default function DashboardLayout({ children }) {
           {navConfig.items.map((item) => {
             const isActive = location.pathname === item.path;
             const Icon = item.icon;
-            const isGST = item.path === '/finance/gst';
-            const isPurchases = item.path === '/purchases';
             const rowClass = `flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 ${
               isActive
                 ? 'bg-gradient-to-r from-[#D4AF37]/15 to-transparent text-gold-400 border-l-2 border-gold-500'
@@ -269,11 +267,6 @@ export default function DashboardLayout({ children }) {
               >
                 <Icon size={18} className={isActive ? 'text-gold-400' : ''} />
                 <span>{item.label}</span>
-                {(isGST || isPurchases) && !isActive && (
-                  <span className="ml-auto text-[9px] px-1.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 font-semibold">
-                    NEW
-                  </span>
-                )}
               </Link>
             );
           })}
