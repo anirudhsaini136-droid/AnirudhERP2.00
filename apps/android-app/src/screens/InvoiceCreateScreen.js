@@ -131,6 +131,13 @@ const INDIAN_STATES = [
   "Puducherry",
 ];
 
+function matchIndianStateAndroid(raw) {
+  const t = (raw || "").trim();
+  if (!t) return "";
+  const m = INDIAN_STATES.find((s) => s.toLowerCase() === t.toLowerCase());
+  return m || t;
+}
+
 export default function InvoiceCreateScreen({ navigation }) {
   const route = useRoute();
   const { business } = useAuth();
@@ -375,6 +382,7 @@ export default function InvoiceCreateScreen({ navigation }) {
     setClientAddress(typeof c.address === "string" ? c.address : c.address ? String(c.address) : "");
     const g = (c.gstin || "").toString().toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 15);
     setClientGstin(g);
+    setBuyerState(matchIndianStateAndroid((c.state || "").toString()));
     setCustomerSuggestClosed(true);
     dismissCustomerSuggest();
   };

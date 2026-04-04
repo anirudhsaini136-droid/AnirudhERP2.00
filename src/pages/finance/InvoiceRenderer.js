@@ -190,7 +190,7 @@ export default function InvoiceRenderer({ invoice, items, business, payments }) 
             {invoice.client_address && <div style={{ fontSize: 13, color: '#6b7280', marginTop: 2 }}>{invoice.client_address}</div>}
             {invoice.client_email && <div style={{ fontSize: 13, color: '#6b7280' }}>{invoice.client_email}</div>}
             {invoice.client_phone && <div style={{ fontSize: 13, color: '#6b7280' }}>{invoice.client_phone}</div>}
-            {invoice.client_gstin && <div style={{ fontSize: 13, color: '#6b7280', marginTop: 2 }}>Party GSTIN: {invoice.client_gstin}</div>}
+            {invoice.client_gstin ? <div style={{ fontSize: 13, color: '#6b7280' }}>GSTIN No. {invoice.client_gstin}</div> : null}
           </div>
           <div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px 12px', textAlign: 'right' }}>

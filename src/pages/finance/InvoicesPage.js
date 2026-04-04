@@ -234,6 +234,13 @@ const INDIAN_STATES = [
   'Ladakh','Lakshadweep','Puducherry'
 ];
 
+function matchIndianStateName(raw) {
+  const t = (raw || '').trim();
+  if (!t) return '';
+  const m = INDIAN_STATES.find((s) => s.toLowerCase() === t.toLowerCase());
+  return m || t;
+}
+
 // Product autocomplete component for invoice line items
 function ProductSearch({ value, onChange, onSelect, api, businessId, offline }) {
   const [query, setQuery] = useState(value || '');
@@ -1313,12 +1320,13 @@ export default function InvoicesPage() {
                     client_name: c.name || '',
                     client_phone: c.phone || '',
                     client_email: c.email || '',
-                    client_address: c.address || '',
+                    client_address: (c.address != null ? String(c.address) : '') || '',
                     client_gstin: (c.gstin || '')
                       .toString()
                       .toUpperCase()
                       .replace(/[^A-Z0-9]/g, '')
                       .slice(0, 15),
+                    buyer_state: matchIndianStateName(c.state),
                   })}
                   api={api}
                   businessId={business?.id}
