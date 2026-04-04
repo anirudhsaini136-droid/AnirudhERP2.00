@@ -37,12 +37,13 @@ function safeJsonParse(v, fallback) {
 }
 
 
-// Customer autocomplete for invoice client name
+// Customer autocomplete — GET /api/finance/customers?search=
 function ClientSearch({ value, onChange, onSelect, api, businessId, offline }) {
   const [query, setQuery] = useState(value || '');
   const [results, setResults] = useState([]);
   const [show, setShow] = useState(false);
   const [searching, setSearching] = useState(false);
+  const [hoverIdx, setHoverIdx] = useState(-1);
   const timerRef = useRef(null);
   const wrapRef = useRef(null);
 
@@ -56,23 +57,25 @@ function ClientSearch({ value, onChange, onSelect, api, businessId, offline }) {
     return () => document.removeEventListener('mousedown', handler);
   }, []);
 
-  const handleChange = (val) => {
-    setQuery(val);
-    onChange(val);
+  const fetchCustomers = (val) => {
     if (timerRef.current) clearTimeout(timerRef.current);
-    if (val.length < 2) { setResults([]); setShow(false); return; }
+    if (val.length < 2) {
+      setResults([]);
+      setShow(false);
+      setSearching(false);
+      return;
+    }
     timerRef.current = setTimeout(async () => {
-      // Offline autocomplete: show cached results (from previous online searches).
       if (offline) {
         try {
           const q = (val || '').trim().toLowerCase();
-          const key = `nexa_offline_v1:customers_cache:${businessId}:${q}`;
+          const key = `nexa_offline_v1:finance_customers_cache:${businessId}:${q}`;
           const cached = safeJsonParse(localStorage.getItem(key), []);
           setResults(Array.isArray(cached) ? cached : []);
-          setShow((Array.isArray(cached) ? cached : []).length > 0);
+          setShow(true);
         } catch {
           setResults([]);
-          setShow(false);
+          setShow(true);
         }
         setSearching(false);
         return;
@@ -80,18 +83,37 @@ function ClientSearch({ value, onChange, onSelect, api, businessId, offline }) {
 
       setSearching(true);
       try {
-        const res = await api.get(`/customers/search?q=${encodeURIComponent(val)}`);
+        const res = await api.get('/finance/customers', {
+          params: { search: val, limit: 15, page: 1 },
+        });
         const list = res.data.customers || [];
         setResults(list);
-        setShow(list.length > 0);
+        setShow(true);
         try {
           const q = (val || '').trim().toLowerCase();
-          const key = `nexa_offline_v1:customers_cache:${businessId}:${q}`;
+          const key = `nexa_offline_v1:finance_customers_cache:${businessId}:${q}`;
           localStorage.setItem(key, JSON.stringify(list));
-        } catch {}
-      } catch { setResults([]); }
+        } catch { /* ignore */ }
+      } catch {
+        setResults([]);
+        setShow(true);
+      }
       setSearching(false);
     }, 250);
+  };
+
+  const handleChange = (val) => {
+    setQuery(val);
+    onChange(val);
+    setHoverIdx(-1);
+    fetchCustomers(val);
+  };
+
+  const pickCustomer = (c) => {
+    setShow(false);
+    setHoverIdx(-1);
+    onSelect(c);
+    setQuery(c.name || '');
   };
 
   return (
@@ -101,8 +123,10 @@ function ClientSearch({ value, onChange, onSelect, api, businessId, offline }) {
           className="input-premium mt-1 w-full"
           placeholder="Client name *"
           value={query}
-          onChange={e => handleChange(e.target.value)}
-          onFocus={() => query.length >= 2 && results.length > 0 && setShow(true)}
+          onChange={(e) => handleChange(e.target.value)}
+          onFocus={() => {
+            if (query.length >= 2) fetchCustomers(query);
+          }}
           autoComplete="off"
           required
         />
@@ -110,25 +134,53 @@ function ClientSearch({ value, onChange, onSelect, api, businessId, offline }) {
           <div style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', width: 12, height: 12, border: '2px solid #555', borderTopColor: '#D4AF37', borderRadius: '50%', animation: 'spin 0.6s linear infinite' }} />
         )}
       </div>
-      {show && results.length > 0 && (
-        <div style={{
-          position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 999,
-          background: '#0d0d14', border: '1px solid rgba(255,255,255,0.1)',
-          borderRadius: 10, marginTop: 4, overflow: 'hidden',
-          boxShadow: '0 8px 32px rgba(0,0,0,0.5)'
-        }}>
-          {results.map(c => (
-            <button key={c.id} type="button"
-              onMouseDown={() => { setShow(false); onSelect(c); setQuery(c.name); }}
-              style={{ width: '100%', textAlign: 'left', padding: '8px 12px', background: 'transparent', border: 'none', cursor: 'pointer', borderBottom: '1px solid rgba(255,255,255,0.04)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
-              onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.05)'}
-              onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+      {show && query.length >= 2 && (
+        <div
+          style={{
+            position: 'absolute',
+            top: '100%',
+            left: 0,
+            right: 0,
+            zIndex: 999,
+            background: '#f8f9fa',
+            border: '1px solid rgba(212, 175, 55, 0.45)',
+            borderRadius: 10,
+            marginTop: 4,
+            overflow: 'hidden',
+            boxShadow: '0 12px 40px rgba(0, 0, 0, 0.14)',
+            maxHeight: 280,
+            overflowY: 'auto',
+          }}
+        >
+          {!searching && results.length === 0 && (
+            <div style={{ padding: '12px 14px', fontSize: 13, color: '#6b7280' }}>No customers found — continue typing to add manually</div>
+          )}
+          {results.map((c, idx) => (
+            <button
+              key={c.id || `${c.name}-${c.phone || idx}`}
+              type="button"
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => pickCustomer(c)}
+              onMouseEnter={() => setHoverIdx(idx)}
+              onMouseLeave={() => setHoverIdx(-1)}
+              style={{
+                width: '100%',
+                textAlign: 'left',
+                padding: '10px 14px',
+                background: hoverIdx === idx ? 'rgba(212, 175, 55, 0.18)' : '#ffffff',
+                border: 'none',
+                borderBottom: '1px solid rgba(0,0,0,0.06)',
+                cursor: 'pointer',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                gap: 8,
+              }}
             >
-              <div>
-                <p style={{ color: '#f9fafb', fontSize: 13, fontWeight: 500, margin: 0 }}>{c.name}</p>
-                <p style={{ color: '#6b7280', fontSize: 11, margin: 0 }}>{[c.phone, c.email].filter(Boolean).join(' · ')}</p>
+              <div style={{ minWidth: 0 }}>
+                <p style={{ color: '#111827', fontSize: 14, fontWeight: 600, margin: 0 }}>{c.name}</p>
+                <p style={{ color: '#4b5563', fontSize: 12, margin: '4px 0 0 0' }}>{c.phone || '—'}</p>
               </div>
-              {c.gstin && <p style={{ color: '#D4AF37', fontSize: 10, margin: 0, flexShrink: 0, marginLeft: 8 }}>GST: {c.gstin}</p>}
             </button>
           ))}
         </div>
@@ -1129,11 +1181,17 @@ export default function InvoicesPage() {
                 <ClientSearch
                   value={form.client_name}
                   onChange={(val) => setForm({...form, client_name: val})}
-                  onSelect={(c) => setForm({...form,
+                  onSelect={(c) => setForm({
+                    ...form,
                     client_name: c.name || '',
-                    client_phone: c.phone || form.client_phone,
-                    client_email: c.email || form.client_email,
-                    client_address: c.address || form.client_address
+                    client_phone: c.phone || '',
+                    client_email: c.email || '',
+                    client_address: c.address || '',
+                    client_gstin: (c.gstin || '')
+                      .toString()
+                      .toUpperCase()
+                      .replace(/[^A-Z0-9]/g, '')
+                      .slice(0, 15),
                   })}
                   api={api}
                   businessId={business?.id}

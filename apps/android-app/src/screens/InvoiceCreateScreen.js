@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Alert, Modal, ScrollView, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { getCustomers, getProducts, postInvoice } from "../api";
 import { ContentPanel, HeroBand, PageHeader, PrimaryButton, SecondaryButton } from "../components/NexaUi";
@@ -93,6 +93,9 @@ export default function InvoiceCreateScreen({ navigation }) {
   const [items, setItems] = useState([emptyItem]);
 
   const [customerResults, setCustomerResults] = useState([]);
+  const [customerSearchLoading, setCustomerSearchLoading] = useState(false);
+  const [customerSuggestClosed, setCustomerSuggestClosed] = useState(false);
+  const clientNameBlurTimer = useRef(null);
   const [productResults, setProductResults] = useState([]);
   const [activeProductRow, setActiveProductRow] = useState(null);
   const [productQuery, setProductQuery] = useState("");
@@ -117,22 +120,26 @@ export default function InvoiceCreateScreen({ navigation }) {
     return subtotal + taxAmount - (Number(discountAmount) || 0);
   }, [subtotal, taxAmount, discountAmount]);
 
-  // Customer suggestions (web parity: search auto-populates client fields)
+  // GET /finance/customers?search= — same as web Create Invoice
   useEffect(() => {
     const q = clientName.trim();
     if (!q || q.length < 2) {
       setCustomerResults([]);
+      setCustomerSearchLoading(false);
       return;
     }
 
     let cancelled = false;
     const t = setTimeout(async () => {
+      setCustomerSearchLoading(true);
       try {
-        const data = await getCustomers({ search: q, limit: "10" });
+        const data = await getCustomers({ search: q, limit: "15", page: "1" });
         if (cancelled) return;
         setCustomerResults(data.customers || []);
       } catch {
         if (!cancelled) setCustomerResults([]);
+      } finally {
+        if (!cancelled) setCustomerSearchLoading(false);
       }
     }, 250);
 
@@ -141,6 +148,23 @@ export default function InvoiceCreateScreen({ navigation }) {
       clearTimeout(t);
     };
   }, [clientName]);
+
+  const dismissCustomerSuggest = () => {
+    setCustomerResults([]);
+    setCustomerSearchLoading(false);
+  };
+
+  const applyCustomer = (c) => {
+    if (clientNameBlurTimer.current) clearTimeout(clientNameBlurTimer.current);
+    setClientName(c.name || "");
+    setClientPhone((c.phone || "").toString());
+    setClientEmail((c.email || "").toString());
+    setClientAddress(typeof c.address === "string" ? c.address : c.address ? String(c.address) : "");
+    const g = (c.gstin || "").toString().toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 15);
+    setClientGstin(g);
+    setCustomerSuggestClosed(true);
+    dismissCustomerSuggest();
+  };
 
   // Product suggestions for the focused line item
   useEffect(() => {
@@ -258,26 +282,60 @@ export default function InvoiceCreateScreen({ navigation }) {
           placeholder="Client Name * (search)"
           placeholderTextColor={T.textMuted}
           value={clientName}
-          onChangeText={setClientName}
+          onChangeText={(t) => {
+            setCustomerSuggestClosed(false);
+            setClientName(t);
+          }}
+          autoCorrect={false}
+          onFocus={() => {
+            if (clientNameBlurTimer.current) {
+              clearTimeout(clientNameBlurTimer.current);
+              clientNameBlurTimer.current = null;
+            }
+            setCustomerSuggestClosed(false);
+          }}
+          onBlur={() => {
+            clientNameBlurTimer.current = setTimeout(() => {
+              setCustomerSuggestClosed(true);
+              dismissCustomerSuggest();
+            }, 200);
+          }}
         />
 
-        {customerResults.length > 0 ? (
-          <View style={{ borderWidth: 1, borderColor: T.border, borderRadius: 14, backgroundColor: T.cardBg, marginTop: -6, marginBottom: 10, overflow: "hidden" }}>
-            {customerResults.slice(0, 5).map((c, idx) => (
-              <TouchableOpacity
-                key={(c.name || "") + idx}
-                onPress={() => {
-                  setClientName(c.name || "");
-                  setClientPhone(c.phone || "");
-                  setClientEmail(c.email || "");
-                  if (typeof c.address === "string") setClientAddress(c.address);
-                }}
-                style={{ padding: 12, borderBottomWidth: idx === 4 ? 0 : 1, borderBottomColor: T.border }}
-              >
-                <Text style={{ color: T.textPrimary, fontWeight: "800" }}>{c.name}</Text>
-                {!!(c.phone || c.email) && <Text style={{ color: T.textMuted, marginTop: 4 }}>{c.phone || c.email}</Text>}
-              </TouchableOpacity>
-            ))}
+        {clientName.trim().length >= 2 && !customerSuggestClosed ? (
+          <View
+            style={{
+              borderWidth: 1,
+              borderColor: "rgba(212, 175, 55, 0.45)",
+              borderRadius: 14,
+              backgroundColor: "#f8f9fa",
+              marginTop: -6,
+              marginBottom: 10,
+              overflow: "hidden",
+            }}
+          >
+            {customerSearchLoading ? (
+              <Text style={{ padding: 14, color: "#4b5563", fontSize: 13 }}>Searching…</Text>
+            ) : customerResults.length === 0 ? (
+              <Text style={{ padding: 14, color: "#6b7280", fontSize: 13 }}>No customers found — continue as manual entry</Text>
+            ) : (
+              customerResults.slice(0, 15).map((c, idx) => (
+                <TouchableOpacity
+                  key={c.id ? String(c.id) : `${c.name || ""}-${c.phone || ""}-${idx}`}
+                  onPress={() => applyCustomer(c)}
+                  activeOpacity={0.75}
+                  style={{
+                    padding: 12,
+                    borderBottomWidth: idx === Math.min(customerResults.length, 15) - 1 ? 0 : 1,
+                    borderBottomColor: "rgba(0,0,0,0.08)",
+                    backgroundColor: "#ffffff",
+                  }}
+                >
+                  <Text style={{ color: "#111827", fontWeight: "800", fontSize: 15 }}>{c.name}</Text>
+                  <Text style={{ color: "#4b5563", marginTop: 4, fontSize: 13 }}>{c.phone || "—"}</Text>
+                </TouchableOpacity>
+              ))
+            )}
           </View>
         ) : null}
 
