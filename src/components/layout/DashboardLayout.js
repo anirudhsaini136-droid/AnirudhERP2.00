@@ -549,21 +549,16 @@ export default function DashboardLayout({ children }) {
           sidebarOpen ? 'max-lg:translate-x-0' : 'max-lg:-translate-x-full'
         } lg:translate-x-0 ${isLg && navLabelsVisible ? 'lg:w-60' : 'lg:w-16'}`}
       >
-        <div className="flex h-14 shrink-0 items-center gap-1 border-b border-white/5 px-2 lg:h-16 lg:px-2">
+        <div className="flex h-14 shrink-0 items-center gap-1 border-b border-white/5 pl-2.5 pr-2 lg:h-16 lg:pl-3 lg:pr-2">
           <Link
             to="/"
-            className={`flex min-w-0 flex-1 items-center gap-3 overflow-hidden ${navLabelsVisible ? 'justify-start pl-0.5' : 'justify-center'}`}
+            className={`flex min-w-0 flex-1 items-center gap-2.5 overflow-hidden ${navLabelsVisible ? 'justify-start' : 'justify-center'}`}
           >
-            <div
-              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border-2 border-[#d4a017] bg-[#0a0c10] shadow-[0_0_24px_rgba(212,160,23,0.18)] light-theme:border-[#c9a010] light-theme:bg-slate-900 light-theme:shadow-[0_0_20px_rgba(212,160,23,0.15)]"
-              aria-hidden
-            >
-              <span className="font-display text-[1.125rem] font-bold leading-none tracking-tight text-[#e8c547] light-theme:text-[#f0d060]">
-                N
-              </span>
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gradient-gold">
+              <span className="font-sans text-sm font-bold text-black">N</span>
             </div>
             <span
-              className={`font-display whitespace-nowrap text-lg font-semibold tracking-tight text-white transition-[opacity,max-width] duration-200 ease-out ${
+              className={`font-display whitespace-nowrap text-lg tracking-tight text-white transition-[opacity,max-width] duration-200 ease-out ${
                 navLabelsVisible ? 'max-w-[160px] opacity-100' : 'max-w-0 overflow-hidden opacity-0'
               }`}
             >
@@ -790,37 +785,13 @@ export default function DashboardLayout({ children }) {
           </div>
         )}
 
-        {business && (
-          <div className={`shrink-0 border-t border-white/5 py-3 ${navLabelsVisible ? 'px-4' : 'px-2'}`}>
-            {navLabelsVisible ? (
-              <div className="px-2 text-left">
-                <p className="truncate text-xs text-gray-500">{business.name}</p>
-                <div className="mt-1 flex flex-wrap items-center gap-2">
-                  <span
-                    className={`badge-premium px-2 py-0.5 text-[10px] ${
-                      business.status === 'active'
-                        ? 'badge-success'
-                        : business.status === 'trial'
-                          ? 'badge-warning'
-                          : 'badge-danger'
-                    }`}
-                  >
-                    {business.plan?.toUpperCase()}
-                  </span>
-                  {business.days_remaining !== undefined && (
-                    <span className={`text-[10px] ${business.days_remaining <= 7 ? 'text-rose-400' : 'text-gray-500'}`}>
-                      {business.days_remaining}d left
-                    </span>
-                  )}
-                </div>
-              </div>
-            ) : (
-              <div className="flex flex-col items-center gap-1" title={business.name}>
-                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-white/[0.06] text-xs font-bold text-gold-400">
-                  {(business.name || 'B').slice(0, 1).toUpperCase()}
-                </div>
+        {business && navLabelsVisible ? (
+          <div className="shrink-0 border-t border-white/5 px-4 py-3">
+            <div className="px-2 text-left">
+              <p className="truncate text-xs text-gray-500">{business.name}</p>
+              <div className="mt-1 flex flex-wrap items-center gap-2">
                 <span
-                  className={`badge-premium px-1.5 py-0.5 text-[8px] leading-tight ${
+                  className={`badge-premium px-2 py-0.5 text-[10px] ${
                     business.status === 'active'
                       ? 'badge-success'
                       : business.status === 'trial'
@@ -828,12 +799,17 @@ export default function DashboardLayout({ children }) {
                         : 'badge-danger'
                   }`}
                 >
-                  {(business.plan || '?').slice(0, 1).toUpperCase()}
+                  {business.plan?.toUpperCase()}
                 </span>
+                {business.days_remaining !== undefined && (
+                  <span className={`text-[10px] ${business.days_remaining <= 7 ? 'text-rose-400' : 'text-gray-500'}`}>
+                    {business.days_remaining}d left
+                  </span>
+                )}
               </div>
-            )}
+            </div>
           </div>
-        )}
+        ) : null}
       </aside>
 
       <div className="flex min-h-screen min-w-0 flex-1 flex-col">
