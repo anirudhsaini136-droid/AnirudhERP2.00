@@ -195,6 +195,7 @@ h1, h2, h3, h4, h5, h6, .font-display {
 .light-theme .text-gray-500 { color: #64748b; }
 .light-theme .text-gray-400 { color: #475569; }
 .light-theme .text-gray-300 { color: #334155; }
+.light-theme .text-gray-200 { color: #0f172a; }
 
 .light-theme .border-white\/5 { border-color: rgba(148, 163, 184, 0.25); }
 .light-theme .border-white\/10 { border-color: rgba(148, 163, 184, 0.3); }

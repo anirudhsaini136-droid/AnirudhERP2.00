@@ -558,31 +558,33 @@ export default function DashboardLayout({ children }) {
       >
         <div
           className={`relative flex h-14 shrink-0 items-center border-b border-white/5 lg:h-16 ${
-            collapsedDesktopRail ? 'justify-center px-0' : 'gap-1 px-2.5 pr-2 lg:pl-3.5 lg:pr-2'
+            collapsedDesktopRail ? 'justify-center px-0' : 'gap-1 px-2.5 pr-2 lg:pl-4 lg:pr-2'
           }`}
         >
           {collapsedDesktopRail ? (
-            <>
-              <Link to="/" className="flex items-center justify-center py-2 pl-0.5" aria-label="NexaERP home">
-                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gradient-gold">
-                  <span className="font-sans text-sm font-bold text-black">N</span>
-                </div>
-              </Link>
+            <div className="flex w-full min-w-0 items-center gap-0 px-0.5">
+              <div className="flex min-w-0 min-h-0 flex-1 justify-center pr-0.5">
+                <Link to="/" className="flex items-center justify-center py-2" aria-label="NexaERP home">
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gradient-gold">
+                    <span className="font-sans text-sm font-bold text-black">N</span>
+                  </div>
+                </Link>
+              </div>
               <button
                 type="button"
-                className="absolute right-1 top-1/2 z-10 flex -translate-y-1/2 rounded-md p-1 text-gray-400 transition-colors hover:bg-white/[0.06] hover:text-gold-400"
+                className="flex h-8 w-7 shrink-0 items-center justify-center rounded-md text-gray-500 transition-colors hover:bg-white/[0.06] hover:text-gold-400"
                 aria-label={sidebarPinned ? 'Unpin sidebar' : 'Pin sidebar open'}
                 title={sidebarPinned ? 'Unpin sidebar' : 'Pin sidebar open'}
                 onClick={() => setSidebarPinned((p) => !p)}
               >
-                {sidebarPinned ? <ChevronLeft size={16} strokeWidth={2} /> : <ChevronRight size={16} strokeWidth={2} />}
+                {sidebarPinned ? <ChevronLeft size={15} strokeWidth={2} /> : <ChevronRight size={15} strokeWidth={2} />}
               </button>
-            </>
+            </div>
           ) : (
             <>
               <Link
                 to="/"
-                className="flex min-w-0 flex-1 items-center gap-2.5 overflow-hidden pl-1.5 lg:pl-2"
+                className="flex min-w-0 flex-1 items-center gap-2.5 overflow-hidden pl-2 lg:pl-2.5"
                 aria-label="NexaERP home"
               >
                 <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gradient-gold">
@@ -790,7 +792,7 @@ export default function DashboardLayout({ children }) {
                 {userInitial}
               </div>
               {navLabelsVisible ? (
-                <span className="min-w-0 flex-1 truncate text-left text-sm font-medium text-gray-200 light-theme:text-slate-800">
+                <span className="min-w-0 flex-1 truncate text-left text-sm font-semibold text-white">
                   {displayFirstName}
                 </span>
               ) : null}
