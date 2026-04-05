@@ -191,6 +191,8 @@ export default function DashboardLayout({ children }) {
 
   /** Desktop rail: expanded when pinned or hovering the aside. Mobile drawer: expanded when open. */
   const navLabelsVisible = isLg ? sidebarPinned || sidebarRailHover : sidebarOpen;
+  /** Narrow 64px rail: logo must use full width; pin control is absolutely positioned so it does not squeeze the mark. */
+  const collapsedDesktopRail = isLg && !navLabelsVisible;
 
   const role = user?.role || 'staff';
   const rawNav = NAV_CONFIG[role] || NAV_CONFIG.staff;
@@ -549,34 +551,56 @@ export default function DashboardLayout({ children }) {
           sidebarOpen ? 'max-lg:translate-x-0' : 'max-lg:-translate-x-full'
         } lg:translate-x-0 ${isLg && navLabelsVisible ? 'lg:w-60' : 'lg:w-16'}`}
       >
-        <div className="flex h-14 shrink-0 items-center gap-1 border-b border-white/5 pl-2.5 pr-2 lg:h-16 lg:pl-3 lg:pr-2">
-          <Link
-            to="/"
-            className={`flex min-w-0 flex-1 items-center gap-2.5 overflow-hidden ${navLabelsVisible ? 'justify-start' : 'justify-center'}`}
-          >
-            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gradient-gold">
-              <span className="font-sans text-sm font-bold text-black">N</span>
-            </div>
-            <span
-              className={`font-display whitespace-nowrap text-lg tracking-tight text-white transition-[opacity,max-width] duration-200 ease-out ${
-                navLabelsVisible ? 'max-w-[160px] opacity-100' : 'max-w-0 overflow-hidden opacity-0'
-              }`}
-            >
-              NexaERP
-            </span>
-          </Link>
-          <button
-            type="button"
-            className="hidden shrink-0 rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-white/[0.06] hover:text-gold-400 lg:flex"
-            aria-label={sidebarPinned ? 'Unpin sidebar' : 'Pin sidebar open'}
-            title={sidebarPinned ? 'Unpin sidebar' : 'Pin sidebar open'}
-            onClick={() => setSidebarPinned((p) => !p)}
-          >
-            {sidebarPinned ? <ChevronLeft size={18} strokeWidth={2} /> : <ChevronRight size={18} strokeWidth={2} />}
-          </button>
-          <button type="button" className="p-1.5 text-gray-400 hover:text-white lg:hidden" onClick={() => setSidebarOpen(false)} aria-label="Close menu">
-            <X size={20} />
-          </button>
+        <div
+          className={`relative flex h-14 shrink-0 items-center border-b border-white/5 lg:h-16 ${
+            collapsedDesktopRail ? 'justify-center px-0' : 'gap-1 px-2.5 pr-2 lg:px-3 lg:pr-2'
+          }`}
+        >
+          {collapsedDesktopRail ? (
+            <>
+              <Link to="/" className="flex items-center justify-center py-2" aria-label="NexaERP home">
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gradient-gold">
+                  <span className="font-sans text-sm font-bold text-black">N</span>
+                </div>
+              </Link>
+              <button
+                type="button"
+                className="absolute right-1 top-1/2 z-10 flex -translate-y-1/2 rounded-md p-1 text-gray-400 transition-colors hover:bg-white/[0.06] hover:text-gold-400"
+                aria-label={sidebarPinned ? 'Unpin sidebar' : 'Pin sidebar open'}
+                title={sidebarPinned ? 'Unpin sidebar' : 'Pin sidebar open'}
+                onClick={() => setSidebarPinned((p) => !p)}
+              >
+                {sidebarPinned ? <ChevronLeft size={16} strokeWidth={2} /> : <ChevronRight size={16} strokeWidth={2} />}
+              </button>
+            </>
+          ) : (
+            <>
+              <Link
+                to="/"
+                className="flex min-w-0 flex-1 items-center gap-2.5 overflow-hidden pl-0.5 lg:pl-0"
+                aria-label="NexaERP home"
+              >
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gradient-gold">
+                  <span className="font-sans text-sm font-bold text-black">N</span>
+                </div>
+                {navLabelsVisible ? (
+                  <span className="font-display whitespace-nowrap text-lg tracking-tight text-white">NexaERP</span>
+                ) : null}
+              </Link>
+              <button
+                type="button"
+                className="hidden shrink-0 rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-white/[0.06] hover:text-gold-400 lg:flex"
+                aria-label={sidebarPinned ? 'Unpin sidebar' : 'Pin sidebar open'}
+                title={sidebarPinned ? 'Unpin sidebar' : 'Pin sidebar open'}
+                onClick={() => setSidebarPinned((p) => !p)}
+              >
+                {sidebarPinned ? <ChevronLeft size={18} strokeWidth={2} /> : <ChevronRight size={18} strokeWidth={2} />}
+              </button>
+              <button type="button" className="p-1.5 text-gray-400 hover:text-white lg:hidden" onClick={() => setSidebarOpen(false)} aria-label="Close menu">
+                <X size={20} />
+              </button>
+            </>
+          )}
         </div>
 
         <div className={`shrink-0 border-b border-white/5 py-2 ${navLabelsVisible ? 'px-3' : 'px-2'}`}>
@@ -584,13 +608,9 @@ export default function DashboardLayout({ children }) {
             className={`flex items-center rounded-lg bg-white/[0.03] ${navLabelsVisible ? 'gap-2 px-3 py-1.5' : 'justify-center px-2 py-2'}`}
           >
             <NavIcon size={navLabelsVisible ? 14 : 18} className="shrink-0 text-gold-400" />
-            <span
-              className={`text-xs font-semibold uppercase tracking-wider text-gray-400 transition-[opacity,max-width] duration-200 ease-out ${
-                navLabelsVisible ? 'max-w-[200px] opacity-100' : 'max-w-0 overflow-hidden opacity-0'
-              }`}
-            >
-              {rawNav.title}
-            </span>
+            {navLabelsVisible ? (
+              <span className="max-w-[200px] text-xs font-semibold uppercase tracking-wider text-gray-400">{rawNav.title}</span>
+            ) : null}
           </div>
         </div>
 
@@ -752,14 +772,16 @@ export default function DashboardLayout({ children }) {
               className={`flex w-full items-center gap-3 rounded-xl py-1 transition-colors hover:bg-white/[0.04] ${navLabelsVisible ? 'justify-start pl-0.5 pr-1' : 'justify-center'}`}
               aria-expanded={showSidebarUserMenu}
               aria-haspopup="menu"
+              aria-label={`Account, ${displayFirstName}`}
             >
               <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#d4a017] text-sm font-bold text-black">
                 {userInitial}
               </div>
               {navLabelsVisible ? (
-                <span className="min-w-0 flex-1 truncate text-left text-sm font-medium text-gray-200">{displayFirstName}</span>
+                <span className="min-w-0 flex-1 truncate text-left text-sm font-medium text-gray-200 light-theme:text-slate-800">
+                  {displayFirstName}
+                </span>
               ) : null}
-              {!navLabelsVisible ? <span className="sr-only">{displayFirstName}</span> : null}
             </button>
             {showSidebarUserMenu ? (
               <div className="absolute bottom-full left-2 right-2 z-[60] mb-1 overflow-hidden rounded-xl border border-white/10 bg-void py-1 shadow-elevated light-theme:border-slate-200 light-theme:bg-white">
