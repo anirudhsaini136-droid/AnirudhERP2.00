@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import {
@@ -17,6 +18,34 @@ import { getDisabledPremiumModules } from '../../shared-core/premiumModules';
 
 const PREMIUM_LS_KEY = 'nexaerp_premium_features_expanded';
 const SIDEBAR_REORDER_ROLES = ['business_owner', 'finance_admin', 'hr_admin', 'inventory_admin', 'ca_admin'];
+const SCROLL_EDGE_PX = 56;
+const SCROLL_SPEED_PX = 16;
+
+/** @template T @param {T[]} items @param {number} fromIndex @param {number} hoverBefore */
+function finalizeReorder(items, fromIndex, hoverBefore) {
+  if (fromIndex < 0 || fromIndex >= items.length) return items;
+  const n = items.length;
+  const hb = Math.max(0, Math.min(hoverBefore, n));
+  const copy = [...items];
+  const [moved] = copy.splice(fromIndex, 1);
+  const insertAt = hb > fromIndex ? hb - 1 : hb;
+  copy.splice(insertAt, 0, moved);
+  return copy;
+}
+
+/** @param {number} clientY @param {(HTMLElement|null)[]} rowEls @param {number} [rowCount] */
+function hoverBeforeIndexFromY(clientY, rowEls, rowCount) {
+  const n = rowCount != null ? rowCount : rowEls.length;
+  for (let i = 0; i < n; i++) {
+    const el = rowEls[i];
+    if (!el) continue;
+    const r = el.getBoundingClientRect();
+    if (r.height <= 0) continue;
+    const mid = r.top + r.height / 2;
+    if (clientY < mid) return i;
+  }
+  return n;
+}
 
 const NAV_CONFIG = {
   super_admin: {
@@ -170,6 +199,9 @@ export default function DashboardLayout({ children }) {
     setNavItems(mergedNavItems);
   }, [mergedNavItems]);
 
+  const navItemsRef = useRef(navItems);
+  navItemsRef.current = navItems;
+
   const canReorderSidebar = business && SIDEBAR_REORDER_ROLES.includes(role);
   const saveTimerRef = useRef(null);
 
@@ -193,27 +225,109 @@ export default function DashboardLayout({ children }) {
     [persistSidebarOrder],
   );
 
-  const onDragStart = (e, index) => {
-    e.dataTransfer.setData('text/plain', String(index));
-    e.dataTransfer.effectAllowed = 'move';
-  };
+  /** @type {React.MutableRefObject<HTMLDivElement|null>} */
+  const navScrollRef = useRef(null);
+  const lastPointerYRef = useRef(0);
+  const listDragRef = useRef(null);
+  /** @type {React.MutableRefObject<{ fromIndex: number; hoverBefore: number; ghostX: number; ghostY: number; grabOffsetX: number; grabOffsetY: number; width: number }|null>} */
+  const dragSessionRef = useRef(null);
 
-  const onDragOver = (e) => {
-    e.preventDefault();
-  };
+  const [listDrag, setListDrag] = useState(null);
+  listDragRef.current = listDrag;
 
-  const onDrop = (e, toIndex) => {
-    e.preventDefault();
-    const from = Number(e.dataTransfer.getData('text/plain'), 10);
-    if (Number.isNaN(from) || from === toIndex) return;
-    setNavItems((prev) => {
-      const next = [...prev];
-      const [moved] = next.splice(from, 1);
-      next.splice(toIndex, 0, moved);
-      schedulePersistOrder(next.map((i) => i.orderKey));
-      return next;
-    });
-  };
+  const previewNavItems = useMemo(() => {
+    if (!listDrag) return navItems;
+    return finalizeReorder(navItems, listDrag.fromIndex, listDrag.hoverBefore);
+  }, [navItems, listDrag]);
+
+  useEffect(() => {
+    if (!listDrag) return undefined;
+    const nav = navScrollRef.current;
+    let raf = 0;
+    const tick = () => {
+      if (!listDragRef.current) return;
+      if (nav) {
+        const y = lastPointerYRef.current;
+        const rect = nav.getBoundingClientRect();
+        if (y < rect.top + SCROLL_EDGE_PX) nav.scrollTop -= SCROLL_SPEED_PX;
+        else if (y > rect.bottom - SCROLL_EDGE_PX) nav.scrollTop += SCROLL_SPEED_PX;
+      }
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [listDrag]);
+
+  const onReorderHandlePointerDown = useCallback(
+    (e, index) => {
+      if (!canReorderSidebar || e.button !== 0 || index < 0) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const handleEl = e.currentTarget;
+      const rowWrap = handleEl.closest('[data-nav-row]');
+      if (!(rowWrap instanceof HTMLElement)) return;
+      const rect = rowWrap.getBoundingClientRect();
+      try {
+        handleEl.setPointerCapture(e.pointerId);
+      } catch {
+        /* ignore */
+      }
+      lastPointerYRef.current = e.clientY;
+      const session = {
+        fromIndex: index,
+        hoverBefore: index,
+        ghostX: e.clientX,
+        ghostY: e.clientY,
+        grabOffsetX: e.clientX - rect.left,
+        grabOffsetY: e.clientY - rect.top,
+        width: rect.width,
+      };
+      dragSessionRef.current = session;
+      setListDrag(session);
+
+      const onMove = (ev) => {
+        const s = dragSessionRef.current;
+        if (!s) return;
+        lastPointerYRef.current = ev.clientY;
+        const navEl = navScrollRef.current;
+        const rowEls = navEl ? [...navEl.querySelectorAll('[data-nav-row]')] : [];
+        s.hoverBefore = hoverBeforeIndexFromY(ev.clientY, rowEls, rowEls.length);
+        s.ghostX = ev.clientX;
+        s.ghostY = ev.clientY;
+        setListDrag({ ...s });
+      };
+
+      const onUp = () => {
+        window.removeEventListener('pointermove', onMove);
+        window.removeEventListener('pointerup', onUp);
+        window.removeEventListener('pointercancel', onUp);
+        document.body.style.userSelect = '';
+        try {
+          handleEl.releasePointerCapture(e.pointerId);
+        } catch {
+          /* ignore */
+        }
+        const ld = dragSessionRef.current;
+        dragSessionRef.current = null;
+        setListDrag(null);
+        if (!ld) return;
+        const base = navItemsRef.current;
+        const next = finalizeReorder(base, ld.fromIndex, ld.hoverBefore);
+        const oldKeys = base.map((i) => i.orderKey);
+        const newKeys = next.map((i) => i.orderKey);
+        if (JSON.stringify(oldKeys) !== JSON.stringify(newKeys)) {
+          schedulePersistOrder(newKeys);
+        }
+        setNavItems(next);
+      };
+
+      document.body.style.userSelect = 'none';
+      window.addEventListener('pointermove', onMove);
+      window.addEventListener('pointerup', onUp);
+      window.addEventListener('pointercancel', onUp);
+    },
+    [canReorderSidebar, schedulePersistOrder],
+  );
 
   const handleResetSidebarOrder = async () => {
     try {
@@ -297,7 +411,10 @@ export default function DashboardLayout({ children }) {
 
   const NavIcon = rawNav.icon;
 
-  const renderNavRow = (item, index) => {
+  const draggedSourcePath = listDrag ? navItems[listDrag.fromIndex]?.path : null;
+
+  const renderNavRow = (item, sourceIndex) => {
+    const isPlaceholder = Boolean(listDrag && draggedSourcePath === item.path);
     const isActive = location.pathname === item.path;
     const Icon = item.icon;
     const rowClass = `flex flex-1 min-w-0 items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 ${
@@ -305,6 +422,17 @@ export default function DashboardLayout({ children }) {
         ? 'bg-gradient-to-r from-[#D4AF37]/15 to-transparent text-gold-400 border-l-2 border-gold-500'
         : 'text-gray-400 hover:text-white hover:bg-white/[0.04]'
     } ${item.trialLocked ? 'opacity-70 cursor-pointer' : ''}`;
+
+    if (isPlaceholder) {
+      return (
+        <div
+          key={item.path}
+          data-nav-row
+          className="flex items-stretch gap-0.5 rounded-xl min-h-[44px] border border-dashed border-gold-500/25 bg-white/[0.03] opacity-80"
+          aria-hidden
+        />
+      );
+    }
 
     const inner = item.trialLocked ? (
       <button
@@ -329,16 +457,14 @@ export default function DashboardLayout({ children }) {
     return (
       <div
         key={item.path}
-        className="flex items-stretch gap-0.5 rounded-xl"
-        onDragOver={canReorderSidebar ? onDragOver : undefined}
-        onDrop={canReorderSidebar ? (e) => onDrop(e, index) : undefined}
+        data-nav-row
+        className="group/nav-row flex items-stretch gap-0.5 rounded-xl"
       >
         {canReorderSidebar ? (
           <button
             type="button"
-            className="shrink-0 w-7 flex items-center justify-center rounded-lg text-gray-500 hover:text-gold-400 cursor-grab active:cursor-grabbing select-none text-[10px] leading-none tracking-tighter"
-            draggable
-            onDragStart={(e) => onDragStart(e, index)}
+            className="sidebar-drag-handle shrink-0 w-7 flex items-center justify-center rounded-lg text-gray-500 hover:text-gold-400 cursor-grab active:cursor-grabbing select-none text-[10px] leading-none tracking-tighter touch-none opacity-0 transition-opacity duration-150 group-hover/nav-row:opacity-100"
+            onPointerDown={(e) => onReorderHandlePointerDown(e, sourceIndex)}
             aria-label="Drag to reorder"
           >
             ⋮⋮
@@ -348,6 +474,9 @@ export default function DashboardLayout({ children }) {
       </div>
     );
   };
+
+  const dragGhostItem = listDrag ? navItems[listDrag.fromIndex] : null;
+  const DragGhostIcon = dragGhostItem?.icon;
 
   return (
     <div className="min-h-screen bg-obsidian flex">
@@ -379,11 +508,16 @@ export default function DashboardLayout({ children }) {
           </div>
         </div>
 
-        <nav className="flex-1 overflow-y-auto py-4 px-3 space-y-1">
-          {navItems.map((item, index) => renderNavRow(item, index))}
+        <nav className="flex-1 flex flex-col min-h-0">
+          <div ref={navScrollRef} className="flex-1 overflow-y-auto min-h-0 py-4 px-3 space-y-1">
+            {previewNavItems.map((item) => {
+              const sourceIndex = navItems.findIndex((x) => x.path === item.path);
+              return renderNavRow(item, sourceIndex);
+            })}
+          </div>
 
           {disabledPremiumModules.length > 0 ? (
-            <div className="pt-4 mt-2 border-t border-white/10">
+            <div className="shrink-0 px-3 pb-1 pt-4 mt-2 border-t border-white/10">
               <div className="border-t border-b border-white/10 py-2 my-2">
                 <button
                   type="button"
@@ -432,7 +566,7 @@ export default function DashboardLayout({ children }) {
           ) : null}
 
           {canReorderSidebar ? (
-            <div className="pt-2 px-1">
+            <div className="shrink-0 pt-2 px-4 pb-2">
               <button
                 type="button"
                 onClick={handleResetSidebarOrder}
@@ -443,6 +577,27 @@ export default function DashboardLayout({ children }) {
             </div>
           ) : null}
         </nav>
+
+        {listDrag &&
+          dragGhostItem &&
+          DragGhostIcon &&
+          typeof document !== 'undefined' &&
+          createPortal(
+            <div
+              className="pointer-events-none fixed z-[100] rounded-xl border border-gold-500/35 bg-void/95 light-theme:bg-white/95 light-theme:border-amber-400/40 shadow-2xl backdrop-blur-md flex items-center gap-2 px-3 py-2.5 text-sm text-gray-200 light-theme:text-slate-800"
+              style={{
+                left: listDrag.ghostX - listDrag.grabOffsetX,
+                top: listDrag.ghostY - listDrag.grabOffsetY,
+                width: listDrag.width,
+                boxShadow: '0 18px 40px rgba(0,0,0,0.45)',
+              }}
+            >
+              <span className="text-gray-500 light-theme:text-slate-500 text-[10px] select-none shrink-0">⋮⋮</span>
+              <DragGhostIcon size={18} className="text-gold-400 shrink-0" />
+              <span className="truncate font-medium">{dragGhostItem.label}</span>
+            </div>,
+            document.body,
+          )}
 
         <Dialog open={trialOpen} onOpenChange={setTrialOpen}>
           <DialogContent className="sm:max-w-md border-white/10 bg-void">
