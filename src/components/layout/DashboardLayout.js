@@ -5,7 +5,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import {
   LayoutDashboard, Building2, Users, UserCheck, Calendar, FileText,
   Receipt, BarChart3, Package, ShoppingCart, Settings, Bell, Truck,
-  LogOut, ChevronDown, Menu, X, Clock, Briefcase, CreditCard,
+  LogOut, ChevronDown, ChevronLeft, ChevronRight, Menu, X, Clock, Briefcase, CreditCard,
   Shield, Home, FileSpreadsheet, UserCircle, ArrowLeftRight, BookUser,
   IndianRupee, BookOpen, HardDriveDownload, Repeat, Lock, FileDown,
 } from 'lucide-react';
@@ -17,6 +17,7 @@ import { applySidebarOrder } from '../../shared-core/sidebarOrder';
 import { getDisabledPremiumModules } from '../../shared-core/premiumModules';
 
 const PREMIUM_LS_KEY = 'nexaerp_premium_features_expanded';
+const SIDEBAR_PINNED_LS_KEY = 'nexaerp_sidebar_pinned';
 const SIDEBAR_REORDER_ROLES = ['business_owner', 'finance_admin', 'hr_admin', 'inventory_admin', 'ca_admin'];
 const SCROLL_EDGE_PX = 56;
 const SCROLL_SPEED_PX = 16;
@@ -45,6 +46,21 @@ function hoverBeforeIndexFromY(clientY, rowEls, rowCount) {
     if (clientY < mid) return i;
   }
   return n;
+}
+
+function useIsLg() {
+  const [ok, setOk] = useState(
+    () => typeof window !== 'undefined' && window.matchMedia('(min-width: 1024px)').matches,
+  );
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+    const mq = window.matchMedia('(min-width: 1024px)');
+    const fn = () => setOk(mq.matches);
+    fn();
+    mq.addEventListener('change', fn);
+    return () => mq.removeEventListener('change', fn);
+  }, []);
+  return ok;
 }
 
 const NAV_CONFIG = {
@@ -154,6 +170,27 @@ export default function DashboardLayout({ children }) {
   const [showNotifs, setShowNotifs] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
 
+  const isLg = useIsLg();
+  const [sidebarPinned, setSidebarPinned] = useState(() => {
+    try {
+      return localStorage.getItem(SIDEBAR_PINNED_LS_KEY) === '1';
+    } catch {
+      return false;
+    }
+  });
+  const [sidebarRailHover, setSidebarRailHover] = useState(false);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(SIDEBAR_PINNED_LS_KEY, sidebarPinned ? '1' : '0');
+    } catch {
+      /* ignore */
+    }
+  }, [sidebarPinned]);
+
+  /** Desktop rail: expanded when pinned or hovering the aside. Mobile drawer: expanded when open. */
+  const navLabelsVisible = isLg ? sidebarPinned || sidebarRailHover : sidebarOpen;
+
   const role = user?.role || 'staff';
   const rawNav = NAV_CONFIG[role] || NAV_CONFIG.staff;
 
@@ -260,7 +297,7 @@ export default function DashboardLayout({ children }) {
 
   const onReorderHandlePointerDown = useCallback(
     (e, index) => {
-      if (!canReorderSidebar || e.button !== 0 || index < 0) return;
+      if (!canReorderSidebar || !navLabelsVisible || e.button !== 0 || index < 0) return;
       e.preventDefault();
       e.stopPropagation();
       const handleEl = e.currentTarget;
@@ -326,7 +363,7 @@ export default function DashboardLayout({ children }) {
       window.addEventListener('pointerup', onUp);
       window.addEventListener('pointercancel', onUp);
     },
-    [canReorderSidebar, schedulePersistOrder],
+    [canReorderSidebar, navLabelsVisible, schedulePersistOrder],
   );
 
   const handleResetSidebarOrder = async () => {
@@ -417,10 +454,11 @@ export default function DashboardLayout({ children }) {
     const isPlaceholder = Boolean(listDrag && draggedSourcePath === item.path);
     const isActive = location.pathname === item.path;
     const Icon = item.icon;
-    const rowClass = `flex flex-1 min-w-0 items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 ${
+    const pad = navLabelsVisible ? 'gap-3 px-3 py-2.5' : 'justify-center px-2 py-2.5 min-h-[44px]';
+    const rowClass = `flex flex-1 min-w-0 items-center rounded-xl text-sm font-medium transition-all duration-200 ease-out ${pad} ${
       isActive
         ? 'bg-gradient-to-r from-[#D4AF37]/15 to-transparent text-gold-400 border-l-2 border-gold-500'
-        : 'text-gray-400 hover:text-white hover:bg-white/[0.04]'
+        : 'text-gray-400 hover:text-white hover:bg-white/[0.04] border-l-2 border-transparent'
     } ${item.trialLocked ? 'opacity-70 cursor-pointer' : ''}`;
 
     if (isPlaceholder) {
@@ -434,6 +472,16 @@ export default function DashboardLayout({ children }) {
       );
     }
 
+    const labelEl = (
+      <span
+        className={`flex-1 truncate text-left transition-[opacity,max-width] duration-200 ease-out ${
+          navLabelsVisible ? 'opacity-100 max-w-[200px]' : 'opacity-0 max-w-0 overflow-hidden pointer-events-none'
+        }`}
+      >
+        {item.label}
+      </span>
+    );
+
     const inner = item.trialLocked ? (
       <button
         type="button"
@@ -443,16 +491,28 @@ export default function DashboardLayout({ children }) {
           setTrialOpen(true);
         }}
       >
-        <Icon size={18} className={isActive ? 'text-gold-400' : 'text-gray-500'} />
-        <span className="flex-1">{item.label}</span>
-        <Lock size={15} className="shrink-0 text-amber-400/90" />
+        <Icon size={18} className={`shrink-0 ${isActive ? 'text-gold-400' : 'text-gray-500'}`} />
+        {navLabelsVisible ? (
+          <>
+            {labelEl}
+            <Lock size={15} className="shrink-0 text-amber-400/90" />
+          </>
+        ) : null}
+        {!navLabelsVisible ? <span className="sr-only">{item.label}</span> : null}
       </button>
     ) : (
-      <Link to={item.path} onClick={() => setSidebarOpen(false)} className={rowClass}>
-        <Icon size={18} className={isActive ? 'text-gold-400' : ''} />
-        <span>{item.label}</span>
+      <Link
+        to={item.path}
+        onClick={() => setSidebarOpen(false)}
+        className={rowClass}
+      >
+        <Icon size={18} className={`shrink-0 ${isActive ? 'text-gold-400' : 'text-gray-400'}`} />
+        {navLabelsVisible ? <span className="truncate">{item.label}</span> : null}
+        {!navLabelsVisible ? <span className="sr-only">{item.label}</span> : null}
       </Link>
     );
+
+    const showDrag = canReorderSidebar && navLabelsVisible;
 
     return (
       <div
@@ -460,7 +520,7 @@ export default function DashboardLayout({ children }) {
         data-nav-row
         className="group/nav-row flex items-stretch gap-0.5 rounded-xl"
       >
-        {canReorderSidebar ? (
+        {showDrag ? (
           <button
             type="button"
             className="sidebar-drag-handle shrink-0 w-7 flex items-center justify-center rounded-lg text-gray-500 hover:text-gold-400 cursor-grab active:cursor-grabbing select-none text-[10px] leading-none tracking-tighter touch-none opacity-0 transition-opacity duration-150 group-hover/nav-row:opacity-100"
@@ -485,31 +545,62 @@ export default function DashboardLayout({ children }) {
       )}
 
       <aside
-        className={`fixed lg:sticky top-0 left-0 h-screen w-64 bg-void border-r border-white/5 z-50 flex flex-col transition-transform duration-300 ${
-          sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
-        }`}
+        onMouseEnter={() => isLg && setSidebarRailHover(true)}
+        onMouseLeave={() => isLg && setSidebarRailHover(false)}
+        className={`fixed lg:sticky top-0 left-0 z-50 flex h-screen flex-col overflow-hidden border-r border-white/5 bg-void transition-[transform,width] duration-200 ease-out max-lg:w-64 ${
+          sidebarOpen ? 'max-lg:translate-x-0' : 'max-lg:-translate-x-full'
+        } lg:translate-x-0 ${isLg && navLabelsVisible ? 'lg:w-60' : 'lg:w-16'}`}
       >
-        <div className="h-16 flex items-center px-6 border-b border-white/5 shrink-0">
-          <Link to="/" className="flex items-center gap-2.5">
-            <div className="w-8 h-8 bg-gradient-gold rounded-lg flex items-center justify-center">
-              <span className="text-black font-bold text-sm font-sans">N</span>
+        <div className="flex h-14 shrink-0 items-center gap-1 border-b border-white/5 px-2 lg:h-16 lg:px-2">
+          <Link
+            to="/"
+            className={`flex min-w-0 flex-1 items-center gap-2.5 overflow-hidden ${navLabelsVisible ? 'justify-start' : 'justify-center'}`}
+          >
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gradient-gold">
+              <span className="font-sans text-sm font-bold text-black">N</span>
             </div>
-            <span className="font-display text-lg text-white tracking-tight">NexaERP</span>
+            <span
+              className={`font-display whitespace-nowrap text-lg tracking-tight text-white transition-[opacity,max-width] duration-200 ease-out ${
+                navLabelsVisible ? 'max-w-[140px] opacity-100' : 'max-w-0 overflow-hidden opacity-0'
+              }`}
+            >
+              NexaERP
+            </span>
           </Link>
-          <button className="lg:hidden ml-auto text-gray-400 hover:text-white" onClick={() => setSidebarOpen(false)}>
+          <button
+            type="button"
+            className="hidden shrink-0 rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-white/[0.06] hover:text-gold-400 lg:flex"
+            aria-label={sidebarPinned ? 'Unpin sidebar' : 'Pin sidebar open'}
+            title={sidebarPinned ? 'Unpin sidebar' : 'Pin sidebar open'}
+            onClick={() => setSidebarPinned((p) => !p)}
+          >
+            {sidebarPinned ? <ChevronLeft size={18} strokeWidth={2} /> : <ChevronRight size={18} strokeWidth={2} />}
+          </button>
+          <button type="button" className="p-1.5 text-gray-400 hover:text-white lg:hidden" onClick={() => setSidebarOpen(false)} aria-label="Close menu">
             <X size={20} />
           </button>
         </div>
 
-        <div className="px-4 py-3 border-b border-white/5 shrink-0">
-          <div className="flex items-center gap-2 px-2 py-1.5 rounded-lg bg-white/[0.03]">
-            <NavIcon size={14} className="text-gold-400" />
-            <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">{rawNav.title}</span>
+        <div className={`shrink-0 border-b border-white/5 py-2 ${navLabelsVisible ? 'px-3' : 'px-2'}`}>
+          <div
+            className={`flex items-center rounded-lg bg-white/[0.03] ${navLabelsVisible ? 'gap-2 px-2 py-1.5' : 'justify-center py-2'}`}
+          >
+            <NavIcon size={navLabelsVisible ? 14 : 18} className="shrink-0 text-gold-400" />
+            <span
+              className={`text-xs font-semibold uppercase tracking-wider text-gray-400 transition-[opacity,max-width] duration-200 ease-out ${
+                navLabelsVisible ? 'max-w-[200px] opacity-100' : 'max-w-0 overflow-hidden opacity-0'
+              }`}
+            >
+              {rawNav.title}
+            </span>
           </div>
         </div>
 
-        <nav className="flex-1 flex flex-col min-h-0">
-          <div ref={navScrollRef} className="flex-1 overflow-y-auto min-h-0 py-4 px-3 space-y-1">
+        <nav className="flex min-h-0 flex-1 flex-col">
+          <div
+            ref={navScrollRef}
+            className={`min-h-0 flex-1 space-y-1 overflow-y-auto py-4 transition-[padding] duration-200 ease-out ${navLabelsVisible ? 'px-3' : 'px-2'}`}
+          >
             {previewNavItems.map((item) => {
               const sourceIndex = navItems.findIndex((x) => x.path === item.path);
               return renderNavRow(item, sourceIndex);
@@ -517,20 +608,29 @@ export default function DashboardLayout({ children }) {
           </div>
 
           {disabledPremiumModules.length > 0 ? (
-            <div className="shrink-0 px-3 pb-1 pt-4 mt-2 border-t border-white/10">
-              <div className="border-t border-b border-white/10 py-2 my-2">
+            <div className={`shrink-0 border-t border-white/10 pb-1 pt-4 mt-2 ${navLabelsVisible ? 'px-3' : 'px-2'}`}>
+              <div className="my-2 border-y border-white/10 py-2">
                 <button
                   type="button"
                   onClick={() => setPremiumOpen((o) => !o)}
-                  className="w-full flex items-center justify-between px-2 py-1.5 text-xs font-semibold text-gray-300 hover:text-gold-400 transition-colors"
+                  className={`flex w-full items-center py-1.5 text-xs font-semibold text-gray-300 transition-colors hover:text-gold-400 ${
+                    navLabelsVisible ? 'justify-between px-2' : 'justify-center px-0'
+                  }`}
+                  aria-label="Premium features"
                 >
-                  <span className="flex items-center gap-1.5">
-                    <span>✨</span> Premium Features
-                    <span className="text-gold-500/90">{premiumOpen ? '∨' : '›'}</span>
-                  </span>
+                  {navLabelsVisible ? (
+                    <span className="flex items-center gap-1.5">
+                      <span>✨</span> Premium Features
+                      <span className="text-gold-500/90">{premiumOpen ? '∨' : '›'}</span>
+                    </span>
+                  ) : (
+                    <span className="text-lg leading-none" aria-hidden>
+                      ⭐
+                    </span>
+                  )}
                 </button>
               </div>
-              {premiumOpen ? (
+              {premiumOpen && navLabelsVisible ? (
                 <div className="space-y-0.5 pb-2">
                   {disabledPremiumModules.map((m) => (
                     <button
@@ -540,13 +640,13 @@ export default function DashboardLayout({ children }) {
                         setSidebarOpen(false);
                         setPremiumLocked({ id: m.id, label: m.label });
                       }}
-                      className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-sm text-gray-400 hover:text-white hover:bg-white/[0.04] text-left"
+                      className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm text-gray-400 hover:bg-white/[0.04] hover:text-white"
                     >
-                      <span className="text-base shrink-0" aria-hidden>
+                      <span className="shrink-0 text-base" aria-hidden>
                         {m.icon}
                       </span>
                       <span className="flex-1">{m.label}</span>
-                      <span className="text-gold-500 text-xs shrink-0">⭐</span>
+                      <span className="shrink-0 text-xs text-gold-500">⭐</span>
                     </button>
                   ))}
                   <button
@@ -555,22 +655,22 @@ export default function DashboardLayout({ children }) {
                       setSidebarOpen(false);
                       navigate('/trial-upgrade');
                     }}
-                    className="w-full mt-2 mx-2 text-left text-xs font-semibold text-gold-400 hover:text-gold-300"
+                    className="mx-2 mt-2 w-full text-left text-xs font-semibold text-gold-400 hover:text-gold-300"
                   >
                     Upgrade Plan →
                   </button>
-                  <div className="border-b border-white/10 mt-3" />
+                  <div className="mt-3 border-b border-white/10" />
                 </div>
               ) : null}
             </div>
           ) : null}
 
-          {canReorderSidebar ? (
-            <div className="shrink-0 pt-2 px-4 pb-2">
+          {canReorderSidebar && navLabelsVisible ? (
+            <div className="shrink-0 px-4 pb-2 pt-2">
               <button
                 type="button"
                 onClick={handleResetSidebarOrder}
-                className="text-[11px] text-gray-500 hover:text-gold-400 transition-colors"
+                className="text-[11px] text-gray-500 transition-colors hover:text-gold-400"
               >
                 Reset to default order
               </button>
@@ -644,12 +744,36 @@ export default function DashboardLayout({ children }) {
         </Dialog>
 
         {business && (
-          <div className="px-4 py-3 border-t border-white/5 shrink-0">
-            <div className="px-2">
-              <p className="text-xs text-gray-500 truncate">{business.name}</p>
-              <div className="flex items-center gap-2 mt-1">
+          <div className={`shrink-0 border-t border-white/5 py-3 ${navLabelsVisible ? 'px-4' : 'px-2'}`}>
+            {navLabelsVisible ? (
+              <div className="px-2">
+                <p className="truncate text-xs text-gray-500">{business.name}</p>
+                <div className="mt-1 flex items-center gap-2">
+                  <span
+                    className={`badge-premium px-2 py-0.5 text-[10px] ${
+                      business.status === 'active'
+                        ? 'badge-success'
+                        : business.status === 'trial'
+                          ? 'badge-warning'
+                          : 'badge-danger'
+                    }`}
+                  >
+                    {business.plan?.toUpperCase()}
+                  </span>
+                  {business.days_remaining !== undefined && (
+                    <span className={`text-[10px] ${business.days_remaining <= 7 ? 'text-rose-400' : 'text-gray-500'}`}>
+                      {business.days_remaining}d left
+                    </span>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <div className="flex flex-col items-center gap-1" title={business.name}>
+                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-white/[0.06] text-xs font-bold text-gold-400">
+                  {(business.name || 'B').slice(0, 1).toUpperCase()}
+                </div>
                 <span
-                  className={`badge-premium text-[10px] px-2 py-0.5 ${
+                  className={`badge-premium px-1.5 py-0.5 text-[8px] leading-tight ${
                     business.status === 'active'
                       ? 'badge-success'
                       : business.status === 'trial'
@@ -657,20 +781,15 @@ export default function DashboardLayout({ children }) {
                         : 'badge-danger'
                   }`}
                 >
-                  {business.plan?.toUpperCase()}
+                  {(business.plan || '?').slice(0, 1).toUpperCase()}
                 </span>
-                {business.days_remaining !== undefined && (
-                  <span className={`text-[10px] ${business.days_remaining <= 7 ? 'text-rose-400' : 'text-gray-500'}`}>
-                    {business.days_remaining}d left
-                  </span>
-                )}
               </div>
-            </div>
+            )}
           </div>
         )}
       </aside>
 
-      <div className="flex-1 flex flex-col min-h-screen">
+      <div className="flex min-h-screen min-w-0 flex-1 flex-col">
         {impersonating && (
           <div className="bg-amber-500/10 border-b border-amber-500/20 px-4 py-2 flex items-center justify-between">
             <div className="flex items-center gap-2">
