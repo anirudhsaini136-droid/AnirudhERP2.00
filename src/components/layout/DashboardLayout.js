@@ -453,6 +453,11 @@ export default function DashboardLayout({ children }) {
 
   const displayFirstName = (user?.first_name || user?.email || 'User').trim();
   const userInitial = (displayFirstName.charAt(0) || '?').toUpperCase();
+  const businessNameSameAsUser =
+    business &&
+    String(business.name || '')
+      .trim()
+      .toLowerCase() === displayFirstName.toLowerCase();
 
   const draggedSourcePath = listDrag ? navItems[listDrag.fromIndex]?.path : null;
 
@@ -553,12 +558,12 @@ export default function DashboardLayout({ children }) {
       >
         <div
           className={`relative flex h-14 shrink-0 items-center border-b border-white/5 lg:h-16 ${
-            collapsedDesktopRail ? 'justify-center px-0' : 'gap-1 px-2.5 pr-2 lg:px-3 lg:pr-2'
+            collapsedDesktopRail ? 'justify-center px-0' : 'gap-1 px-2.5 pr-2 lg:pl-3.5 lg:pr-2'
           }`}
         >
           {collapsedDesktopRail ? (
             <>
-              <Link to="/" className="flex items-center justify-center py-2" aria-label="NexaERP home">
+              <Link to="/" className="flex items-center justify-center py-2 pl-0.5" aria-label="NexaERP home">
                 <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gradient-gold">
                   <span className="font-sans text-sm font-bold text-black">N</span>
                 </div>
@@ -577,7 +582,7 @@ export default function DashboardLayout({ children }) {
             <>
               <Link
                 to="/"
-                className="flex min-w-0 flex-1 items-center gap-2.5 overflow-hidden pl-0.5 lg:pl-0"
+                className="flex min-w-0 flex-1 items-center gap-2.5 overflow-hidden pl-1.5 lg:pl-2"
                 aria-label="NexaERP home"
               >
                 <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gradient-gold">
@@ -614,7 +619,7 @@ export default function DashboardLayout({ children }) {
           </div>
         </div>
 
-        <nav className="flex min-h-0 flex-1 flex-col">
+        <nav className="flex min-h-0 flex-1 flex-col overflow-hidden">
           <div
             ref={navScrollRef}
             className={`min-h-0 flex-1 space-y-1 overflow-y-auto py-4 transition-[padding] duration-200 ease-out ${navLabelsVisible ? 'px-3' : 'px-2'}`}
@@ -623,77 +628,84 @@ export default function DashboardLayout({ children }) {
               const sourceIndex = navItems.findIndex((x) => x.path === item.path);
               return renderNavRow(item, sourceIndex);
             })}
-          </div>
 
-          {disabledPremiumModules.length > 0 ? (
-            <div className={`shrink-0 border-t border-white/10 pb-1 pt-4 mt-2 ${navLabelsVisible ? 'px-3' : 'px-2'}`}>
-              <div className="my-2 border-y border-white/10 py-2">
-                <button
-                  type="button"
-                  onClick={() => setPremiumOpen((o) => !o)}
-                  className={`flex w-full items-center py-1.5 text-xs font-semibold text-gray-300 transition-colors hover:text-gold-400 ${
-                    navLabelsVisible ? 'justify-between px-2' : 'justify-center px-0'
-                  }`}
-                  aria-label="Premium features"
-                >
-                  {navLabelsVisible ? (
-                    <span className="flex items-center gap-1.5">
-                      <span>✨</span> Premium Features
-                      <span className="text-gold-500/90">{premiumOpen ? '∨' : '›'}</span>
-                    </span>
-                  ) : (
-                    <span className="text-lg leading-none" aria-hidden>
-                      ⭐
-                    </span>
-                  )}
-                </button>
-              </div>
-              {premiumOpen && navLabelsVisible ? (
-                <div className="space-y-0.5 pb-2">
-                  {disabledPremiumModules.map((m) => (
+            {disabledPremiumModules.length > 0 ? (
+              <div className="mt-4 border-t border-white/10 pt-4">
+                <div className="border-b border-white/10 py-2">
+                  <button
+                    type="button"
+                    onClick={() => setPremiumOpen((o) => !o)}
+                    className={`flex w-full items-center gap-2 py-1.5 text-xs font-semibold text-gray-300 transition-colors hover:text-gold-400 light-theme:text-slate-600 ${
+                      navLabelsVisible ? 'px-1' : 'justify-center px-0'
+                    }`}
+                    aria-label="Premium features"
+                  >
+                    {navLabelsVisible ? (
+                      <>
+                        <span className="flex min-w-0 flex-1 items-center gap-1.5 truncate pr-2 text-left">
+                          <span className="shrink-0" aria-hidden>
+                            ✨
+                          </span>
+                          <span className="truncate">Premium Features</span>
+                        </span>
+                        <span className="shrink-0 pl-1 pr-0.5 text-base font-light leading-none text-gold-500/95 light-theme:text-amber-600">
+                          {premiumOpen ? '∨' : '›'}
+                        </span>
+                      </>
+                    ) : (
+                      <span className="flex items-center justify-center gap-3 px-1" aria-hidden>
+                        <span className="text-lg leading-none">⭐</span>
+                        <span className="text-sm font-light leading-none text-gold-500/90">{premiumOpen ? '∨' : '›'}</span>
+                      </span>
+                    )}
+                  </button>
+                </div>
+                {premiumOpen && navLabelsVisible ? (
+                  <div className="space-y-0.5 pb-2 pt-1">
+                    {disabledPremiumModules.map((m) => (
+                      <button
+                        key={m.id}
+                        type="button"
+                        onClick={() => {
+                          setSidebarOpen(false);
+                          setPremiumLocked({ id: m.id, label: m.label });
+                        }}
+                        className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm text-gray-400 hover:bg-white/[0.04] hover:text-white light-theme:text-slate-600"
+                      >
+                        <span className="shrink-0 text-base" aria-hidden>
+                          {m.icon}
+                        </span>
+                        <span className="flex-1">{m.label}</span>
+                        <span className="shrink-0 text-xs text-gold-500">⭐</span>
+                      </button>
+                    ))}
                     <button
-                      key={m.id}
                       type="button"
                       onClick={() => {
                         setSidebarOpen(false);
-                        setPremiumLocked({ id: m.id, label: m.label });
+                        navigate('/trial-upgrade');
                       }}
-                      className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm text-gray-400 hover:bg-white/[0.04] hover:text-white"
+                      className="mx-2 mt-2 w-full text-left text-xs font-semibold text-gold-400 hover:text-gold-300"
                     >
-                      <span className="shrink-0 text-base" aria-hidden>
-                        {m.icon}
-                      </span>
-                      <span className="flex-1">{m.label}</span>
-                      <span className="shrink-0 text-xs text-gold-500">⭐</span>
+                      Upgrade Plan →
                     </button>
-                  ))}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSidebarOpen(false);
-                      navigate('/trial-upgrade');
-                    }}
-                    className="mx-2 mt-2 w-full text-left text-xs font-semibold text-gold-400 hover:text-gold-300"
-                  >
-                    Upgrade Plan →
-                  </button>
-                  <div className="mt-3 border-b border-white/10" />
-                </div>
-              ) : null}
-            </div>
-          ) : null}
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
 
-          {canReorderSidebar && navLabelsVisible ? (
-            <div className="shrink-0 px-4 pb-2 pt-2">
-              <button
-                type="button"
-                onClick={handleResetSidebarOrder}
-                className="text-[11px] text-gray-500 transition-colors hover:text-gold-400"
-              >
-                Reset to default order
-              </button>
-            </div>
-          ) : null}
+            {canReorderSidebar && navLabelsVisible ? (
+              <div className="px-1 pb-4 pt-3">
+                <button
+                  type="button"
+                  onClick={handleResetSidebarOrder}
+                  className="text-[11px] text-gray-500 transition-colors hover:text-gold-400 light-theme:text-slate-500"
+                >
+                  Reset to default order
+                </button>
+              </div>
+            ) : null}
+          </div>
         </nav>
 
         {listDrag &&
@@ -810,8 +822,10 @@ export default function DashboardLayout({ children }) {
         {business && navLabelsVisible ? (
           <div className="shrink-0 border-t border-white/5 px-4 py-3">
             <div className="px-2 text-left">
-              <p className="truncate text-xs text-gray-500">{business.name}</p>
-              <div className="mt-1 flex flex-wrap items-center gap-2">
+              {!businessNameSameAsUser ? (
+                <p className="truncate text-xs text-gray-500 light-theme:text-slate-600">{business.name}</p>
+              ) : null}
+              <div className={`flex flex-wrap items-center gap-2 ${businessNameSameAsUser ? '' : 'mt-1'}`}>
                 <span
                   className={`badge-premium px-2 py-0.5 text-[10px] ${
                     business.status === 'active'
