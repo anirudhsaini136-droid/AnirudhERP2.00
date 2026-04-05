@@ -562,24 +562,27 @@ export default function DashboardLayout({ children }) {
           }`}
         >
           {collapsedDesktopRail ? (
-            <div className="flex w-full min-w-0 items-center gap-0 px-0.5">
-              <div className="flex min-w-0 min-h-0 flex-1 justify-center pr-0.5">
-                <Link to="/" className="flex items-center justify-center py-2" aria-label="NexaERP home">
-                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gradient-gold">
-                    <span className="font-sans text-sm font-bold text-black">N</span>
-                  </div>
-                </Link>
-              </div>
+            <>
+              {/* True center of rail (matches footer avatar); pin sits in narrow right strip only */}
+              <Link
+                to="/"
+                className="absolute left-1/2 top-1/2 z-[1] flex -translate-x-1/2 -translate-y-1/2 items-center justify-center py-2"
+                aria-label="NexaERP home"
+              >
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gradient-gold">
+                  <span className="font-sans text-sm font-bold text-black">N</span>
+                </div>
+              </Link>
               <button
                 type="button"
-                className="flex h-8 w-7 shrink-0 items-center justify-center rounded-md text-gray-500 transition-colors hover:bg-white/[0.06] hover:text-gold-400"
+                className="absolute right-0 top-1/2 z-[2] flex h-9 w-4 -translate-y-1/2 items-center justify-center rounded-md text-gray-500 transition-colors hover:bg-white/[0.06] hover:text-gold-400"
                 aria-label={sidebarPinned ? 'Unpin sidebar' : 'Pin sidebar open'}
                 title={sidebarPinned ? 'Unpin sidebar' : 'Pin sidebar open'}
                 onClick={() => setSidebarPinned((p) => !p)}
               >
-                {sidebarPinned ? <ChevronLeft size={15} strokeWidth={2} /> : <ChevronRight size={15} strokeWidth={2} />}
+                {sidebarPinned ? <ChevronLeft size={14} strokeWidth={2} /> : <ChevronRight size={14} strokeWidth={2} />}
               </button>
-            </div>
+            </>
           ) : (
             <>
               <Link
