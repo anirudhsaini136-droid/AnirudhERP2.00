@@ -169,6 +169,7 @@ export default function DashboardLayout({ children }) {
   const [unreadCount, setUnreadCount] = useState(0);
   const [showNotifs, setShowNotifs] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
+  const [showSidebarUserMenu, setShowSidebarUserMenu] = useState(false);
 
   const isLg = useIsLg();
   const [sidebarPinned, setSidebarPinned] = useState(() => {
@@ -448,14 +449,19 @@ export default function DashboardLayout({ children }) {
 
   const NavIcon = rawNav.icon;
 
+  const displayFirstName = (user?.first_name || user?.email || 'User').trim();
+  const userInitial = (displayFirstName.charAt(0) || '?').toUpperCase();
+
   const draggedSourcePath = listDrag ? navItems[listDrag.fromIndex]?.path : null;
 
   const renderNavRow = (item, sourceIndex) => {
     const isPlaceholder = Boolean(listDrag && draggedSourcePath === item.path);
     const isActive = location.pathname === item.path;
     const Icon = item.icon;
-    const pad = navLabelsVisible ? 'gap-3 px-3 py-2.5' : 'justify-center px-2 py-2.5 min-h-[44px]';
-    const rowClass = `flex flex-1 min-w-0 items-center rounded-xl text-sm font-medium transition-all duration-200 ease-out ${pad} ${
+    const innerPad = navLabelsVisible
+      ? 'min-w-0 flex-1 gap-3 py-2.5 pl-3 pr-2 text-left'
+      : 'min-w-0 flex-1 justify-center px-0 py-2.5 min-h-[44px]';
+    const rowClass = `flex items-center rounded-xl text-sm font-medium transition-all duration-200 ease-out ${innerPad} ${
       isActive
         ? 'bg-gradient-to-r from-[#D4AF37]/15 to-transparent text-gold-400 border-l-2 border-gold-500'
         : 'text-gray-400 hover:text-white hover:bg-white/[0.04] border-l-2 border-transparent'
@@ -466,7 +472,7 @@ export default function DashboardLayout({ children }) {
         <div
           key={item.path}
           data-nav-row
-          className="flex items-stretch gap-0.5 rounded-xl min-h-[44px] border border-dashed border-gold-500/25 bg-white/[0.03] opacity-80"
+          className="flex min-h-[44px] w-full items-stretch rounded-xl border border-dashed border-gold-500/25 bg-white/[0.03] opacity-80"
           aria-hidden
         />
       );
@@ -474,8 +480,8 @@ export default function DashboardLayout({ children }) {
 
     const labelEl = (
       <span
-        className={`flex-1 truncate text-left transition-[opacity,max-width] duration-200 ease-out ${
-          navLabelsVisible ? 'opacity-100 max-w-[200px]' : 'opacity-0 max-w-0 overflow-hidden pointer-events-none'
+        className={`min-w-0 flex-1 truncate text-left transition-[opacity,max-width] duration-200 ease-out ${
+          navLabelsVisible ? 'max-w-[200px] opacity-100' : 'pointer-events-none max-w-0 overflow-hidden opacity-0'
         }`}
       >
         {item.label}
@@ -485,7 +491,7 @@ export default function DashboardLayout({ children }) {
     const inner = item.trialLocked ? (
       <button
         type="button"
-        className={`w-full text-left ${rowClass}`}
+        className={rowClass}
         onClick={() => {
           setSidebarOpen(false);
           setTrialOpen(true);
@@ -501,13 +507,9 @@ export default function DashboardLayout({ children }) {
         {!navLabelsVisible ? <span className="sr-only">{item.label}</span> : null}
       </button>
     ) : (
-      <Link
-        to={item.path}
-        onClick={() => setSidebarOpen(false)}
-        className={rowClass}
-      >
+      <Link to={item.path} onClick={() => setSidebarOpen(false)} className={rowClass}>
         <Icon size={18} className={`shrink-0 ${isActive ? 'text-gold-400' : 'text-gray-400'}`} />
-        {navLabelsVisible ? <span className="truncate">{item.label}</span> : null}
+        {navLabelsVisible ? labelEl : null}
         {!navLabelsVisible ? <span className="sr-only">{item.label}</span> : null}
       </Link>
     );
@@ -515,22 +517,18 @@ export default function DashboardLayout({ children }) {
     const showDrag = canReorderSidebar && navLabelsVisible;
 
     return (
-      <div
-        key={item.path}
-        data-nav-row
-        className="group/nav-row flex items-stretch gap-0.5 rounded-xl"
-      >
+      <div key={item.path} data-nav-row className="group/nav-row flex w-full min-w-0 items-stretch rounded-xl">
+        {inner}
         {showDrag ? (
           <button
             type="button"
-            className="sidebar-drag-handle shrink-0 w-7 flex items-center justify-center rounded-lg text-gray-500 hover:text-gold-400 cursor-grab active:cursor-grabbing select-none text-[10px] leading-none tracking-tighter touch-none opacity-0 transition-opacity duration-150 group-hover/nav-row:opacity-100"
+            className="sidebar-drag-handle flex w-7 shrink-0 cursor-grab touch-none select-none items-center justify-center rounded-lg text-[10px] leading-none tracking-tighter text-gray-500 opacity-0 transition-opacity duration-150 hover:text-gold-400 active:cursor-grabbing group-hover/nav-row:opacity-100"
             onPointerDown={(e) => onReorderHandlePointerDown(e, sourceIndex)}
             aria-label="Drag to reorder"
           >
             ⋮⋮
           </button>
         ) : null}
-        {inner}
       </div>
     );
   };
@@ -554,14 +552,19 @@ export default function DashboardLayout({ children }) {
         <div className="flex h-14 shrink-0 items-center gap-1 border-b border-white/5 px-2 lg:h-16 lg:px-2">
           <Link
             to="/"
-            className={`flex min-w-0 flex-1 items-center gap-2.5 overflow-hidden ${navLabelsVisible ? 'justify-start' : 'justify-center'}`}
+            className={`flex min-w-0 flex-1 items-center gap-3 overflow-hidden ${navLabelsVisible ? 'justify-start pl-0.5' : 'justify-center'}`}
           >
-            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gradient-gold">
-              <span className="font-sans text-sm font-bold text-black">N</span>
+            <div
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border-2 border-[#d4a017] bg-[#0a0c10] shadow-[0_0_24px_rgba(212,160,23,0.18)] light-theme:border-[#c9a010] light-theme:bg-slate-900 light-theme:shadow-[0_0_20px_rgba(212,160,23,0.15)]"
+              aria-hidden
+            >
+              <span className="font-display text-[1.125rem] font-bold leading-none tracking-tight text-[#e8c547] light-theme:text-[#f0d060]">
+                N
+              </span>
             </div>
             <span
-              className={`font-display whitespace-nowrap text-lg tracking-tight text-white transition-[opacity,max-width] duration-200 ease-out ${
-                navLabelsVisible ? 'max-w-[140px] opacity-100' : 'max-w-0 overflow-hidden opacity-0'
+              className={`font-display whitespace-nowrap text-lg font-semibold tracking-tight text-white transition-[opacity,max-width] duration-200 ease-out ${
+                navLabelsVisible ? 'max-w-[160px] opacity-100' : 'max-w-0 overflow-hidden opacity-0'
               }`}
             >
               NexaERP
@@ -583,7 +586,7 @@ export default function DashboardLayout({ children }) {
 
         <div className={`shrink-0 border-b border-white/5 py-2 ${navLabelsVisible ? 'px-3' : 'px-2'}`}>
           <div
-            className={`flex items-center rounded-lg bg-white/[0.03] ${navLabelsVisible ? 'gap-2 px-2 py-1.5' : 'justify-center py-2'}`}
+            className={`flex items-center rounded-lg bg-white/[0.03] ${navLabelsVisible ? 'gap-2 px-3 py-1.5' : 'justify-center px-2 py-2'}`}
           >
             <NavIcon size={navLabelsVisible ? 14 : 18} className="shrink-0 text-gold-400" />
             <span
@@ -684,7 +687,7 @@ export default function DashboardLayout({ children }) {
           typeof document !== 'undefined' &&
           createPortal(
             <div
-              className="pointer-events-none fixed z-[100] rounded-xl border border-gold-500/35 bg-void/95 light-theme:bg-white/95 light-theme:border-amber-400/40 shadow-2xl backdrop-blur-md flex items-center gap-2 px-3 py-2.5 text-sm text-gray-200 light-theme:text-slate-800"
+              className="pointer-events-none fixed z-[100] flex items-center gap-2 rounded-xl border border-gold-500/35 bg-void/95 px-3 py-2.5 text-sm text-gray-200 shadow-2xl backdrop-blur-md light-theme:border-amber-400/40 light-theme:bg-white/95 light-theme:text-slate-800"
               style={{
                 left: listDrag.ghostX - listDrag.grabOffsetX,
                 top: listDrag.ghostY - listDrag.grabOffsetY,
@@ -692,9 +695,9 @@ export default function DashboardLayout({ children }) {
                 boxShadow: '0 18px 40px rgba(0,0,0,0.45)',
               }}
             >
-              <span className="text-gray-500 light-theme:text-slate-500 text-[10px] select-none shrink-0">⋮⋮</span>
-              <DragGhostIcon size={18} className="text-gold-400 shrink-0" />
-              <span className="truncate font-medium">{dragGhostItem.label}</span>
+              <DragGhostIcon size={18} className="shrink-0 text-gold-400" />
+              <span className="min-w-0 flex-1 truncate font-medium">{dragGhostItem.label}</span>
+              <span className="shrink-0 select-none text-[10px] text-gray-500 light-theme:text-slate-500">⋮⋮</span>
             </div>,
             document.body,
           )}
@@ -743,12 +746,56 @@ export default function DashboardLayout({ children }) {
           </DialogContent>
         </Dialog>
 
+        {user && (
+          <div className={`relative shrink-0 border-t border-white/5 ${navLabelsVisible ? 'px-3 py-3' : 'px-2 py-3'}`}>
+            <button
+              type="button"
+              onClick={() => {
+                setShowSidebarUserMenu((v) => !v);
+                setShowUserMenu(false);
+              }}
+              className={`flex w-full items-center gap-3 rounded-xl py-1 transition-colors hover:bg-white/[0.04] ${navLabelsVisible ? 'justify-start pl-0.5 pr-1' : 'justify-center'}`}
+              aria-expanded={showSidebarUserMenu}
+              aria-haspopup="menu"
+            >
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#d4a017] text-sm font-bold text-black">
+                {userInitial}
+              </div>
+              {navLabelsVisible ? (
+                <span className="min-w-0 flex-1 truncate text-left text-sm font-medium text-gray-200">{displayFirstName}</span>
+              ) : null}
+              {!navLabelsVisible ? <span className="sr-only">{displayFirstName}</span> : null}
+            </button>
+            {showSidebarUserMenu ? (
+              <div className="absolute bottom-full left-2 right-2 z-[60] mb-1 overflow-hidden rounded-xl border border-white/10 bg-void py-1 shadow-elevated light-theme:border-slate-200 light-theme:bg-white">
+                <div className="border-b border-white/5 px-3 py-2 light-theme:border-slate-100">
+                  <p className="truncate text-sm font-medium text-white light-theme:text-slate-900">
+                    {user?.first_name} {user?.last_name}
+                  </p>
+                  <p className="truncate text-xs text-gray-500">{user?.email}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowSidebarUserMenu(false);
+                    logout();
+                  }}
+                  className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm text-gray-400 hover:bg-white/[0.04] hover:text-rose-400 light-theme:hover:bg-slate-50"
+                >
+                  <LogOut size={15} />
+                  Logout
+                </button>
+              </div>
+            ) : null}
+          </div>
+        )}
+
         {business && (
           <div className={`shrink-0 border-t border-white/5 py-3 ${navLabelsVisible ? 'px-4' : 'px-2'}`}>
             {navLabelsVisible ? (
-              <div className="px-2">
+              <div className="px-2 text-left">
                 <p className="truncate text-xs text-gray-500">{business.name}</p>
-                <div className="mt-1 flex items-center gap-2">
+                <div className="mt-1 flex flex-wrap items-center gap-2">
                   <span
                     className={`badge-premium px-2 py-0.5 text-[10px] ${
                       business.status === 'active'
@@ -818,6 +865,7 @@ export default function DashboardLayout({ children }) {
                 onClick={() => {
                   setShowNotifs(!showNotifs);
                   setShowUserMenu(false);
+                  setShowSidebarUserMenu(false);
                 }}
                 className="relative p-2 rounded-lg text-gray-400 hover:text-white hover:bg-white/5 transition-colors"
               >
@@ -864,6 +912,7 @@ export default function DashboardLayout({ children }) {
                 onClick={() => {
                   setShowUserMenu(!showUserMenu);
                   setShowNotifs(false);
+                  setShowSidebarUserMenu(false);
                 }}
                 className="flex items-center gap-2 pl-3 pr-2 py-1.5 rounded-lg hover:bg-white/5 transition-colors"
               >
@@ -901,6 +950,7 @@ export default function DashboardLayout({ children }) {
           onClick={() => {
             setShowNotifs(false);
             setShowUserMenu(false);
+            setShowSidebarUserMenu(false);
           }}
         >
           {children}
