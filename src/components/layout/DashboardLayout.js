@@ -719,7 +719,7 @@ export default function DashboardLayout({ children }) {
           typeof document !== 'undefined' &&
           createPortal(
             <div
-              className="pointer-events-none fixed z-[100] flex items-center gap-2 rounded-xl border border-gold-500/35 bg-void/95 px-3 py-2.5 text-sm text-gray-200 shadow-2xl backdrop-blur-md light-theme:border-amber-400/40 light-theme:bg-white/95 light-theme:text-slate-800"
+              className="sidebar-drag-ghost pointer-events-none fixed z-[100] flex items-center gap-2 rounded-xl px-3 py-2.5 text-sm font-medium shadow-2xl backdrop-blur-md"
               style={{
                 left: listDrag.ghostX - listDrag.grabOffsetX,
                 top: listDrag.ghostY - listDrag.grabOffsetY,
@@ -727,9 +727,9 @@ export default function DashboardLayout({ children }) {
                 boxShadow: '0 18px 40px rgba(0,0,0,0.45)',
               }}
             >
-              <DragGhostIcon size={18} className="shrink-0 text-gold-400" />
-              <span className="min-w-0 flex-1 truncate font-medium">{dragGhostItem.label}</span>
-              <span className="shrink-0 select-none text-[10px] text-gray-500 light-theme:text-slate-500">⋮⋮</span>
+              <DragGhostIcon size={18} className="shrink-0" />
+              <span className="min-w-0 flex-1 truncate">{dragGhostItem.label}</span>
+              <span className="shrink-0 select-none text-[10px] opacity-70">⋮⋮</span>
             </div>,
             document.body,
           )}

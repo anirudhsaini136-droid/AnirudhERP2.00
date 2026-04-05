@@ -197,6 +197,18 @@ h1, h2, h3, h4, h5, h6, .font-display {
 .light-theme .text-gray-300 { color: #334155; }
 .light-theme .text-gray-200 { color: #0f172a; }
 
+/* Sidebar nav reorder: floating ghost must stay readable in light + dark */
+.sidebar-drag-ghost {
+  background: rgba(8, 9, 14, 0.96);
+  color: #e7bb33;
+  border: 1px solid rgba(212, 175, 55, 0.4);
+}
+.light-theme .sidebar-drag-ghost {
+  background: rgba(255, 255, 255, 0.98);
+  color: #a16207;
+  border-color: rgba(217, 119, 6, 0.45);
+}
+
 .light-theme .border-white\/5 { border-color: rgba(148, 163, 184, 0.25); }
 .light-theme .border-white\/10 { border-color: rgba(148, 163, 184, 0.3); }
 .light-theme .bg-white\/5 { background-color: rgba(148, 163, 184, 0.08); }
