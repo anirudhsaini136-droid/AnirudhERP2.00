@@ -42,6 +42,7 @@ const ALL_MODULES = [
   { id: 'expenses', label: 'Expenses', icon: '💸' },
   { id: 'accounting', label: 'Accounting', icon: '📒', desc: 'Double-entry bookkeeping, P&L, Balance Sheet' },
   { id: 'ca_portal', label: 'CA Portal', icon: '🔐' },
+  { id: 'tally_export', label: 'Tally Export', icon: '📤', desc: 'Export data for Tally' },
 ];
 
 function ModulesEditor({ businessId, api, bizData, onRefresh }) {

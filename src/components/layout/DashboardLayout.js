@@ -1,111 +1,118 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import {
   LayoutDashboard, Building2, Users, UserCheck, Calendar, FileText,
-  Receipt, BarChart3, Package, ShoppingCart, Settings, Bell, Truck, 
+  Receipt, BarChart3, Package, ShoppingCart, Settings, Bell, Truck,
   LogOut, ChevronDown, Menu, X, Clock, Briefcase, CreditCard,
-  Shield, Home,   FileSpreadsheet, UserCircle, ArrowLeftRight, BookUser,
-  IndianRupee, BookOpen, HardDriveDownload, Repeat, Lock
+  Shield, Home, FileSpreadsheet, UserCircle, ArrowLeftRight, BookUser,
+  IndianRupee, BookOpen, HardDriveDownload, Repeat, Lock, FileDown,
 } from 'lucide-react';
 import ThemeToggle from '../ThemeToggle';
 import { parseEnabledModules, isNavPathAllowedForModules } from '../../shared-core/modules';
 import { shouldApplyTrialModuleLock, isTrialPathUnlocked, TRIAL_UPGRADE_MESSAGE } from '../../shared-core/trialAccess';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../ui/dialog';
+import { applySidebarOrder } from '../../shared-core/sidebarOrder';
+import { getDisabledPremiumModules } from '../../shared-core/premiumModules';
+
+const PREMIUM_LS_KEY = 'nexaerp_premium_features_expanded';
+const SIDEBAR_REORDER_ROLES = ['business_owner', 'finance_admin', 'hr_admin', 'inventory_admin', 'ca_admin'];
 
 const NAV_CONFIG = {
   super_admin: {
     title: 'Super Admin',
     icon: Shield,
     items: [
-      { path: '/super-admin', label: 'Dashboard', icon: LayoutDashboard },
-      { path: '/super-admin/businesses', label: 'Businesses', icon: Building2 },
-      { path: '/super-admin/settings', label: 'Platform Settings', icon: Settings },
-    ]
+      { path: '/super-admin', label: 'Dashboard', icon: LayoutDashboard, orderKey: 'dashboard' },
+      { path: '/super-admin/businesses', label: 'Businesses', icon: Building2, orderKey: 'businesses' },
+      { path: '/super-admin/settings', label: 'Platform Settings', icon: Settings, orderKey: 'settings_sa' },
+    ],
   },
   business_owner: {
     title: 'Business',
     icon: Briefcase,
     items: [
-      { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-      { path: '/dashboard/users', label: 'Manage Users', icon: Users },
-      { path: '/hr', label: 'HR Dashboard', icon: UserCheck },
-      { path: '/hr/employees', label: 'Employees', icon: Users },
-      { path: '/hr/attendance', label: 'Attendance', icon: Calendar },
-      { path: '/hr/leave', label: 'Leave', icon: FileText },
-      { path: '/hr/payroll', label: 'Payroll', icon: CreditCard },
-      { path: '/finance', label: 'Finance Dashboard', icon: BarChart3 },
-      { path: '/finance/invoices', label: 'Sales Invoice', icon: FileSpreadsheet },
-      { path: '/finance/recurring-invoices', label: 'Recurring Invoices', icon: Repeat },
-      { path: '/finance/eway-bills', label: 'E-Way Bills', icon: Truck },
-      { path: '/finance/customers', label: 'Customer Ledger', icon: BookUser },
-      { path: '/finance/migration', label: 'Import data', icon: HardDriveDownload },
-      { path: '/finance/expenses', label: 'Expenses', icon: Receipt },
-      { path: '/finance/reports', label: 'Reports', icon: BarChart3 },
-      { path: '/finance/gst', label: 'GST Reports', icon: IndianRupee },
-      { path: '/accounting', label: 'Accounting', icon: BookOpen },
-      { path: '/purchases', label: 'Purchase Invoice', icon: Truck },
-      { path: '/inventory', label: 'Inventory', icon: Package },
-      { path: '/inventory/billing', label: 'Quick Bill', icon: ShoppingCart },
-      { path: '/dashboard/settings', label: 'Settings', icon: Settings },
-    ]
+      { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, orderKey: 'dashboard' },
+      { path: '/dashboard/users', label: 'Manage Users', icon: Users, orderKey: 'users' },
+      { path: '/hr', label: 'HR Dashboard', icon: UserCheck, orderKey: 'hr' },
+      { path: '/hr/employees', label: 'Employees', icon: Users, orderKey: 'hr_employees' },
+      { path: '/hr/attendance', label: 'Attendance', icon: Calendar, orderKey: 'hr_attendance' },
+      { path: '/hr/leave', label: 'Leave', icon: FileText, orderKey: 'hr_leave' },
+      { path: '/hr/payroll', label: 'Payroll', icon: CreditCard, orderKey: 'payroll' },
+      { path: '/finance', label: 'Finance Dashboard', icon: BarChart3, orderKey: 'finance' },
+      { path: '/finance/invoices', label: 'Sales Invoice', icon: FileSpreadsheet, orderKey: 'invoices' },
+      { path: '/finance/recurring-invoices', label: 'Recurring Invoices', icon: Repeat, orderKey: 'recurring_invoices' },
+      { path: '/finance/eway-bills', label: 'E-Way Bills', icon: Truck, orderKey: 'eway_bills' },
+      { path: '/finance/customers', label: 'Customer Ledger', icon: BookUser, orderKey: 'customers' },
+      { path: '/finance/migration', label: 'Import data', icon: HardDriveDownload, orderKey: 'migration' },
+      { path: '/finance/expenses', label: 'Expenses', icon: Receipt, orderKey: 'expenses' },
+      { path: '/finance/reports', label: 'Reports', icon: BarChart3, orderKey: 'reports' },
+      { path: '/finance/gst', label: 'GST Reports', icon: IndianRupee, orderKey: 'gst' },
+      { path: '/finance/tally-export', label: 'Tally Export', icon: FileDown, orderKey: 'tally_export' },
+      { path: '/accounting', label: 'Accounting', icon: BookOpen, orderKey: 'accounting' },
+      { path: '/purchases', label: 'Purchase Invoice', icon: Truck, orderKey: 'purchases' },
+      { path: '/inventory', label: 'Inventory', icon: Package, orderKey: 'inventory' },
+      { path: '/inventory/billing', label: 'Quick Bill', icon: ShoppingCart, orderKey: 'quick_bill' },
+      { path: '/dashboard/settings', label: 'Settings', icon: Settings, orderKey: 'settings' },
+    ],
   },
   hr_admin: {
     title: 'HR Management',
     icon: UserCheck,
     items: [
-      { path: '/hr', label: 'Dashboard', icon: LayoutDashboard },
-      { path: '/hr/employees', label: 'Employees', icon: Users },
-      { path: '/hr/attendance', label: 'Attendance', icon: Calendar },
-      { path: '/hr/leave', label: 'Leave Mgmt', icon: FileText },
-      { path: '/hr/payroll', label: 'Payroll', icon: CreditCard },
-    ]
+      { path: '/hr', label: 'Dashboard', icon: LayoutDashboard, orderKey: 'hr' },
+      { path: '/hr/employees', label: 'Employees', icon: Users, orderKey: 'hr_employees' },
+      { path: '/hr/attendance', label: 'Attendance', icon: Calendar, orderKey: 'hr_attendance' },
+      { path: '/hr/leave', label: 'Leave Mgmt', icon: FileText, orderKey: 'hr_leave' },
+      { path: '/hr/payroll', label: 'Payroll', icon: CreditCard, orderKey: 'payroll' },
+    ],
   },
   finance_admin: {
     title: 'Finance',
     icon: BarChart3,
     items: [
-      { path: '/finance', label: 'Dashboard', icon: LayoutDashboard },
-      { path: '/finance/invoices', label: 'Sales Invoice', icon: FileSpreadsheet },
-      { path: '/finance/recurring-invoices', label: 'Recurring Invoices', icon: Repeat },
-      { path: '/finance/eway-bills', label: 'E-Way Bills', icon: Truck },
-      { path: '/finance/customers', label: 'Customer Ledger', icon: BookUser },
-      { path: '/finance/migration', label: 'Import data', icon: HardDriveDownload },
-      { path: '/finance/expenses', label: 'Expenses', icon: Receipt },
-      { path: '/finance/reports', label: 'Reports', icon: BarChart3 },
-      { path: '/finance/gst', label: 'GST Reports', icon: IndianRupee },
-      { path: '/accounting', label: 'Accounting', icon: BookOpen },
-      { path: '/purchases', label: 'Purchase Invoice', icon: Truck },
-    ]
+      { path: '/finance', label: 'Dashboard', icon: LayoutDashboard, orderKey: 'finance' },
+      { path: '/finance/invoices', label: 'Sales Invoice', icon: FileSpreadsheet, orderKey: 'invoices' },
+      { path: '/finance/recurring-invoices', label: 'Recurring Invoices', icon: Repeat, orderKey: 'recurring_invoices' },
+      { path: '/finance/eway-bills', label: 'E-Way Bills', icon: Truck, orderKey: 'eway_bills' },
+      { path: '/finance/customers', label: 'Customer Ledger', icon: BookUser, orderKey: 'customers' },
+      { path: '/finance/migration', label: 'Import data', icon: HardDriveDownload, orderKey: 'migration' },
+      { path: '/finance/expenses', label: 'Expenses', icon: Receipt, orderKey: 'expenses' },
+      { path: '/finance/reports', label: 'Reports', icon: BarChart3, orderKey: 'reports' },
+      { path: '/finance/gst', label: 'GST Reports', icon: IndianRupee, orderKey: 'gst' },
+      { path: '/finance/tally-export', label: 'Tally Export', icon: FileDown, orderKey: 'tally_export' },
+      { path: '/accounting', label: 'Accounting', icon: BookOpen, orderKey: 'accounting' },
+      { path: '/purchases', label: 'Purchase Invoice', icon: Truck, orderKey: 'purchases' },
+    ],
   },
   ca_admin: {
     title: 'CA Portal',
     icon: BookOpen,
     items: [
-      { path: '/ca', label: 'GST Reports', icon: IndianRupee },
-      { path: '/finance/invoices', label: 'Sales Invoice', icon: FileSpreadsheet },
-      { path: '/purchases', label: 'Purchase Invoice', icon: Truck },
-    ]
+      { path: '/ca', label: 'GST Reports', icon: IndianRupee, orderKey: 'ca_gst' },
+      { path: '/finance/invoices', label: 'Sales Invoice', icon: FileSpreadsheet, orderKey: 'invoices' },
+      { path: '/purchases', label: 'Purchase Invoice', icon: Truck, orderKey: 'purchases' },
+    ],
   },
   inventory_admin: {
     title: 'Inventory',
     icon: Package,
     items: [
-      { path: '/inventory', label: 'Products', icon: Package },
-      { path: '/inventory/billing', label: 'Quick Bill', icon: ShoppingCart },
-    ]
+      { path: '/inventory', label: 'Products', icon: Package, orderKey: 'inventory' },
+      { path: '/inventory/billing', label: 'Quick Bill', icon: ShoppingCart, orderKey: 'quick_bill' },
+    ],
   },
   staff: {
     title: 'Staff Portal',
     icon: Home,
     items: [
-      { path: '/staff', label: 'Home', icon: Home },
-      { path: '/staff/attendance', label: 'My Attendance', icon: Clock },
-      { path: '/staff/leave', label: 'My Leave', icon: Calendar },
-      { path: '/staff/payslips', label: 'My Payslips', icon: FileText },
-      { path: '/staff/profile', label: 'My Profile', icon: UserCircle },
-    ]
-  }
+      { path: '/staff', label: 'Home', icon: Home, orderKey: 'staff_home' },
+      { path: '/staff/attendance', label: 'My Attendance', icon: Clock, orderKey: 'staff_attendance' },
+      { path: '/staff/leave', label: 'My Leave', icon: Calendar, orderKey: 'staff_leave' },
+      { path: '/staff/payslips', label: 'My Payslips', icon: FileText, orderKey: 'staff_payslips' },
+      { path: '/staff/profile', label: 'My Profile', icon: UserCircle, orderKey: 'staff_profile' },
+    ],
+  },
 };
 
 export default function DashboardLayout({ children }) {
@@ -121,43 +128,127 @@ export default function DashboardLayout({ children }) {
   const role = user?.role || 'staff';
   const rawNav = NAV_CONFIG[role] || NAV_CONFIG.staff;
 
-  // Filter nav items based on business modules
-  const enabledModules = React.useMemo(() => parseEnabledModules(business), [business]);
+  const enabledModules = useMemo(() => parseEnabledModules(business), [business]);
 
-  const isPathAllowed = (path) => {
-    // Super admin always has full access
-    if (role === 'super_admin') return true;
-    // Staff portal items are not gated by Super Admin module chips (same business record)
-    if (role === 'staff') return true;
-    // Always allow dashboard and settings regardless of modules
-    if (['/dashboard', '/dashboard/settings'].includes(path)) return true;
-    if (
-      path === '/trial-upgrade' &&
-      ['business_owner', 'finance_admin', 'hr_admin', 'inventory_admin', 'ca_admin'].includes(role)
-    ) {
-      return true;
-    }
-    // No business context or still loading — do not show full module list
-    if (enabledModules === null) return false;
-    // Empty modules → only dashboard/settings
-    if (enabledModules.length === 0) return false;
-    return isNavPathAllowedForModules(path, enabledModules);
-  };
+  const isPathAllowed = useCallback(
+    (path) => {
+      if (role === 'super_admin') return true;
+      if (role === 'staff') return true;
+      if (['/dashboard', '/dashboard/settings'].includes(path)) return true;
+      if (
+        path === '/trial-upgrade' &&
+        ['business_owner', 'finance_admin', 'hr_admin', 'inventory_admin', 'ca_admin'].includes(role)
+      ) {
+        return true;
+      }
+      if (enabledModules === null) return false;
+      if (enabledModules.length === 0) return false;
+      return isNavPathAllowedForModules(path, enabledModules);
+    },
+    [role, enabledModules],
+  );
 
-  const [trialOpen, setTrialOpen] = React.useState(false);
+  const [trialOpen, setTrialOpen] = useState(false);
 
-  const navConfig = {
-    ...rawNav,
-    items: rawNav.items
+  const baseNavItems = useMemo(() => {
+    return rawNav.items
       .filter((item) => isPathAllowed(item.path))
       .map((item) => ({
         ...item,
-        trialLocked:
-          shouldApplyTrialModuleLock(business, role) && !isTrialPathUnlocked(item.path),
-      })),
+        trialLocked: shouldApplyTrialModuleLock(business, role) && !isTrialPathUnlocked(item.path),
+      }));
+  }, [rawNav.items, isPathAllowed, business, role]);
+
+  const savedSidebarOrder = business?.sidebar_order;
+  const mergedNavItems = useMemo(
+    () => applySidebarOrder(baseNavItems, savedSidebarOrder),
+    [baseNavItems, savedSidebarOrder],
+  );
+
+  const [navItems, setNavItems] = useState(mergedNavItems);
+  useEffect(() => {
+    setNavItems(mergedNavItems);
+  }, [mergedNavItems]);
+
+  const canReorderSidebar = business && SIDEBAR_REORDER_ROLES.includes(role);
+  const saveTimerRef = useRef(null);
+
+  const persistSidebarOrder = useCallback(
+    async (keys) => {
+      try {
+        await api.put('/business/sidebar-order', { order: keys });
+        await refreshUser();
+      } catch {
+        /* ignore */
+      }
+    },
+    [api, refreshUser],
+  );
+
+  const schedulePersistOrder = useCallback(
+    (keys) => {
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = setTimeout(() => persistSidebarOrder(keys), 450);
+    },
+    [persistSidebarOrder],
+  );
+
+  const onDragStart = (e, index) => {
+    e.dataTransfer.setData('text/plain', String(index));
+    e.dataTransfer.effectAllowed = 'move';
   };
 
-  const lastSessionRefreshRef = React.useRef(0);
+  const onDragOver = (e) => {
+    e.preventDefault();
+  };
+
+  const onDrop = (e, toIndex) => {
+    e.preventDefault();
+    const from = Number(e.dataTransfer.getData('text/plain'), 10);
+    if (Number.isNaN(from) || from === toIndex) return;
+    setNavItems((prev) => {
+      const next = [...prev];
+      const [moved] = next.splice(from, 1);
+      next.splice(toIndex, 0, moved);
+      schedulePersistOrder(next.map((i) => i.orderKey));
+      return next;
+    });
+  };
+
+  const handleResetSidebarOrder = async () => {
+    try {
+      await api.put('/business/sidebar-order', { order: [] });
+      await refreshUser();
+    } catch {
+      /* ignore */
+    }
+  };
+
+  const disabledPremiumModules = useMemo(() => {
+    if (!business || role === 'super_admin' || role === 'staff') return [];
+    if (!Array.isArray(enabledModules)) return [];
+    return getDisabledPremiumModules(enabledModules);
+  }, [business, role, enabledModules]);
+
+  const [premiumOpen, setPremiumOpen] = useState(() => {
+    try {
+      return localStorage.getItem(PREMIUM_LS_KEY) === '1';
+    } catch {
+      return false;
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(PREMIUM_LS_KEY, premiumOpen ? '1' : '0');
+    } catch {
+      /* ignore */
+    }
+  }, [premiumOpen]);
+
+  const [premiumLocked, setPremiumLocked] = useState(null);
+
+  const lastSessionRefreshRef = useRef(0);
   useEffect(() => {
     const refreshSessionIfVisible = () => {
       if (typeof document === 'undefined' || document.visibilityState !== 'visible') return;
@@ -180,7 +271,9 @@ export default function DashboardLayout({ children }) {
         const res = await api.get('/notifications?limit=10');
         setNotifications(res.data.notifications || []);
         setUnreadCount(res.data.unread_count || 0);
-      } catch (e) {}
+      } catch (e) {
+        /* ignore */
+      }
     };
     fetchNotifications();
     const interval = setInterval(fetchNotifications, 30000);
@@ -196,11 +289,65 @@ export default function DashboardLayout({ children }) {
     try {
       await api.put('/notifications/read-all');
       setUnreadCount(0);
-      setNotifications(n => n.map(x => ({ ...x, is_read: true })));
-    } catch (e) {}
+      setNotifications((n) => n.map((x) => ({ ...x, is_read: true })));
+    } catch (e) {
+      /* ignore */
+    }
   };
 
-  const NavIcon = navConfig.icon;
+  const NavIcon = rawNav.icon;
+
+  const renderNavRow = (item, index) => {
+    const isActive = location.pathname === item.path;
+    const Icon = item.icon;
+    const rowClass = `flex flex-1 min-w-0 items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 ${
+      isActive
+        ? 'bg-gradient-to-r from-[#D4AF37]/15 to-transparent text-gold-400 border-l-2 border-gold-500'
+        : 'text-gray-400 hover:text-white hover:bg-white/[0.04]'
+    } ${item.trialLocked ? 'opacity-70 cursor-pointer' : ''}`;
+
+    const inner = item.trialLocked ? (
+      <button
+        type="button"
+        className={`w-full text-left ${rowClass}`}
+        onClick={() => {
+          setSidebarOpen(false);
+          setTrialOpen(true);
+        }}
+      >
+        <Icon size={18} className={isActive ? 'text-gold-400' : 'text-gray-500'} />
+        <span className="flex-1">{item.label}</span>
+        <Lock size={15} className="shrink-0 text-amber-400/90" />
+      </button>
+    ) : (
+      <Link to={item.path} onClick={() => setSidebarOpen(false)} className={rowClass}>
+        <Icon size={18} className={isActive ? 'text-gold-400' : ''} />
+        <span>{item.label}</span>
+      </Link>
+    );
+
+    return (
+      <div
+        key={item.path}
+        className="flex items-stretch gap-0.5 rounded-xl"
+        onDragOver={canReorderSidebar ? onDragOver : undefined}
+        onDrop={canReorderSidebar ? (e) => onDrop(e, index) : undefined}
+      >
+        {canReorderSidebar ? (
+          <button
+            type="button"
+            className="shrink-0 w-7 flex items-center justify-center rounded-lg text-gray-500 hover:text-gold-400 cursor-grab active:cursor-grabbing select-none text-[10px] leading-none tracking-tighter"
+            draggable
+            onDragStart={(e) => onDragStart(e, index)}
+            aria-label="Drag to reorder"
+          >
+            ⋮⋮
+          </button>
+        ) : null}
+        {inner}
+      </div>
+    );
+  };
 
   return (
     <div className="min-h-screen bg-obsidian flex">
@@ -208,9 +355,11 @@ export default function DashboardLayout({ children }) {
         <div className="fixed inset-0 bg-black/60 z-40 lg:hidden" onClick={() => setSidebarOpen(false)} />
       )}
 
-      {/* Sidebar */}
-      <aside className={`fixed lg:sticky top-0 left-0 h-screen w-64 bg-void border-r border-white/5 z-50 flex flex-col transition-transform duration-300 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}>
-        {/* Logo */}
+      <aside
+        className={`fixed lg:sticky top-0 left-0 h-screen w-64 bg-void border-r border-white/5 z-50 flex flex-col transition-transform duration-300 ${
+          sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
+        }`}
+      >
         <div className="h-16 flex items-center px-6 border-b border-white/5 shrink-0">
           <Link to="/" className="flex items-center gap-2.5">
             <div className="w-8 h-8 bg-gradient-gold rounded-lg flex items-center justify-center">
@@ -223,53 +372,76 @@ export default function DashboardLayout({ children }) {
           </button>
         </div>
 
-        {/* Role badge */}
         <div className="px-4 py-3 border-b border-white/5 shrink-0">
           <div className="flex items-center gap-2 px-2 py-1.5 rounded-lg bg-white/[0.03]">
             <NavIcon size={14} className="text-gold-400" />
-            <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">{navConfig.title}</span>
+            <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">{rawNav.title}</span>
           </div>
         </div>
 
-        {/* Nav items */}
         <nav className="flex-1 overflow-y-auto py-4 px-3 space-y-1">
-          {navConfig.items.map((item) => {
-            const isActive = location.pathname === item.path;
-            const Icon = item.icon;
-            const rowClass = `flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 ${
-              isActive
-                ? 'bg-gradient-to-r from-[#D4AF37]/15 to-transparent text-gold-400 border-l-2 border-gold-500'
-                : 'text-gray-400 hover:text-white hover:bg-white/[0.04]'
-            } ${item.trialLocked ? 'opacity-70 cursor-pointer' : ''}`;
-            if (item.trialLocked) {
-              return (
+          {navItems.map((item, index) => renderNavRow(item, index))}
+
+          {disabledPremiumModules.length > 0 ? (
+            <div className="pt-4 mt-2 border-t border-white/10">
+              <div className="border-t border-b border-white/10 py-2 my-2">
                 <button
                   type="button"
-                  key={item.path}
-                  className={`w-full text-left ${rowClass}`}
-                  onClick={() => {
-                    setSidebarOpen(false);
-                    setTrialOpen(true);
-                  }}
+                  onClick={() => setPremiumOpen((o) => !o)}
+                  className="w-full flex items-center justify-between px-2 py-1.5 text-xs font-semibold text-gray-300 hover:text-gold-400 transition-colors"
                 >
-                  <Icon size={18} className={isActive ? 'text-gold-400' : 'text-gray-500'} />
-                  <span className="flex-1">{item.label}</span>
-                  <Lock size={15} className="shrink-0 text-amber-400/90" />
+                  <span className="flex items-center gap-1.5">
+                    <span>✨</span> Premium Features
+                    <span className="text-gold-500/90">{premiumOpen ? '∨' : '›'}</span>
+                  </span>
                 </button>
-              );
-            }
-            return (
-              <Link
-                key={item.path}
-                to={item.path}
-                onClick={() => setSidebarOpen(false)}
-                className={rowClass}
+              </div>
+              {premiumOpen ? (
+                <div className="space-y-0.5 pb-2">
+                  {disabledPremiumModules.map((m) => (
+                    <button
+                      key={m.id}
+                      type="button"
+                      onClick={() => {
+                        setSidebarOpen(false);
+                        setPremiumLocked({ id: m.id, label: m.label });
+                      }}
+                      className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-sm text-gray-400 hover:text-white hover:bg-white/[0.04] text-left"
+                    >
+                      <span className="text-base shrink-0" aria-hidden>
+                        {m.icon}
+                      </span>
+                      <span className="flex-1">{m.label}</span>
+                      <span className="text-gold-500 text-xs shrink-0">⭐</span>
+                    </button>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSidebarOpen(false);
+                      navigate('/trial-upgrade');
+                    }}
+                    className="w-full mt-2 mx-2 text-left text-xs font-semibold text-gold-400 hover:text-gold-300"
+                  >
+                    Upgrade Plan →
+                  </button>
+                  <div className="border-b border-white/10 mt-3" />
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+
+          {canReorderSidebar ? (
+            <div className="pt-2 px-1">
+              <button
+                type="button"
+                onClick={handleResetSidebarOrder}
+                className="text-[11px] text-gray-500 hover:text-gold-400 transition-colors"
               >
-                <Icon size={18} className={isActive ? 'text-gold-400' : ''} />
-                <span>{item.label}</span>
-              </Link>
-            );
-          })}
+                Reset to default order
+              </button>
+            </div>
+          ) : null}
         </nav>
 
         <Dialog open={trialOpen} onOpenChange={setTrialOpen}>
@@ -281,13 +453,55 @@ export default function DashboardLayout({ children }) {
           </DialogContent>
         </Dialog>
 
-        {/* Business info */}
+        <Dialog open={!!premiumLocked} onOpenChange={(open) => !open && setPremiumLocked(null)}>
+          <DialogContent className="sm:max-w-md border-gold-500/25 bg-void light-theme:bg-white light-theme:border-amber-400/30">
+            <DialogHeader>
+              <DialogTitle className="text-gold-400 light-theme:text-amber-700 flex items-center gap-2 text-base">
+                <span className="text-lg" aria-hidden>
+                  ⭐
+                </span>
+                Premium Feature
+              </DialogTitle>
+            </DialogHeader>
+            <div className="text-sm text-gray-400 light-theme:text-slate-600 leading-relaxed space-y-3">
+              <p>
+                <span className="text-white light-theme:text-slate-900 font-medium">{premiumLocked?.label}</span> is not included in your
+                current plan.
+              </p>
+              <p>Contact your administrator to upgrade and unlock this feature.</p>
+            </div>
+            <DialogFooter className="gap-2 sm:justify-end flex-col sm:flex-row pt-2">
+              <a
+                href="mailto:admin@nexaerp.in"
+                className="inline-flex items-center justify-center rounded-lg bg-gradient-to-r from-[#D4AF37] to-[#b8922e] px-4 py-2 text-sm font-semibold text-black hover:opacity-95"
+              >
+                Contact Admin
+              </a>
+              <button
+                type="button"
+                onClick={() => setPremiumLocked(null)}
+                className="inline-flex items-center justify-center rounded-lg border border-white/15 px-4 py-2 text-sm text-gray-300 hover:bg-white/[0.06] light-theme:border-slate-300 light-theme:text-slate-700"
+              >
+                Close
+              </button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
         {business && (
           <div className="px-4 py-3 border-t border-white/5 shrink-0">
             <div className="px-2">
               <p className="text-xs text-gray-500 truncate">{business.name}</p>
               <div className="flex items-center gap-2 mt-1">
-                <span className={`badge-premium text-[10px] px-2 py-0.5 ${business.status === 'active' ? 'badge-success' : business.status === 'trial' ? 'badge-warning' : 'badge-danger'}`}>
+                <span
+                  className={`badge-premium text-[10px] px-2 py-0.5 ${
+                    business.status === 'active'
+                      ? 'badge-success'
+                      : business.status === 'trial'
+                        ? 'badge-warning'
+                        : 'badge-danger'
+                  }`}
+                >
                   {business.plan?.toUpperCase()}
                 </span>
                 {business.days_remaining !== undefined && (
@@ -301,9 +515,7 @@ export default function DashboardLayout({ children }) {
         )}
       </aside>
 
-      {/* Main content */}
       <div className="flex-1 flex flex-col min-h-screen">
-        {/* Impersonation bar */}
         {impersonating && (
           <div className="bg-amber-500/10 border-b border-amber-500/20 px-4 py-2 flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -318,7 +530,6 @@ export default function DashboardLayout({ children }) {
           </div>
         )}
 
-        {/* Header */}
         <header className="h-16 border-b border-white/5 flex items-center justify-between px-4 lg:px-6 shrink-0 bg-void/50 backdrop-blur-sm sticky top-0 z-30">
           <button className="lg:hidden text-gray-400 hover:text-white" onClick={() => setSidebarOpen(true)}>
             <Menu size={22} />
@@ -328,10 +539,12 @@ export default function DashboardLayout({ children }) {
 
           <div className="flex items-center gap-3">
             <ThemeToggle compact />
-            {/* Notifications */}
             <div className="relative">
               <button
-                onClick={() => { setShowNotifs(!showNotifs); setShowUserMenu(false); }}
+                onClick={() => {
+                  setShowNotifs(!showNotifs);
+                  setShowUserMenu(false);
+                }}
                 className="relative p-2 rounded-lg text-gray-400 hover:text-white hover:bg-white/5 transition-colors"
               >
                 <Bell size={18} />
@@ -354,25 +567,35 @@ export default function DashboardLayout({ children }) {
                   <div className="max-h-64 overflow-y-auto">
                     {notifications.length === 0 ? (
                       <p className="text-gray-500 text-xs text-center py-8">No notifications</p>
-                    ) : notifications.map(n => (
-                      <div key={n.id} className={`px-4 py-3 border-b border-white/[0.03] hover:bg-white/[0.02] ${!n.is_read ? 'bg-gold/[0.02]' : ''}`}>
-                        <p className="text-sm text-white">{n.title}</p>
-                        {n.message && <p className="text-xs text-gray-500 mt-0.5 line-clamp-2">{n.message}</p>}
-                      </div>
-                    ))}
+                    ) : (
+                      notifications.map((n) => (
+                        <div
+                          key={n.id}
+                          className={`px-4 py-3 border-b border-white/[0.03] hover:bg-white/[0.02] ${
+                            !n.is_read ? 'bg-gold/[0.02]' : ''
+                          }`}
+                        >
+                          <p className="text-sm text-white">{n.title}</p>
+                          {n.message && <p className="text-xs text-gray-500 mt-0.5 line-clamp-2">{n.message}</p>}
+                        </div>
+                      ))
+                    )}
                   </div>
                 </div>
               )}
             </div>
 
-            {/* User menu */}
             <div className="relative">
               <button
-                onClick={() => { setShowUserMenu(!showUserMenu); setShowNotifs(false); }}
+                onClick={() => {
+                  setShowUserMenu(!showUserMenu);
+                  setShowNotifs(false);
+                }}
                 className="flex items-center gap-2 pl-3 pr-2 py-1.5 rounded-lg hover:bg-white/5 transition-colors"
               >
                 <div className="w-7 h-7 bg-gradient-gold rounded-full flex items-center justify-center text-black text-xs font-bold">
-                  {user?.first_name?.[0]}{user?.last_name?.[0]}
+                  {user?.first_name?.[0]}
+                  {user?.last_name?.[0]}
                 </div>
                 <span className="text-sm text-gray-300 hidden sm:inline">{user?.first_name}</span>
                 <ChevronDown size={14} className="text-gray-500" />
@@ -380,11 +603,11 @@ export default function DashboardLayout({ children }) {
               {showUserMenu && (
                 <div className="absolute right-0 top-12 w-56 glass-card rounded-xl shadow-elevated z-50 overflow-hidden py-1">
                   <div className="px-4 py-3 border-b border-white/5">
-                    <p className="text-sm text-white font-medium">{user?.first_name} {user?.last_name}</p>
+                    <p className="text-sm text-white font-medium">
+                      {user?.first_name} {user?.last_name}
+                    </p>
                     <p className="text-xs text-gray-500">{user?.email}</p>
-                    <span className="badge-premium badge-gold text-[10px] mt-1 inline-block">
-                      {role.replace('_', ' ')}
-                    </span>
+                    <span className="badge-premium badge-gold text-[10px] mt-1 inline-block">{role.replace('_', ' ')}</span>
                   </div>
                   <button
                     onClick={logout}
@@ -399,10 +622,12 @@ export default function DashboardLayout({ children }) {
           </div>
         </header>
 
-        {/* Page content */}
         <main
           className="flex-1 p-4 lg:p-6 overflow-auto"
-          onClick={() => { setShowNotifs(false); setShowUserMenu(false); }}
+          onClick={() => {
+            setShowNotifs(false);
+            setShowUserMenu(false);
+          }}
         >
           {children}
         </main>

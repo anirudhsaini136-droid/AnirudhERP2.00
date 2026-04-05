@@ -55,6 +55,7 @@ const NAV_PATH_MODULE_REQUIREMENTS = {
   '/finance/expenses': { all: ['expenses'] },
   '/finance/reports': { all: ['invoices_finance'] },
   '/finance/gst': { all: ['gst_reports'] },
+  '/finance/tally-export': { all: ['tally_export'] },
   '/accounting': { all: ['accounting'] },
   '/purchases': { all: ['purchases_itc'] },
   '/inventory': { all: ['inventory_billing'] },

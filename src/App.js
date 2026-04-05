@@ -38,6 +38,7 @@ import CustomerLedgerDetailPage from './pages/finance/CustomerLedgerDetailPage';
 import DataMigrationPage from './pages/finance/DataMigrationPage';
 import RecurringInvoicesPage from './pages/finance/RecurringInvoicesPage';
 import EwayBillsPage from './pages/finance/EwayBillsPage';
+import TallyExportPage from './pages/finance/TallyExportPage';
 import InventoryPage from './pages/inventory/InventoryPage';
 import BillingPage from './pages/inventory/BillingPage';
 import StaffHome from './pages/staff/StaffHome';
@@ -244,6 +245,14 @@ function AppRoutes() {
       <Route
         path="/finance/eway-bills"
         element={<BizRoute allowedRoles={['finance_admin', 'business_owner']} modules={['eway_bill']}><EwayBillsPage /></BizRoute>}
+      />
+      <Route
+        path="/finance/tally-export"
+        element={
+          <BizRoute allowedRoles={['finance_admin', 'business_owner']} modules={['tally_export']}>
+            <TallyExportPage />
+          </BizRoute>
+        }
       />
 
       <Route path="/inventory" element={<BizRoute allowedRoles={['inventory_admin', 'business_owner']} modules={['inventory_billing']}><InventoryPage /></BizRoute>} />
