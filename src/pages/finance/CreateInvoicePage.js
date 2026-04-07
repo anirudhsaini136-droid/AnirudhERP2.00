@@ -205,6 +205,9 @@ export default function CreateInvoicePage() {
           client_name: pf.client_name || s.client_name,
           issue_date: pf.issue_date || s.issue_date,
           due_date: pf.due_date || s.due_date,
+          buyer_state: pf.buyer_state || s.buyer_state,
+          tax_rate: pf.tax_rate != null ? Number(pf.tax_rate) : s.tax_rate,
+          per_item_tax: Boolean(pf.per_item_tax),
           challan_id: pf.challan_id || '',
           items: padInvoiceItemsTrailingBlank(mapped.length ? mapped : s.items),
         }));

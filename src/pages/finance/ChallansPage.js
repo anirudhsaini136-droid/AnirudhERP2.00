@@ -4,6 +4,7 @@ import DashboardLayout from '../../components/layout/DashboardLayout';
 import { useAuth } from '../../contexts/AuthContext';
 import { Input } from '../../components/ui/input';
 import { toast } from 'sonner';
+import { INDIAN_STATES } from './invoiceFormPrimitives';
 
 export default function ChallansPage() {
   const { api } = useAuth();
@@ -14,6 +15,9 @@ export default function ChallansPage() {
   const [form, setForm] = React.useState({
     customer_name: '',
     date: today,
+    buyer_state: '',
+    tax_rate: 0,
+    per_item_tax: false,
     items: [{ description: '', quantity: 1, unit_price: 0 }],
   });
 
@@ -36,8 +40,11 @@ export default function ChallansPage() {
       .filter((i) => String(i.description || '').trim())
       .map((i) => ({
         description: String(i.description || '').trim(),
+        hsn_code: String(i.hsn_code || '').trim() || null,
         quantity: Number(i.quantity) || 1,
         unit_price: Number(i.unit_price) || 0,
+        item_discount: Number(i.item_discount) || 0,
+        ...(form.per_item_tax ? { line_tax_rate: Number(i.line_tax_rate) || 0 } : {}),
       }));
     if (!builtItems.length) {
       toast.error('Add at least one item');
@@ -47,20 +54,53 @@ export default function ChallansPage() {
       await api.post('/advanced/challans', {
         customer_name: form.customer_name,
         date: form.date,
+        buyer_state: form.buyer_state || null,
+        tax_rate: Number(form.tax_rate) || 0,
+        per_item_tax: Boolean(form.per_item_tax),
         items: builtItems,
       });
       toast.success('Challan created');
-      setForm({ customer_name: '', date: today, items: [{ description: '', quantity: 1, unit_price: 0 }] });
+      setForm({
+        customer_name: '',
+        date: today,
+        buyer_state: '',
+        tax_rate: 0,
+        per_item_tax: false,
+        items: [{ description: '', hsn_code: '', quantity: 1, unit_price: 0, item_discount: 0, line_tax_rate: 0 }],
+      });
       load();
     } catch (e2) {
       toast.error(e2?.response?.data?.detail || 'Failed to create challan');
     }
   };
 
-  const addItemRow = () => setForm((s) => ({ ...s, items: [...(s.items || []), { description: '', quantity: 1, unit_price: 0 }] }));
+  const addItemRow = () =>
+    setForm((s) => ({
+      ...s,
+      items: [...(s.items || []), { description: '', hsn_code: '', quantity: 1, unit_price: 0, item_discount: 0, line_tax_rate: 0 }],
+    }));
   const removeItemRow = (idx) => setForm((s) => ({ ...s, items: (s.items || []).filter((_, i) => i !== idx) }));
   const setItemField = (idx, field, value) =>
     setForm((s) => ({ ...s, items: (s.items || []).map((it, i) => (i === idx ? { ...it, [field]: value } : it)) }));
+
+  const totals = React.useMemo(() => {
+    const valid = (form.items || []).filter((i) => String(i.description || '').trim());
+    const subtotal = valid.reduce((sum, i) => {
+      const qty = Number(i.quantity) || 0;
+      const rate = Number(i.unit_price) || 0;
+      const disc = Number(i.item_discount) || 0;
+      return sum + (qty * rate - disc);
+    }, 0);
+    const tax = valid.reduce((sum, i) => {
+      const qty = Number(i.quantity) || 0;
+      const rate = Number(i.unit_price) || 0;
+      const disc = Number(i.item_discount) || 0;
+      const taxable = qty * rate - disc;
+      const tr = form.per_item_tax ? Number(i.line_tax_rate) || 0 : Number(form.tax_rate) || 0;
+      return sum + (taxable * tr) / 100;
+    }, 0);
+    return { subtotal, tax, total: subtotal + tax };
+  }, [form.items, form.per_item_tax, form.tax_rate]);
 
   return (
     <DashboardLayout>
@@ -77,6 +117,25 @@ export default function ChallansPage() {
               <Input className="input-premium mt-1" type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} />
             </div>
           </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div>
+              <label className="text-xs text-gray-400">Buyer state</label>
+              <select className="input-premium mt-1 w-full" value={form.buyer_state} onChange={(e) => setForm({ ...form, buyer_state: e.target.value })}>
+                <option value="">Select buyer state</option>
+                {INDIAN_STATES.map((s) => <option key={s} value={s}>{s}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="text-xs text-gray-400">Tax Rate (%)</label>
+              <Input className="input-premium mt-1" type="number" min="0" value={form.tax_rate} onChange={(e) => setForm({ ...form, tax_rate: e.target.value })} />
+            </div>
+            <div className="flex items-end">
+              <label className="text-xs text-gray-300 flex items-center gap-2">
+                <input type="checkbox" checked={form.per_item_tax} onChange={(e) => setForm({ ...form, per_item_tax: e.target.checked })} />
+                Per-item tax
+              </label>
+            </div>
+          </div>
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <p className="text-sm text-white font-medium">Items</p>
@@ -84,18 +143,28 @@ export default function ChallansPage() {
             </div>
             {(form.items || []).map((it, idx) => (
               <div key={`challan-item-${idx}`} className="grid grid-cols-1 md:grid-cols-10 gap-2">
-                <div className="md:col-span-5">
+                <div className="md:col-span-3">
                   <label className="text-xs text-gray-400">Item</label>
                   <Input className="input-premium mt-1" placeholder="Item name" value={it.description} onChange={(e) => setItemField(idx, 'description', e.target.value)} />
+                </div>
+                <div className="md:col-span-2">
+                  <label className="text-xs text-gray-400">HSN</label>
+                  <Input className="input-premium mt-1" placeholder="HSN code" value={it.hsn_code || ''} onChange={(e) => setItemField(idx, 'hsn_code', e.target.value)} />
                 </div>
                 <div className="md:col-span-2">
                   <label className="text-xs text-gray-400">Qty</label>
                   <Input className="input-premium mt-1" type="number" min="1" value={it.quantity} onChange={(e) => setItemField(idx, 'quantity', e.target.value)} />
                 </div>
-                <div className="md:col-span-2">
+                <div className="md:col-span-1">
                   <label className="text-xs text-gray-400">Amount</label>
                   <Input className="input-premium mt-1" type="number" min="0" value={it.unit_price} onChange={(e) => setItemField(idx, 'unit_price', e.target.value)} />
                 </div>
+                {form.per_item_tax && (
+                  <div className="md:col-span-1">
+                    <label className="text-xs text-gray-400">Tax %</label>
+                    <Input className="input-premium mt-1" type="number" min="0" value={it.line_tax_rate || 0} onChange={(e) => setItemField(idx, 'line_tax_rate', e.target.value)} />
+                  </div>
+                )}
                 <div className="md:col-span-1 flex items-end">
                   <button
                     type="button"
@@ -108,6 +177,11 @@ export default function ChallansPage() {
                 </div>
               </div>
             ))}
+          </div>
+          <div className="text-sm text-gray-300">
+            <p>Subtotal: {totals.subtotal.toFixed(2)}</p>
+            <p>Tax: {totals.tax.toFixed(2)}</p>
+            <p className="font-semibold text-white">Total: {totals.total.toFixed(2)}</p>
           </div>
           <button className="btn-premium btn-primary w-fit">Create Challan</button>
         </form>
