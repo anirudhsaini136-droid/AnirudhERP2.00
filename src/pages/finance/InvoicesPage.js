@@ -5,7 +5,7 @@ import DashboardLayout from '../../components/layout/DashboardLayout';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../../components/ui/dialog';
 import { Input } from '../../components/ui/input';
 import { Label } from '../../components/ui/label';
-import { Plus, Search, Eye, CheckCircle, Trash2, Bell } from 'lucide-react';
+import { Plus, Search, Eye, CheckCircle, Trash2, Bell, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 import { toastAfterWhatsAppOpen } from '../../utils/whatsappToast';
 import {
@@ -14,6 +14,7 @@ import {
   upsertLocalInvoices,
   recordLocalPaymentAndQueue,
   syncOfflineInvoiceQueue,
+  retrySyncForInvoice,
   upsertServerInvoices,
   dedupeInvoicesForOffline,
   pruneExpiredLocalDrafts,
@@ -267,6 +268,19 @@ export default function InvoicesPage() {
     toast.success(`${deleted} invoice(s) deleted`);
   };
 
+  const handleRetrySync = async (inv) => {
+    if (!business?.id) return;
+    try {
+      const res = await retrySyncForInvoice({ api, businessId: business.id, localInvoiceId: inv.id });
+      if (res.synced > 0) toast.success('Invoice synced online');
+      else if (res.failed > 0) toast.error(inv.sync_error || 'Sync failed. Open invoice and correct details.');
+      else toast.success('Sync queued');
+      fetchInvoices();
+    } catch {
+      toast.error('Retry failed');
+    }
+  };
+
   const draftCount = business?.id ? countDraftInvoices(business.id) : 0;
 
   const openPayment = (inv) => {
@@ -518,7 +532,21 @@ export default function InvoicesPage() {
                     )}
                   </td>
                   <td className="text-sm text-gray-400">{fmtDate(inv.due_date)}</td>
-                  <td><span className={`badge-premium ${STATUS_COLORS[inv.status] || 'badge-neutral'}`}>{inv.status?.replace('_', ' ')}</span></td>
+                  <td>
+                    <div className="flex items-center justify-start gap-2">
+                      <span className={`badge-premium ${STATUS_COLORS[inv.status] || 'badge-neutral'}`}>{inv.status?.replace('_', ' ')}</span>
+                      {inv.sync_status === 'sync_failed' && (
+                        <span className="text-[10px] px-2 py-0.5 rounded-full border border-rose-500/30 text-rose-400" title={inv.sync_error || 'Sync failed'}>
+                          sync failed
+                        </span>
+                      )}
+                      {inv.sync_status === 'local_pending' && (
+                        <span className="text-[10px] px-2 py-0.5 rounded-full border border-amber-500/30 text-amber-400">
+                          pending sync
+                        </span>
+                      )}
+                    </div>
+                  </td>
                   <td className="text-right">
                     <div className="flex items-center justify-end gap-1">
                       <button
@@ -538,6 +566,15 @@ export default function InvoicesPage() {
                       )}
                       {['draft','sent','partially_paid','overdue'].includes(inv.status) && (
                         <button onClick={() => openPayment(inv)} className="p-1.5 text-emerald-400 hover:text-emerald-300" title="Record Payment"><CheckCircle size={15} /></button>
+                      )}
+                      {(inv.sync_status === 'local_pending' || inv.sync_status === 'sync_failed') && (
+                        <button
+                          onClick={() => handleRetrySync(inv)}
+                          className="p-1.5 text-amber-400 hover:text-amber-300"
+                          title={inv.sync_error ? `Retry Sync: ${inv.sync_error}` : 'Retry Sync'}
+                        >
+                          <RefreshCw size={15} />
+                        </button>
                       )}
                       {user?.role !== "ca_admin" && (
                         <button

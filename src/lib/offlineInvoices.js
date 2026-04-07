@@ -45,6 +45,51 @@ function isPermanentClientError(status) {
   return [400, 401, 403, 404, 409, 422].includes(Number(status));
 }
 
+function normalizeDateInput(v) {
+  const s = String(v || "").trim();
+  if (!s) return null;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+  const m = s.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if (m) return `${m[3]}-${m[2]}-${m[1]}`;
+  const iso = new Date(s);
+  if (!Number.isNaN(iso.getTime())) return iso.toISOString().slice(0, 10);
+  return null;
+}
+
+function nullableId(v) {
+  const s = String(v ?? "").trim();
+  return s || null;
+}
+
+function normalizeCreateInvoicePayload(payload) {
+  const p = { ...(payload || {}) };
+  const issueDate = normalizeDateInput(p.issue_date) || new Date().toISOString().slice(0, 10);
+  const dueDate = normalizeDateInput(p.due_date) || issueDate;
+  const items = Array.isArray(p.items)
+    ? p.items
+        .filter((i) => String(i?.description || "").trim())
+        .map((i) => ({
+          product_id: nullableId(i.product_id),
+          description: String(i.description || "").trim(),
+          hsn_code: i.hsn_code || null,
+          quantity: Number(i.quantity) || 1,
+          unit_price: Number(i.unit_price) || 0,
+          item_discount: Number(i.item_discount) || 0,
+          ...(i.line_tax_rate != null ? { line_tax_rate: Number(i.line_tax_rate) || 0 } : {}),
+        }))
+    : [];
+  return {
+    ...p,
+    issue_date: issueDate,
+    due_date: dueDate,
+    customer_id: nullableId(p.customer_id),
+    salesman_id: nullableId(p.salesman_id),
+    price_list_id: nullableId(p.price_list_id),
+    challan_id: nullableId(p.challan_id),
+    items,
+  };
+}
+
 function compactQueue(queue) {
   const items = Array.isArray(queue) ? queue : [];
   const seenCreate = new Set();
@@ -314,7 +359,7 @@ export function enqueueCreateInvoice({ businessId, localInvoiceId, payload }) {
     qid: uuid(),
     type: "CREATE_INVOICE",
     local_invoice_id: localInvoiceId,
-    payload,
+    payload: normalizeCreateInvoicePayload(payload),
     created_at: nowIso(),
     status: "pending",
     retry_count: 0,
@@ -448,7 +493,8 @@ export async function syncOfflineInvoiceQueue({ api, businessId }) {
     }
     try {
       if (action.type === "CREATE_INVOICE") {
-        const res = await api.post("/finance/invoices", action.payload);
+        const normalizedPayload = normalizeCreateInvoicePayload(action.payload);
+        const res = await api.post("/finance/invoices", normalizedPayload);
         const serverInvoiceId = res?.data?.id;
         const serverInvoiceNumber = res?.data?.invoice_number;
         const invoices = loadLocalInvoices(businessId);
@@ -513,5 +559,37 @@ export async function syncOfflineInvoiceQueue({ api, businessId }) {
 
   setLocalQueue(businessId, nextQueue);
   return { synced, failed, skipped };
+}
+
+export async function retrySyncForInvoice({ api, businessId, localInvoiceId }) {
+  const queue = loadLocalQueue(businessId);
+  const hasPending = queue.some(
+    (q) => q.type === "CREATE_INVOICE" && q.local_invoice_id === localInvoiceId && q.status === "pending"
+  );
+  if (!hasPending) {
+    const inv = getLocalInvoice(businessId, localInvoiceId);
+    if (inv) {
+      const payload = normalizeCreateInvoicePayload({
+        client_name: inv.client_name || "",
+        client_email: inv.client_email || null,
+        client_address: inv.client_address || null,
+        client_phone: inv.client_phone || null,
+        client_gstin: inv.client_gstin || null,
+        buyer_state: inv.buyer_state || null,
+        place_of_supply: inv.place_of_supply || inv.buyer_state || null,
+        issue_date: inv.issue_date,
+        due_date: inv.due_date,
+        payment_terms: inv.payment_terms || null,
+        notes: inv.notes || null,
+        currency: inv.currency || "INR",
+        tax_rate: Number(inv.tax_rate) || 0,
+        discount_amount: Number(inv.discount_amount) || 0,
+        custom_fields: [],
+        items: Array.isArray(inv.items) ? inv.items : [],
+      });
+      enqueueCreateInvoice({ businessId, localInvoiceId, payload });
+    }
+  }
+  return syncOfflineInvoiceQueue({ api, businessId });
 }
 
