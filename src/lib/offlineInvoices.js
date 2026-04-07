@@ -41,6 +41,10 @@ function isOnline() {
   return navigator.onLine;
 }
 
+function isPermanentClientError(status) {
+  return [400, 401, 403, 404, 409, 422].includes(Number(status));
+}
+
 const DRAFT_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 
 /** Remove local-only drafts older than 24h. Returns how many were removed. */
@@ -454,7 +458,26 @@ export async function syncOfflineInvoiceQueue({ api, businessId }) {
       nextQueue.push(action);
     } catch (e) {
       failed += 1;
-      // Keep it for retry later (increment retry count).
+      const status = e?.response?.status;
+      const detail = e?.response?.data?.detail;
+      const reason = typeof detail === "string" ? detail : JSON.stringify(detail || {});
+
+      // 4xx means payload/user-state issue; endless retries create noise and never recover.
+      if (isPermanentClientError(status)) {
+        if (action.type === "CREATE_INVOICE") {
+          const invoices = loadLocalInvoices(businessId);
+          const inv = invoices.find((i) => i.id === action.local_invoice_id);
+          if (inv) {
+            inv.sync_status = "sync_failed";
+            inv.sync_error = reason || `HTTP ${status}`;
+            inv.updated_at = nowIso();
+            upsertLocalInvoices(businessId, invoices);
+          }
+        }
+        continue;
+      }
+
+      // Retry only transient/server failures.
       nextQueue.push({
         ...action,
         retry_count: Number(action.retry_count || 0) + 1,
