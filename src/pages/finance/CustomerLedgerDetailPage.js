@@ -78,6 +78,8 @@ export default function CustomerLedgerDetailPage() {
   const [reminderBusy, setReminderBusy] = useState(false);
   const [reminderText, setReminderText] = useState('');
   const [reminderLinkNote, setReminderLinkNote] = useState(null);
+  const [creditLimitInput, setCreditLimitInput] = useState('');
+  const [savingCreditLimit, setSavingCreditLimit] = useState(false);
 
   const today = new Date().toISOString().split('T')[0];
   const [bulkForm, setBulkForm] = useState({
@@ -91,6 +93,11 @@ export default function CustomerLedgerDetailPage() {
         params: ledgerPhone !== undefined ? { phone: ledgerPhone } : {},
       });
       setData(res.data);
+      setCreditLimitInput(
+        res.data?.customer?.credit_limit != null && Number.isFinite(Number(res.data.customer.credit_limit))
+          ? String(res.data.customer.credit_limit)
+          : ''
+      );
       setBulkForm(f => ({ ...f, amount: res.data.customer?.total_outstanding || 0 }));
     } catch (e) {
       const status = e?.response?.status;
@@ -202,6 +209,24 @@ export default function CustomerLedgerDetailPage() {
     toastAfterWhatsAppOpen('WhatsApp opened');
   };
 
+  const saveCreditLimit = async () => {
+    if (!customer?.id) {
+      toast.error('Credit limit can be saved only for linked CRM customer');
+      return;
+    }
+    setSavingCreditLimit(true);
+    try {
+      await api.put(`/finance/customers/${customer.id}`, {
+        credit_limit: creditLimitInput === '' ? null : Number(creditLimitInput),
+      });
+      toast.success('Credit limit saved');
+      await load();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || 'Failed to save credit limit');
+    }
+    setSavingCreditLimit(false);
+  };
+
   const copyReminderMessage = async () => {
     if (!reminderText) return;
     try {
@@ -277,25 +302,47 @@ export default function CustomerLedgerDetailPage() {
             </div>
           ))}
         </div>
-        {Number(customer.credit_limit || 0) > 0 ? (
-          <div className="glass-card rounded-2xl p-4">
-            <div className="flex items-center justify-between text-xs text-gray-400 mb-2">
-              <span>Credit Limit Usage</span>
-              <span>
-                {fmt(customer.total_outstanding)} / {fmt(customer.credit_limit)}
-              </span>
-            </div>
-            <div className="h-2 rounded-full bg-white/[0.08] overflow-hidden">
-              <div
-                className={`h-full ${Number(customer.credit_usage_pct || 0) > 100 ? 'bg-rose-500' : 'bg-emerald-500'}`}
-                style={{ width: `${Math.min(100, Number(customer.credit_usage_pct || 0))}%` }}
+        <div className="glass-card rounded-2xl p-4 space-y-3">
+          <div className="flex items-end gap-2">
+            <div className="flex-1">
+              <Label className="text-xs text-gray-500">Credit Limit</Label>
+              <Input
+                type="number"
+                min="0"
+                step="0.01"
+                className="input-premium mt-1"
+                placeholder="₹ amount"
+                value={creditLimitInput}
+                onChange={(e) => setCreditLimitInput(e.target.value)}
               />
             </div>
-            <p className="text-[11px] text-gray-500 mt-2">
-              {Number(customer.credit_usage_pct || 0).toFixed(1)}% used
-            </p>
+            <button type="button" onClick={saveCreditLimit} disabled={savingCreditLimit} className="btn-premium btn-primary">
+              {savingCreditLimit ? 'Saving...' : 'Save'}
+            </button>
           </div>
-        ) : null}
+          {Number(customer.credit_limit || 0) > 0 ? (
+            <>
+              <p className="text-xs text-gray-400">
+                Usage: {fmt(customer.total_outstanding)} / {fmt(customer.credit_limit)}
+              </p>
+              <div className="h-2 rounded-full bg-white/[0.08] overflow-hidden">
+                <div
+                  className={`h-full ${
+                    Number(customer.credit_usage_pct || 0) >= 100
+                      ? 'bg-rose-500'
+                      : Number(customer.credit_usage_pct || 0) >= 80
+                        ? 'bg-amber-400'
+                        : 'bg-emerald-500'
+                  }`}
+                  style={{ width: `${Math.min(100, Number(customer.credit_usage_pct || 0))}%` }}
+                />
+              </div>
+              <p className="text-[11px] text-gray-500">{Number(customer.credit_usage_pct || 0).toFixed(1)}%</p>
+            </>
+          ) : (
+            <p className="text-xs text-gray-500">No credit limit set.</p>
+          )}
+        </div>
 
         {/* Last payment adjustments */}
         {lastAdjustments && lastAdjustments.length > 0 && (

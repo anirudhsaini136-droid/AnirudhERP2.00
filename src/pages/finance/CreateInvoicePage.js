@@ -36,6 +36,7 @@ export default function CreateInvoicePage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const draftIdParam = searchParams.get('draft');
+  const challanIdParam = searchParams.get('challan');
 
   const getSavedPref = (key, fallback) => {
     try {
@@ -53,6 +54,7 @@ export default function CreateInvoicePage() {
 
   const today = new Date().toISOString().split('T')[0];
   const [form, setForm] = useState({
+    customer_id: '',
     client_name: '',
     client_email: '',
     client_address: '',
@@ -64,6 +66,8 @@ export default function CreateInvoicePage() {
     discount_amount: 0,
     notes: '',
     currency: 'INR',
+    challan_id: '',
+    salesman_id: '',
     buyer_state: '',
     per_item_tax: false,
     items: [{ ...emptyItem }],
@@ -82,6 +86,9 @@ export default function CreateInvoicePage() {
   const [barcodeInput, setBarcodeInput] = useState('');
   const [creditWarnOpen, setCreditWarnOpen] = useState(false);
   const [creditWarnInfo, setCreditWarnInfo] = useState(null);
+  const [salesmen, setSalesmen] = useState([]);
+  const [selectedCustomerCredit, setSelectedCustomerCredit] = useState(null);
+  const [allowOverCredit, setAllowOverCredit] = useState(false);
 
   useEffect(() => {
     const on = () => setOfflineNow(!navigator.onLine);
@@ -100,6 +107,10 @@ export default function CreateInvoicePage() {
       .catch(() => {});
   }, [api]);
 
+  useEffect(() => {
+    api.get('/advanced/salesmen').then((r) => setSalesmen(r.data?.items || [])).catch(() => setSalesmen([]));
+  }, [api]);
+
   const resetForm = useCallback(() => {
     const savedLabels = getSavedPref('cfLabels', []);
     const restoredCF = savedLabels.map((label) => ({ label, value: '' }));
@@ -110,6 +121,7 @@ export default function CreateInvoicePage() {
     setShowItemDiscount(itemDisc);
     setShowCustomFields(hasCF);
     setForm({
+      customer_id: '',
       client_name: '',
       client_email: '',
       client_address: '',
@@ -121,6 +133,8 @@ export default function CreateInvoicePage() {
       discount_amount: 0,
       notes: '',
       currency: 'INR',
+      challan_id: '',
+      salesman_id: '',
       buyer_state: '',
       per_item_tax: false,
       items: [{ ...emptyItem }],
@@ -136,6 +150,7 @@ export default function CreateInvoicePage() {
     setActiveDraftId(inv.id);
     setForm({
       client_name: inv.client_name || '',
+      customer_id: inv.customer_id || '',
       client_email: inv.client_email || '',
       client_address: inv.client_address || '',
       client_phone: inv.client_phone || '',
@@ -146,6 +161,8 @@ export default function CreateInvoicePage() {
       discount_amount: Number(inv.discount_amount) || 0,
       notes: inv.notes || '',
       currency: inv.currency || 'INR',
+      challan_id: inv.challan_id || '',
+      salesman_id: inv.salesman_id || '',
       buyer_state: inv.buyer_state || '',
       per_item_tax: Boolean(inv.per_item_tax),
       items: padInvoiceItemsTrailingBlank(
@@ -163,6 +180,37 @@ export default function CreateInvoicePage() {
       custom_fields: Array.isArray(inv.custom_fields) ? inv.custom_fields : [],
     });
   }, [draftIdParam, business?.id, today]);
+
+  useEffect(() => {
+    if (!challanIdParam || draftIdParam) return;
+    api
+      .post(`/advanced/challans/${encodeURIComponent(challanIdParam)}/convert`)
+      .then((r) => {
+        const pf = r.data?.prefill || {};
+        const mapped = (pf.items || []).map((i) => ({
+          ...emptyItem,
+          product_id: i.product_id || null,
+          description: i.description || '',
+          hsn_code: i.hsn_code || '',
+          quantity: Number(i.quantity) || 1,
+          unit_price: Number(i.unit_price) || 0,
+          item_discount: Number(i.item_discount) || 0,
+          line_tax_rate: Number(i.line_tax_rate) || 0,
+          amount: (Number(i.quantity) || 1) * (Number(i.unit_price) || 0) - (Number(i.item_discount) || 0),
+          batch_number: i.batch_number || '',
+          expiry_date: i.expiry_date || '',
+        }));
+        setForm((s) => ({
+          ...s,
+          client_name: pf.client_name || s.client_name,
+          issue_date: pf.issue_date || s.issue_date,
+          due_date: pf.due_date || s.due_date,
+          challan_id: pf.challan_id || '',
+          items: padInvoiceItemsTrailingBlank(mapped.length ? mapped : s.items),
+        }));
+      })
+      .catch(() => {});
+  }, [api, challanIdParam, draftIdParam]);
 
   const removeLocalInvoiceByIdCb = useCallback((localId) => {
     if (!business?.id || !localId) return;
@@ -211,6 +259,8 @@ export default function CreateInvoicePage() {
         return g && PARTY_GSTIN_RE.test(g) ? g : null;
       })(),
       buyer_state: form.buyer_state || null,
+      salesman_id: form.salesman_id || null,
+      challan_id: form.challan_id || null,
       place_of_supply: form.buyer_state || null,
       supply_type: gstDraft.supply_type,
       issue_date: form.issue_date || today,
@@ -336,6 +386,10 @@ export default function CreateInvoicePage() {
       : subtotal * ((Number(form.tax_rate) || 0) / 100)) * 100
   ) / 100;
   const totalAmount = subtotal + taxAmount - (Number(form.discount_amount) || 0);
+  const projectedOutstanding = Number(selectedCustomerCredit?.existing_outstanding || 0) + Number(totalAmount || 0);
+  const creditLimitExceeded =
+    Number(selectedCustomerCredit?.credit_limit || 0) > 0 &&
+    projectedOutstanding > Number(selectedCustomerCredit?.credit_limit || 0);
 
   const previewInvoice = useMemo(() => {
     const customFieldsFiltered = (form.custom_fields || [])
@@ -453,7 +507,7 @@ export default function CreateInvoicePage() {
       buyer_state: form.buyer_state || null,
       place_of_supply: form.buyer_state || null,
       custom_fields: form.custom_fields.filter((f) => f.label && f.value),
-      ignore_credit_limit_warning: ignoreCreditLimitWarning,
+      ignore_credit_limit_warning: ignoreCreditLimitWarning || allowOverCredit,
       items: linesForSave.map((i) => {
         const base = {
           product_id: i.product_id || null,
@@ -493,6 +547,9 @@ export default function CreateInvoicePage() {
       if (err?.response?.status === 409 && detail?.code === 'CREDIT_LIMIT_EXCEEDED') {
         setCreditWarnInfo(detail);
         setCreditWarnOpen(true);
+        if (typeof navigator !== 'undefined' && /Android/i.test(navigator.userAgent || '')) {
+          window.alert(`Credit limit exceeded.\nOutstanding: ${fmt(detail?.outstanding)}\nCredit limit: ${fmt(detail?.credit_limit)}`);
+        }
         return;
       }
       try {
@@ -550,6 +607,22 @@ export default function CreateInvoicePage() {
       setCreating(false);
     }
   };
+
+  useEffect(() => {
+    const cid = form.customer_id;
+    if (!cid) {
+      setSelectedCustomerCredit(null);
+      return;
+    }
+    api
+      .get(`/finance/customers/${encodeURIComponent(cid)}`)
+      .then((r) => setSelectedCustomerCredit(r.data?.customer || null))
+      .catch(() => setSelectedCustomerCredit(null));
+  }, [api, form.customer_id]);
+
+  useEffect(() => {
+    if (!creditLimitExceeded) setAllowOverCredit(false);
+  }, [creditLimitExceeded, form.customer_id]);
 
   const requestGoBack = () => {
     if (creating) return;
@@ -645,10 +718,13 @@ export default function CreateInvoicePage() {
                   <Label className="text-gray-400 text-xs">Client Name *</Label>
                   <ClientSearch
                     value={form.client_name}
-                    onChange={(val) => setForm({ ...form, client_name: val })}
+                    onChange={(val) =>
+                      setForm({ ...form, client_name: val, customer_id: val === form.client_name ? form.customer_id : '' })
+                    }
                     onSelect={(c) =>
                       setForm({
                         ...form,
+                        customer_id: c.id || '',
                         client_name: c.name || '',
                         client_phone: c.phone || '',
                         client_email: c.email || '',
@@ -675,7 +751,38 @@ export default function CreateInvoicePage() {
                     onChange={(e) => setForm({ ...form, client_phone: e.target.value })}
                   />
                 </div>
+                <div>
+                  <Label className="text-gray-400 text-xs">Salesman (Optional)</Label>
+                  <select
+                    className="input-premium mt-1 w-full"
+                    value={form.salesman_id || ''}
+                    onChange={(e) => setForm({ ...form, salesman_id: e.target.value })}
+                  >
+                    <option value="">Select salesman</option>
+                    {salesmen.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
+
+              {creditLimitExceeded && !allowOverCredit ? (
+                <div className="rounded-xl border border-amber-500/35 bg-amber-500/10 p-3 text-sm">
+                  <p className="text-amber-300 font-semibold">Credit limit warning</p>
+                  <p className="text-gray-300 mt-1 leading-relaxed">
+                    Adding this invoice will exceed {(selectedCustomerCredit?.name || form.client_name || 'customer')}&apos;s credit limit of{' '}
+                    {fmt(selectedCustomerCredit?.credit_limit)}.
+                  </p>
+                  <p className="text-xs text-gray-400 mt-1">
+                    Outstanding: {fmt(selectedCustomerCredit?.existing_outstanding)} | This invoice: {fmt(totalAmount)} | Total: {fmt(projectedOutstanding)}
+                  </p>
+                  <button type="button" className="btn-premium btn-secondary mt-2" onClick={() => setAllowOverCredit(true)}>
+                    Continue Anyway
+                  </button>
+                </div>
+              ) : null}
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <Label className="text-gray-400 text-xs">Client Email</Label>
