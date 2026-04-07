@@ -277,6 +277,25 @@ export default function CustomerLedgerDetailPage() {
             </div>
           ))}
         </div>
+        {Number(customer.credit_limit || 0) > 0 ? (
+          <div className="glass-card rounded-2xl p-4">
+            <div className="flex items-center justify-between text-xs text-gray-400 mb-2">
+              <span>Credit Limit Usage</span>
+              <span>
+                {fmt(customer.total_outstanding)} / {fmt(customer.credit_limit)}
+              </span>
+            </div>
+            <div className="h-2 rounded-full bg-white/[0.08] overflow-hidden">
+              <div
+                className={`h-full ${Number(customer.credit_usage_pct || 0) > 100 ? 'bg-rose-500' : 'bg-emerald-500'}`}
+                style={{ width: `${Math.min(100, Number(customer.credit_usage_pct || 0))}%` }}
+              />
+            </div>
+            <p className="text-[11px] text-gray-500 mt-2">
+              {Number(customer.credit_usage_pct || 0).toFixed(1)}% used
+            </p>
+          </div>
+        ) : null}
 
         {/* Last payment adjustments */}
         {lastAdjustments && lastAdjustments.length > 0 && (

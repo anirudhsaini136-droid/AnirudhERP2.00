@@ -79,6 +79,9 @@ export default function CreateInvoicePage() {
   const [invoiceClosePrompt, setInvoiceClosePrompt] = useState(false);
   const [invoiceBiz, setInvoiceBiz] = useState(null);
   const [showPreview, setShowPreview] = useState(() => getSavedPref('invPreview', true));
+  const [barcodeInput, setBarcodeInput] = useState('');
+  const [creditWarnOpen, setCreditWarnOpen] = useState(false);
+  const [creditWarnInfo, setCreditWarnInfo] = useState(null);
 
   useEffect(() => {
     const on = () => setOfflineNow(!navigator.onLine);
@@ -295,6 +298,32 @@ export default function CreateInvoicePage() {
     }
   };
 
+  const addByBarcode = async () => {
+    const code = barcodeInput.trim();
+    if (!code) return;
+    try {
+      const res = await api.get(`/advanced/products/by-barcode/${encodeURIComponent(code)}`);
+      const p = res.data?.product;
+      if (!p) return;
+      const idx = form.items.findIndex((x) => !x.description);
+      const next = [...form.items];
+      const row = {
+        ...emptyItem,
+        product_id: p.id,
+        description: p.name,
+        quantity: 1,
+        unit_price: Number(p.unit_price || 0),
+        amount: Number(p.unit_price || 0),
+        available_stock: Number(p.current_stock || 0),
+      };
+      if (idx >= 0) next[idx] = row; else next.push(row);
+      setForm({ ...form, items: padInvoiceItemsTrailingBlank(next) });
+      setBarcodeInput('');
+    } catch {
+      toast.error('Barcode not found');
+    }
+  };
+
   const countedItems = useMemo(() => filterInvoiceItemsForSave(form.items), [form.items]);
 
   const subtotal = countedItems.reduce((s, i) => s + (Number(i.amount) || 0), 0);
@@ -417,6 +446,29 @@ export default function CreateInvoicePage() {
     }
     setCreating(true);
     const offline = typeof navigator !== 'undefined' ? !navigator.onLine : true;
+    const makePayload = (ignoreCreditLimitWarning = false) => ({
+      ...formWithoutGstin,
+      tax_rate: form.per_item_tax ? 0 : Number(form.tax_rate) || 0,
+      ...(partyGstin ? { client_gstin: partyGstin } : {}),
+      buyer_state: form.buyer_state || null,
+      place_of_supply: form.buyer_state || null,
+      custom_fields: form.custom_fields.filter((f) => f.label && f.value),
+      ignore_credit_limit_warning: ignoreCreditLimitWarning,
+      items: linesForSave.map((i) => {
+        const base = {
+          product_id: i.product_id || null,
+          description: i.description,
+          hsn_code: i.hsn_code || null,
+          quantity: Number(i.quantity),
+          unit_price: Number(i.unit_price),
+          item_discount: Number(i.item_discount) || 0,
+        };
+        if (form.per_item_tax) {
+          return { ...base, line_tax_rate: Number(i.line_tax_rate) || 0 };
+        }
+        return base;
+      }),
+    });
     try {
       if (offline) {
         if (!business?.id) throw new Error('Business context missing');
@@ -430,34 +482,19 @@ export default function CreateInvoicePage() {
       }
 
       const { client_gstin: _omitGstin, per_item_tax: _pit, items: _it, ...formWithoutGstin } = form;
-      const res = await api.post('/finance/invoices', {
-        ...formWithoutGstin,
-        tax_rate: form.per_item_tax ? 0 : Number(form.tax_rate) || 0,
-        ...(partyGstin ? { client_gstin: partyGstin } : {}),
-        buyer_state: form.buyer_state || null,
-        place_of_supply: form.buyer_state || null,
-        custom_fields: form.custom_fields.filter((f) => f.label && f.value),
-        items: linesForSave.map((i) => {
-          const base = {
-            product_id: i.product_id || null,
-            description: i.description,
-            hsn_code: i.hsn_code || null,
-            quantity: Number(i.quantity),
-            unit_price: Number(i.unit_price),
-            item_discount: Number(i.item_discount) || 0,
-          };
-          if (form.per_item_tax) {
-            return { ...base, line_tax_rate: Number(i.line_tax_rate) || 0 };
-          }
-          return base;
-        }),
-      });
+      const res = await api.post('/finance/invoices', makePayload(false));
       toast.success('Invoice created');
       if (activeDraftId) removeLocalInvoiceByIdCb(activeDraftId);
       resetForm();
       setActiveDraftId(null);
       navigate('/finance/invoices');
     } catch (err) {
+      const detail = err?.response?.data?.detail;
+      if (err?.response?.status === 409 && detail?.code === 'CREDIT_LIMIT_EXCEEDED') {
+        setCreditWarnInfo(detail);
+        setCreditWarnOpen(true);
+        return;
+      }
       try {
         if (!business?.id) throw err;
         if (activeDraftId) removeLocalInvoiceByIdCb(activeDraftId);
@@ -472,6 +509,43 @@ export default function CreateInvoicePage() {
       } catch {
         toast.error(err.response?.data?.detail || 'Failed to create invoice');
       }
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  const continueCreateOverCreditLimit = async () => {
+    setCreditWarnOpen(false);
+    setCreating(true);
+    try {
+      const linesForSave = filterInvoiceItemsForSave(form.items);
+      const partyGstin = normalizePartyGstin(form.client_gstin);
+      const { client_gstin: _omitGstin, per_item_tax: _pit, items: _it, ...formWithoutGstin } = form;
+      await api.post('/finance/invoices', {
+        ...formWithoutGstin,
+        tax_rate: form.per_item_tax ? 0 : Number(form.tax_rate) || 0,
+        ...(partyGstin ? { client_gstin: partyGstin } : {}),
+        buyer_state: form.buyer_state || null,
+        place_of_supply: form.buyer_state || null,
+        custom_fields: form.custom_fields.filter((f) => f.label && f.value),
+        ignore_credit_limit_warning: true,
+        items: linesForSave.map((i) => ({
+          product_id: i.product_id || null,
+          description: i.description,
+          hsn_code: i.hsn_code || null,
+          quantity: Number(i.quantity),
+          unit_price: Number(i.unit_price),
+          item_discount: Number(i.item_discount) || 0,
+          ...(form.per_item_tax ? { line_tax_rate: Number(i.line_tax_rate) || 0 } : {}),
+        })),
+      });
+      toast.success('Invoice created');
+      if (activeDraftId) removeLocalInvoiceByIdCb(activeDraftId);
+      resetForm();
+      setActiveDraftId(null);
+      navigate('/finance/invoices');
+    } catch (err) {
+      toast.error(err?.response?.data?.detail?.message || err?.response?.data?.detail || 'Failed to create invoice');
     } finally {
       setCreating(false);
     }
@@ -551,6 +625,21 @@ export default function CreateInvoicePage() {
             className={`w-full min-w-0 glass-card rounded-2xl p-5 border border-white/10 ${showPreview ? 'xl:w-[60%]' : ''}`}
           >
             <form onSubmit={handleCreate} className="space-y-4">
+              <div className="rounded-xl border border-white/[0.08] bg-white/[0.03] p-3 flex items-center gap-2">
+                <Input
+                  className="input-premium"
+                  placeholder="Scan barcode and press Enter"
+                  value={barcodeInput}
+                  onChange={(e) => setBarcodeInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      addByBarcode();
+                    }
+                  }}
+                />
+                <button type="button" onClick={addByBarcode} className="btn-premium btn-secondary">Add</button>
+              </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <Label className="text-gray-400 text-xs">Client Name *</Label>
@@ -955,6 +1044,25 @@ export default function CreateInvoicePage() {
               className="btn-premium btn-primary disabled:opacity-40 disabled:pointer-events-none"
             >
               Save draft
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={creditWarnOpen} onOpenChange={setCreditWarnOpen}>
+        <DialogContent className="bg-void border-amber-500/30 max-w-md">
+          <DialogHeader>
+            <DialogTitle className="font-display text-amber-300">Credit limit exceeded</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-gray-300 leading-relaxed">
+            {`Customer outstanding: ${fmt(creditWarnInfo?.outstanding)} | Credit limit: ${fmt(creditWarnInfo?.credit_limit)}.`}
+            {' '}Do you want to continue anyway?
+          </p>
+          <DialogFooter className="gap-2 sm:gap-2">
+            <button type="button" onClick={() => setCreditWarnOpen(false)} className="btn-premium btn-secondary">
+              Cancel
+            </button>
+            <button type="button" onClick={continueCreateOverCreditLimit} className="btn-premium btn-primary">
+              Continue Anyway
             </button>
           </DialogFooter>
         </DialogContent>

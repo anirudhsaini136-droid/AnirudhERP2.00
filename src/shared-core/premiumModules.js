@@ -14,6 +14,18 @@ const PREMIUM_MODULE_ORDER = [
   'customer_ledger',
   'expenses',
   'ca_portal',
+  'barcode_scanning',
+  'pos_billing',
+  'credit_limit',
+  'challan',
+  'pdc_cheques',
+  'rate_management',
+  'salesman_management',
+  'bank_reconciliation',
+  'mis_reports',
+  'order_management',
+  'batch_expiry',
+  'manufacturing',
 ];
 
 const DEFS = {
@@ -31,6 +43,18 @@ const DEFS = {
   accounting: { id: 'accounting', label: 'Accounting', icon: '📊' },
   ca_portal: { id: 'ca_portal', label: 'CA Portal', icon: '🔐' },
   tally_export: { id: 'tally_export', label: 'Tally Export', icon: '📤' },
+  barcode_scanning: { id: 'barcode_scanning', label: 'Barcode Scanning', icon: '📡' },
+  pos_billing: { id: 'pos_billing', label: 'POS Billing', icon: '🧾' },
+  credit_limit: { id: 'credit_limit', label: 'Credit Limit', icon: '💳' },
+  challan: { id: 'challan', label: 'Challan', icon: '📄' },
+  pdc_cheques: { id: 'pdc_cheques', label: 'PDC Cheques', icon: '🏦' },
+  rate_management: { id: 'rate_management', label: 'Rate Management', icon: '🏷️' },
+  salesman_management: { id: 'salesman_management', label: 'Salesman Management', icon: '🧑‍💼' },
+  bank_reconciliation: { id: 'bank_reconciliation', label: 'Bank Reconciliation', icon: '🧮' },
+  mis_reports: { id: 'mis_reports', label: 'MIS Reports', icon: '📈' },
+  order_management: { id: 'order_management', label: 'Order Management', icon: '🗂️' },
+  batch_expiry: { id: 'batch_expiry', label: 'Batch/Expiry', icon: '⏳' },
+  manufacturing: { id: 'manufacturing', label: 'Manufacturing', icon: '🏭' },
 };
 
 /**

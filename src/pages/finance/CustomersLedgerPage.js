@@ -4,7 +4,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import DashboardLayout from '../../components/layout/DashboardLayout';
 import { Input } from '../../components/ui/input';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '../../components/ui/dialog';
-import { Eye, Users, GitMerge } from 'lucide-react';
+import { Eye, Users, GitMerge, Pencil } from 'lucide-react';
 import { toast } from 'sonner';
 
 const fmt = (n) =>
@@ -31,6 +31,9 @@ export default function CustomersLedgerPage() {
   const [mergeSubmitting, setMergeSubmitting] = React.useState(false);
   const [mergeStep, setMergeStep] = React.useState('pick');
   const [mergeTargetRow, setMergeTargetRow] = React.useState(null);
+  const [editOpen, setEditOpen] = React.useState(false);
+  const [editForm, setEditForm] = React.useState({ id: '', name: '', credit_limit: '' });
+  const [editSaving, setEditSaving] = React.useState(false);
 
   const load = React.useCallback(
     async ({ nextPage = page, nextSearch = search } = {}) => {
@@ -143,6 +146,35 @@ export default function CustomersLedgerPage() {
     setMergeStep('confirm');
   };
 
+  const openEdit = (c) => {
+    if (!c?.id) {
+      toast.error('Only saved CRM customer can be edited');
+      return;
+    }
+    setEditForm({
+      id: c.id,
+      name: c.name || '',
+      credit_limit: c.credit_limit != null ? String(c.credit_limit) : '',
+    });
+    setEditOpen(true);
+  };
+
+  const saveEdit = async () => {
+    if (!editForm.id) return;
+    setEditSaving(true);
+    try {
+      await api.put(`/customers/${editForm.id}`, {
+        credit_limit: editForm.credit_limit === '' ? null : Number(editForm.credit_limit),
+      });
+      toast.success('Customer updated');
+      setEditOpen(false);
+      await load({ nextPage: page, nextSearch: search });
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || 'Failed to update customer');
+    }
+    setEditSaving(false);
+  };
+
   return (
     <DashboardLayout>
       <div className="space-y-6 max-w-5xl">
@@ -230,6 +262,16 @@ export default function CustomersLedgerPage() {
                   >
                     <Eye size={16} />
                   </button>
+                  {c.id ? (
+                    <button
+                      type="button"
+                      onClick={() => openEdit(c)}
+                      className="p-2 text-gray-500 hover:text-white shrink-0"
+                      title="Edit customer"
+                    >
+                      <Pencil size={14} />
+                    </button>
+                  ) : null}
                 </div>
               ))}
             </div>
@@ -369,6 +411,38 @@ export default function CustomersLedgerPage() {
               </DialogFooter>
             </>
           )}
+        </DialogContent>
+      </Dialog>
+      <Dialog open={editOpen} onOpenChange={setEditOpen}>
+        <DialogContent className="bg-void border-white/10 max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="font-display text-white">Edit customer</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div>
+              <p className="text-xs text-gray-500 mb-1">Customer</p>
+              <p className="text-sm text-white">{editForm.name}</p>
+            </div>
+            <div>
+              <p className="text-xs text-gray-500 mb-1">Credit Limit (INR)</p>
+              <Input
+                type="number"
+                min="0"
+                step="0.01"
+                value={editForm.credit_limit}
+                onChange={(e) => setEditForm((s) => ({ ...s, credit_limit: e.target.value }))}
+                className="input-premium"
+              />
+            </div>
+          </div>
+          <DialogFooter className="gap-2 sm:gap-2">
+            <button type="button" className="btn-premium btn-secondary" onClick={() => setEditOpen(false)}>
+              Cancel
+            </button>
+            <button type="button" className="btn-premium btn-primary" onClick={saveEdit} disabled={editSaving}>
+              {editSaving ? 'Saving...' : 'Save'}
+            </button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </DashboardLayout>

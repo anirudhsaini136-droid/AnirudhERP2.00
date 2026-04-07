@@ -35,12 +35,21 @@ import CAPortalPage from './pages/ca/CAPortalPage';
 import AccountingPage from './pages/finance/AccountingPage';
 import CustomersLedgerPage from './pages/finance/CustomersLedgerPage';
 import CustomerLedgerDetailPage from './pages/finance/CustomerLedgerDetailPage';
+import ChallansPage from './pages/finance/ChallansPage';
+import POSPage from './pages/finance/POSPage';
+import PdcChequesPage from './pages/finance/PdcChequesPage';
+import PriceListsPage from './pages/finance/PriceListsPage';
+import BankReconciliationPage from './pages/finance/BankReconciliationPage';
+import OrderManagementPage from './pages/finance/OrderManagementPage';
+import MisReportsPage from './pages/finance/MisReportsPage';
 import DataMigrationPage from './pages/finance/DataMigrationPage';
 import RecurringInvoicesPage from './pages/finance/RecurringInvoicesPage';
 import EwayBillsPage from './pages/finance/EwayBillsPage';
 import TallyExportPage from './pages/finance/TallyExportPage';
 import InventoryPage from './pages/inventory/InventoryPage';
 import BillingPage from './pages/inventory/BillingPage';
+import SalesmenPage from './pages/hr/SalesmenPage';
+import ManufacturingPage from './pages/inventory/ManufacturingPage';
 import StaffHome from './pages/staff/StaffHome';
 import StaffAttendance from './pages/staff/StaffAttendance';
 import StaffLeave from './pages/staff/StaffLeave';
@@ -177,6 +186,7 @@ function AppRoutes() {
       <Route path="/hr/attendance" element={<BizRoute allowedRoles={['hr_admin', 'business_owner']} modules={['hr_payroll']}><AttendancePage /></BizRoute>} />
       <Route path="/hr/leave" element={<BizRoute allowedRoles={['hr_admin', 'business_owner']} modules={['hr_payroll']}><LeavePage /></BizRoute>} />
       <Route path="/hr/payroll" element={<BizRoute allowedRoles={['hr_admin', 'business_owner']} modules={['hr_payroll']}><PayrollPage /></BizRoute>} />
+      <Route path="/hr/salesmen" element={<BizRoute allowedRoles={['hr_admin', 'business_owner']} modules={['salesman_management']}><SalesmenPage /></BizRoute>} />
 
       <Route path="/finance" element={<BizRoute allowedRoles={['finance_admin', 'business_owner', 'ca_admin']} modules={['invoices_finance']}><FinanceDashboard /></BizRoute>} />
       <Route path="/finance/invoices" element={<BizRoute allowedRoles={['finance_admin', 'business_owner', 'ca_admin']} modules={['invoices_finance']}><InvoicesPage /></BizRoute>} />
@@ -198,6 +208,13 @@ function AppRoutes() {
       />
       <Route path="/finance/expenses" element={<BizRoute allowedRoles={['finance_admin', 'business_owner']} modules={['expenses']}><ExpensesPage /></BizRoute>} />
       <Route path="/finance/reports" element={<BizRoute allowedRoles={['finance_admin', 'business_owner']} modules={['invoices_finance']}><ReportsPage /></BizRoute>} />
+      <Route path="/finance/challans" element={<BizRoute allowedRoles={['finance_admin', 'business_owner']} modules={['challan']}><ChallansPage /></BizRoute>} />
+      <Route path="/finance/pos" element={<BizRoute allowedRoles={['finance_admin', 'business_owner', 'inventory_admin']} modules={['pos_billing']}><POSPage /></BizRoute>} />
+      <Route path="/finance/pdc-cheques" element={<BizRoute allowedRoles={['finance_admin', 'business_owner']} modules={['pdc_cheques']}><PdcChequesPage /></BizRoute>} />
+      <Route path="/finance/price-lists" element={<BizRoute allowedRoles={['finance_admin', 'business_owner']} modules={['rate_management']}><PriceListsPage /></BizRoute>} />
+      <Route path="/finance/bank-reconciliation" element={<BizRoute allowedRoles={['finance_admin', 'business_owner']} modules={['bank_reconciliation']}><BankReconciliationPage /></BizRoute>} />
+      <Route path="/finance/orders" element={<BizRoute allowedRoles={['finance_admin', 'business_owner']} modules={['order_management']}><OrderManagementPage /></BizRoute>} />
+      <Route path="/finance/mis-reports" element={<BizRoute allowedRoles={['finance_admin', 'business_owner']} modules={['mis_reports']}><MisReportsPage /></BizRoute>} />
       <Route path="/finance/gst" element={<BizRoute allowedRoles={['finance_admin', 'business_owner', 'ca_admin']} modules={['gst_reports']}><GSTReportsPage /></BizRoute>} />
       <Route
         path="/purchases"
@@ -257,6 +274,7 @@ function AppRoutes() {
 
       <Route path="/inventory" element={<BizRoute allowedRoles={['inventory_admin', 'business_owner']} modules={['inventory_billing']}><InventoryPage /></BizRoute>} />
       <Route path="/inventory/billing" element={<BizRoute allowedRoles={['inventory_admin', 'business_owner']} modules={['inventory_billing']}><BillingPage /></BizRoute>} />
+      <Route path="/manufacturing" element={<BizRoute allowedRoles={['inventory_admin', 'business_owner']} modules={['manufacturing']}><ManufacturingPage /></BizRoute>} />
 
       <Route path="/staff" element={<RequireAuth allowedRoles={['staff']}><StaffHome /></RequireAuth>} />
       <Route path="/staff/attendance" element={<RequireAuth allowedRoles={['staff']}><StaffAttendance /></RequireAuth>} />

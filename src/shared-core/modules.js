@@ -54,8 +54,17 @@ const NAV_PATH_MODULE_REQUIREMENTS = {
   '/finance/migration': { all: ['invoices_finance'] },
   '/finance/expenses': { all: ['expenses'] },
   '/finance/reports': { all: ['invoices_finance'] },
+  '/finance/challans': { all: ['challan'] },
+  '/finance/pdc-cheques': { all: ['pdc_cheques'] },
+  '/finance/price-lists': { all: ['rate_management'] },
+  '/finance/bank-reconciliation': { all: ['bank_reconciliation'] },
+  '/finance/mis-reports': { all: ['mis_reports'] },
+  '/finance/orders': { all: ['order_management'] },
+  '/finance/pos': { all: ['pos_billing'] },
   '/finance/gst': { all: ['gst_reports'] },
   '/finance/tally-export': { all: ['tally_export'] },
+  '/hr/salesmen': { all: ['salesman_management'] },
+  '/manufacturing': { all: ['manufacturing'] },
   '/accounting': { all: ['accounting'] },
   '/purchases': { all: ['purchases_itc'] },
   '/inventory': { all: ['inventory_billing'] },
@@ -71,7 +80,16 @@ export function getRequiredModuleSpecForNavPath(path) {
   const exact = NAV_PATH_MODULE_REQUIREMENTS[path];
   if (exact) return exact;
   if (path.startsWith('/finance/invoices')) return { all: ['invoices_finance'] };
+  if (path.startsWith('/finance/challans')) return { all: ['challan'] };
+  if (path.startsWith('/finance/pdc-cheques')) return { all: ['pdc_cheques'] };
+  if (path.startsWith('/finance/price-lists')) return { all: ['rate_management'] };
+  if (path.startsWith('/finance/bank-reconciliation')) return { all: ['bank_reconciliation'] };
+  if (path.startsWith('/finance/mis-reports')) return { all: ['mis_reports'] };
+  if (path.startsWith('/finance/orders')) return { all: ['order_management'] };
+  if (path.startsWith('/finance/pos')) return { all: ['pos_billing'] };
   if (path.startsWith('/finance/customers')) return { all: ['customer_ledger'] };
+  if (path.startsWith('/hr/salesmen')) return { all: ['salesman_management'] };
+  if (path.startsWith('/manufacturing')) return { all: ['manufacturing'] };
   if (path.startsWith('/purchases')) return { all: ['purchases_itc'] };
   return null;
 }

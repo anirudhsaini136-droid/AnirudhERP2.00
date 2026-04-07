@@ -43,6 +43,18 @@ const ALL_MODULES = [
   { id: 'accounting', label: 'Accounting', icon: '📒', desc: 'Double-entry bookkeeping, P&L, Balance Sheet' },
   { id: 'ca_portal', label: 'CA Portal', icon: '🔐' },
   { id: 'tally_export', label: 'Tally Export', icon: '📤', desc: 'Export data for Tally' },
+  { id: 'barcode_scanning', label: 'Barcode Scanning', icon: '📡' },
+  { id: 'pos_billing', label: 'POS Billing', icon: '🧾' },
+  { id: 'credit_limit', label: 'Credit Limit', icon: '💳' },
+  { id: 'challan', label: 'Challan', icon: '📄' },
+  { id: 'pdc_cheques', label: 'PDC Cheques', icon: '🏦' },
+  { id: 'rate_management', label: 'Rate Management', icon: '🏷️' },
+  { id: 'salesman_management', label: 'Salesman Management', icon: '🧑‍💼' },
+  { id: 'bank_reconciliation', label: 'Bank Reconciliation', icon: '🧮' },
+  { id: 'mis_reports', label: 'MIS Reports', icon: '📈' },
+  { id: 'order_management', label: 'Order Management', icon: '🗂️' },
+  { id: 'batch_expiry', label: 'Batch/Expiry', icon: '⏳' },
+  { id: 'manufacturing', label: 'Manufacturing', icon: '🏭' },
 ];
 
 function ModulesEditor({ businessId, api, bizData, onRefresh }) {
