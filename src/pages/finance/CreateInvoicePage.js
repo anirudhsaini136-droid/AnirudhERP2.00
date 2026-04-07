@@ -500,6 +500,7 @@ export default function CreateInvoicePage() {
     }
     setCreating(true);
     const offline = typeof navigator !== 'undefined' ? !navigator.onLine : true;
+    const { client_gstin: _omitGstin, per_item_tax: _pit, items: _it, ...formWithoutGstin } = form;
     const makePayload = (ignoreCreditLimitWarning = false) => ({
       ...formWithoutGstin,
       tax_rate: form.per_item_tax ? 0 : Number(form.tax_rate) || 0,
@@ -535,7 +536,6 @@ export default function CreateInvoicePage() {
         return;
       }
 
-      const { client_gstin: _omitGstin, per_item_tax: _pit, items: _it, ...formWithoutGstin } = form;
       const res = await api.post('/finance/invoices', makePayload(false));
       toast.success('Invoice created');
       if (activeDraftId) removeLocalInvoiceByIdCb(activeDraftId);
