@@ -553,11 +553,11 @@ export default function CreateInvoicePage() {
         return;
       }
       const status = Number(err?.response?.status || 0);
-      if (typeof navigator !== 'undefined' && navigator.onLine && status >= 400 && status < 500) {
+      if (typeof navigator !== 'undefined' && navigator.onLine && status > 0) {
         const msg =
           (typeof detail === 'string' && detail) ||
           detail?.message ||
-          'Invoice validation failed. Please fix the form and try again.';
+          `Invoice create failed (HTTP ${status}). Please fix and try again.`;
         toast.error(msg);
         return;
       }

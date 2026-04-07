@@ -524,6 +524,11 @@ export default function InvoicesPage() {
                     {(inv.client_phone || inv.client_email) && (
                       <p className="text-xs text-gray-500">{inv.client_phone || inv.client_email}</p>
                     )}
+                    {inv.sync_status === 'sync_failed' && inv.sync_error && (
+                      <p className="text-[10px] text-rose-400 mt-0.5 max-w-[260px] truncate" title={inv.sync_error}>
+                        {inv.sync_error}
+                      </p>
+                    )}
                   </td>
                   <td>
                     <p className="text-sm text-gold-400 font-semibold">{fmt(inv.total_amount)}</p>
@@ -551,12 +556,12 @@ export default function InvoicesPage() {
                     <div className="flex items-center justify-end gap-1">
                       <button
                         onClick={() =>
-                          inv.sync_status === 'local_draft'
+                          ['local_draft', 'local_pending', 'sync_failed'].includes(inv.sync_status)
                             ? navigate(`/finance/invoices/create?draft=${encodeURIComponent(inv.id)}`)
                             : navigate(`/finance/invoices/${inv.id}`)
                         }
                         className="p-1.5 text-gray-400 hover:text-white"
-                        title={inv.sync_status === 'local_draft' ? 'Edit Draft' : 'View'}
+                        title={['local_draft', 'local_pending', 'sync_failed'].includes(inv.sync_status) ? 'Edit Draft' : 'View'}
                       >
                         <Eye size={15} />
                       </button>
