@@ -136,7 +136,13 @@ export function reconcileServerInvoiceCache(businessId, serverInvoiceIds = []) {
   const invoices = loadLocalInvoices(businessId);
   const next = invoices.filter((inv) => {
     if (!inv) return false;
-    if (inv.sync_status === "local_pending" || inv.sync_status === "local_draft") return true;
+    if (
+      inv.sync_status === "local_pending" ||
+      inv.sync_status === "local_draft" ||
+      inv.sync_status === "sync_failed"
+    ) {
+      return true;
+    }
     const serverId = inv.server_invoice_id || inv.id;
     return idSet.has(serverId);
   });
