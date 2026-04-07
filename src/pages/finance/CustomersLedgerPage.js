@@ -127,12 +127,12 @@ export default function CustomersLedgerPage() {
     const map = new Map();
     for (const c of customers) {
       const key =
-        c?.id
-          ? `id:${c.id}`
-          : normPhone(c?.phone)
-            ? `np:${normName(c?.name)}||${normPhone(c?.phone)}`
-            : normEmail(c?.email)
-              ? `ne:${normName(c?.name)}||${normEmail(c?.email)}`
+        normPhone(c?.phone)
+          ? `np:${normName(c?.name)}||${normPhone(c?.phone)}`
+          : normEmail(c?.email)
+            ? `ne:${normName(c?.name)}||${normEmail(c?.email)}`
+            : c?.id
+              ? `id:${c.id}`
               : `n:${normName(c?.name)}`;
       if (!map.has(key)) {
         map.set(key, { ...c });
