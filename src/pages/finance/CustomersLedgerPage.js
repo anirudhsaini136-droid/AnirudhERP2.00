@@ -115,6 +115,46 @@ export default function CustomersLedgerPage() {
     );
   }, [mergeTargets, mergeQuery]);
 
+  const dedupedCustomers = React.useMemo(() => {
+    const normName = (v) => String(v || '').trim().toLowerCase().replace(/\s+/g, ' ');
+    const normPhone = (v) => {
+      const d = String(v || '').replace(/\D/g, '');
+      if (!d) return '';
+      return d.length > 10 ? d.slice(-10) : d;
+    };
+    const normEmail = (v) => String(v || '').trim().toLowerCase();
+
+    const map = new Map();
+    for (const c of customers) {
+      const key =
+        c?.id
+          ? `id:${c.id}`
+          : normPhone(c?.phone)
+            ? `np:${normName(c?.name)}||${normPhone(c?.phone)}`
+            : normEmail(c?.email)
+              ? `ne:${normName(c?.name)}||${normEmail(c?.email)}`
+              : `n:${normName(c?.name)}`;
+      if (!map.has(key)) {
+        map.set(key, { ...c });
+        continue;
+      }
+      const m = map.get(key);
+      m.total_invoiced = Number(m.total_invoiced || 0) + Number(c.total_invoiced || 0);
+      m.total_paid = Number(m.total_paid || 0) + Number(c.total_paid || 0);
+      m.total_outstanding = Number(m.total_outstanding || 0) + Number(c.total_outstanding || 0);
+      m.invoice_count = Number(m.invoice_count || 0) + Number(c.invoice_count || 0);
+      m.unpaid_count = Number(m.unpaid_count || 0) + Number(c.unpaid_count || 0);
+      if (!m.phone && c.phone) m.phone = c.phone;
+      if (!m.email && c.email) m.email = c.email;
+      if (!m.id && c.id) m.id = c.id;
+      if (!m.last_invoice_date || (c.last_invoice_date && c.last_invoice_date > m.last_invoice_date)) {
+        m.last_invoice_date = c.last_invoice_date;
+      }
+      map.set(key, m);
+    }
+    return Array.from(map.values()).sort((a, b) => Number(b.total_outstanding || 0) - Number(a.total_outstanding || 0));
+  }, [customers]);
+
   const runMerge = async () => {
     if (!mergeSource?.id || !mergeIntoId) return;
     setMergeSubmitting(true);
@@ -185,7 +225,7 @@ export default function CustomersLedgerPage() {
           </div>
           <div className="hidden sm:flex items-center gap-2 text-xs text-gray-500">
             <Users size={14} />
-            <span>{customers.length} shown</span>
+            <span>{dedupedCustomers.length} shown</span>
           </div>
         </div>
 
@@ -206,11 +246,11 @@ export default function CustomersLedgerPage() {
             <div className="flex items-center justify-center py-10">
               <div className="w-8 h-8 border-2 border-gold-500 border-t-transparent rounded-full animate-spin" />
             </div>
-          ) : customers.length === 0 ? (
+          ) : dedupedCustomers.length === 0 ? (
             <p className="text-center text-gray-500 text-sm py-10">No customers found</p>
           ) : (
             <div className="divide-y divide-white/[0.03]">
-              {customers.map((c) => (
+              {dedupedCustomers.map((c) => (
                 <div
                   key={c.id || `${c.name || ''}__${c.phone || ''}__${c.email || ''}`}
                   className="flex items-center gap-3 px-4 py-3 hover:bg-white/[0.02]"
