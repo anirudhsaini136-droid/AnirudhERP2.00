@@ -248,6 +248,9 @@ export default function CustomerLedgerDetailPage() {
   if (!data) return null;
 
   const { customer, invoices = [], payments = [] } = data;
+  const creditLimitValue = Number(customer?.credit_limit ?? 0);
+  const outstandingValue = Number(customer?.total_outstanding || 0);
+  const usagePct = creditLimitValue > 0 ? (outstandingValue / creditLimitValue) * 100 : 0;
   const unpaidInvoices = invoices.filter(i =>
     ['sent', 'partially_paid', 'overdue'].includes(i.status) && Number(i.balance_due) > 0
   );
@@ -320,28 +323,22 @@ export default function CustomerLedgerDetailPage() {
               {savingCreditLimit ? 'Saving...' : 'Save'}
             </button>
           </div>
-          {Number(customer.credit_limit || 0) > 0 ? (
-            <>
-              <p className="text-xs text-gray-400">
-                Usage: {fmt(customer.total_outstanding)} / {fmt(customer.credit_limit)}
-              </p>
-              <div className="h-2 rounded-full bg-white/[0.08] overflow-hidden">
-                <div
-                  className={`h-full ${
-                    Number(customer.credit_usage_pct || 0) >= 100
-                      ? 'bg-rose-500'
-                      : Number(customer.credit_usage_pct || 0) >= 80
-                        ? 'bg-amber-400'
-                        : 'bg-emerald-500'
-                  }`}
-                  style={{ width: `${Math.min(100, Number(customer.credit_usage_pct || 0))}%` }}
-                />
-              </div>
-              <p className="text-[11px] text-gray-500">{Number(customer.credit_usage_pct || 0).toFixed(1)}%</p>
-            </>
-          ) : (
-            <p className="text-xs text-gray-500">No credit limit set.</p>
-          )}
+          <p className="text-xs text-gray-400">
+            Usage: {fmt(outstandingValue)} / {fmt(creditLimitValue)}
+          </p>
+          <div className="h-2 rounded-full bg-white/[0.08] overflow-hidden">
+            <div
+              className={`h-full ${
+                usagePct >= 100
+                  ? 'bg-rose-500'
+                  : usagePct >= 80
+                    ? 'bg-amber-400'
+                    : 'bg-emerald-500'
+              }`}
+              style={{ width: `${Math.min(100, usagePct)}%` }}
+            />
+          </div>
+          <p className="text-[11px] text-gray-500">{usagePct.toFixed(1)}%</p>
         </div>
 
         {/* Last payment adjustments */}
