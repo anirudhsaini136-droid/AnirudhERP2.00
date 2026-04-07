@@ -24,15 +24,28 @@ export default function POSPage() {
   React.useEffect(() => { loadProducts().catch(() => {}); }, [loadProducts]);
   React.useEffect(() => { barcodeRef.current?.focus(); }, []);
 
+  const productLineTax = (p) => Number(p.tax_rate ?? p.gst_rate ?? 0) || 0;
+
   const addToCart = (p) => {
     setCart((prev) => {
       const idx = prev.findIndex((x) => x.id === p.id);
+      const lineTax = productLineTax(p);
       if (idx >= 0) {
         const next = [...prev];
         next[idx] = { ...next[idx], qty: next[idx].qty + 1 };
         return next;
       }
-      return [...prev, { id: p.id, name: p.name, price: Number(p.unit_price || 0), qty: 1 }];
+      return [
+        ...prev,
+        {
+          id: p.id,
+          name: p.name,
+          price: Number(p.unit_price || 0),
+          qty: 1,
+          hsn_code: p.hsn_code || '',
+          line_tax_rate: lineTax,
+        },
+      ];
     });
   };
 
@@ -50,7 +63,12 @@ export default function POSPage() {
     }
   };
 
-  const total = cart.reduce((s, i) => s + i.qty * i.price, 0);
+  const lineTotalInclTax = (i) => {
+    const base = i.qty * i.price;
+    const tr = Number(i.line_tax_rate) || 0;
+    return base + (base * tr) / 100;
+  };
+  const total = cart.reduce((s, i) => s + lineTotalInclTax(i), 0);
 
   const updateQty = (id, delta) => {
     setCart((prev) =>
@@ -67,7 +85,10 @@ export default function POSPage() {
       <p>Customer: ${customerName}</p>
       <table style="width:100%;border-collapse:collapse" border="1" cellpadding="6">
       <tr><th>Item</th><th>Qty</th><th>Rate</th><th>Total</th></tr>
-      ${cart.map((c) => `<tr><td>${c.name}</td><td>${c.qty}</td><td>${c.price.toFixed(2)}</td><td>${(c.qty * c.price).toFixed(2)}</td></tr>`).join('')}
+      ${cart.map((c) => {
+        const rowTot = lineTotalInclTax(c);
+        return `<tr><td>${c.name}</td><td>${c.qty}</td><td>${c.price.toFixed(2)}</td><td>${rowTot.toFixed(2)}</td></tr>`;
+      }).join('')}
       </table>
       <h2>Total: ${total.toFixed(2)}</h2>
       </body></html>`;
@@ -87,7 +108,15 @@ export default function POSPage() {
         client_name: customerName || 'Walk-in Customer',
         payment_method: payMode,
         paid_amount: total,
-        items: cart.map((c) => ({ product_id: c.id, description: c.name, quantity: c.qty, unit_price: c.price })),
+        items: cart.map((c) => ({
+          product_id: c.id,
+          description: c.name,
+          hsn_code: c.hsn_code || null,
+          quantity: c.qty,
+          unit_price: c.price,
+          line_tax_rate: Number(c.line_tax_rate) > 0 ? Number(c.line_tax_rate) : 0,
+          item_discount: 0,
+        })),
       });
       toast.success('Invoice created and paid');
       printReceipt();
@@ -123,7 +152,8 @@ export default function POSPage() {
               <div key={c.id} className="rounded-lg border border-white/10 p-3">
                 <p className="text-base text-white">{c.name}</p>
                 <div className="flex items-center justify-between text-sm text-gray-300 mt-1">
-                  <span>{c.qty} x {fmt(c.price)}</span><span>{fmt(c.qty * c.price)}</span>
+                  <span>{c.qty} x {fmt(c.price)}{Number(c.line_tax_rate) > 0 ? ` + ${c.line_tax_rate}% GST` : ''}</span>
+                  <span>{fmt(lineTotalInclTax(c))}</span>
                 </div>
                 <div className="grid grid-cols-3 gap-2 mt-2">
                   <button className="btn-premium btn-secondary py-2 text-base" onClick={() => updateQty(c.id, -1)}>-</button>

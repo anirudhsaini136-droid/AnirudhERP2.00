@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import DashboardLayout from '../../components/layout/DashboardLayout';
@@ -9,6 +9,8 @@ import { Plus, Search, Package, AlertTriangle, TrendingUp, TrendingDown, Edit, T
 import { toast } from 'sonner';
 
 const fmt = (n) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(n || 0);
+
+const PRODUCT_TAX_OPTIONS = [0, 5, 12, 18, 28];
 
 const CATEGORY_COLORS = [
   'from-violet-500/20 to-purple-500/20 border-violet-500/30',
@@ -85,8 +87,15 @@ export default function InventoryPage() {
 
   const [productForm, setProductForm] = useState({
     name: '', sku: '', category: '', description: '', unit_price: 0,
-    cost_price: 0, current_stock: 0, minimum_stock: 5, unit_of_measure: 'pcs', image_url: ''
+    cost_price: 0, current_stock: 0, minimum_stock: 5, unit_of_measure: 'pcs', image_url: '',
+    hsn_code: '', tax_rate: 0, barcode: '',
   });
+
+  const sellingPriceInclGst = useMemo(() => {
+    const base = Number(productForm.unit_price) || 0;
+    const tr = Number(productForm.tax_rate) || 0;
+    return base + (base * tr) / 100;
+  }, [productForm.unit_price, productForm.tax_rate]);
 
   const [adjustForm, setAdjustForm] = useState({
     quantity: 1, movement_type: 'stock_in', reference: '', notes: ''
@@ -126,7 +135,10 @@ export default function InventoryPage() {
       await api.post('/inventory/products', productForm);
       toast.success('Product added successfully');
       setShowAddProduct(false);
-      setProductForm({ name: '', sku: '', category: '', description: '', unit_price: 0, cost_price: 0, current_stock: 0, minimum_stock: 5, unit_of_measure: 'pcs', image_url: '' });
+      setProductForm({
+        name: '', sku: '', category: '', description: '', unit_price: 0, cost_price: 0, current_stock: 0,
+        minimum_stock: 5, unit_of_measure: 'pcs', image_url: '', hsn_code: '', tax_rate: 0, barcode: '',
+      });
       fetchProducts();
       fetchDashboard();
     } catch (e) {
@@ -162,7 +174,10 @@ export default function InventoryPage() {
       current_stock: product.current_stock || 0,
       minimum_stock: product.minimum_stock || 5,
       unit_of_measure: product.unit_of_measure || 'pcs',
-      image_url: product.image_url || ''
+      image_url: product.image_url || '',
+      hsn_code: product.hsn_code || '',
+      tax_rate: Number(product.tax_rate ?? product.gst_rate ?? 0) || 0,
+      barcode: product.barcode || '',
     });
     setShowEditProduct(true);
   };
@@ -421,13 +436,39 @@ export default function InventoryPage() {
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <Label className="text-gray-400 text-xs">Selling Price (₹) *</Label>
+                <Label className="text-gray-400 text-xs">Selling Price excl. GST (₹) *</Label>
                 <Input type="number" min="0" step="0.01" className="input-premium mt-1" value={productForm.unit_price} onChange={e => setProductForm({...productForm, unit_price: parseFloat(e.target.value) || 0})} required />
               </div>
               <div>
                 <Label className="text-gray-400 text-xs">Cost Price (₹)</Label>
                 <Input type="number" min="0" step="0.01" className="input-premium mt-1" value={productForm.cost_price} onChange={e => setProductForm({...productForm, cost_price: parseFloat(e.target.value) || 0})} />
               </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-gray-400 text-xs">HSN Code</Label>
+                <Input className="input-premium mt-1" value={productForm.hsn_code} onChange={(e) => setProductForm({ ...productForm, hsn_code: e.target.value })} placeholder="e.g. 8471" />
+              </div>
+              <div>
+                <Label className="text-gray-400 text-xs">Tax Rate (%)</Label>
+                <select
+                  className="input-premium mt-1 w-full h-10 rounded-md"
+                  value={productForm.tax_rate}
+                  onChange={(e) => setProductForm({ ...productForm, tax_rate: Number(e.target.value) })}
+                >
+                  {PRODUCT_TAX_OPTIONS.map((t) => (
+                    <option key={t} value={t}>{t}%</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <div>
+              <Label className="text-gray-400 text-xs">Barcode</Label>
+              <Input className="input-premium mt-1" value={productForm.barcode} onChange={(e) => setProductForm({ ...productForm, barcode: e.target.value })} placeholder="Optional" />
+            </div>
+            <div>
+              <Label className="text-gray-400 text-xs">Selling Price incl. GST (₹)</Label>
+              <Input readOnly className="input-premium mt-1 bg-white/5 text-gray-200" value={sellingPriceInclGst.toFixed(2)} />
             </div>
             <div className="grid grid-cols-3 gap-3">
               <div>
@@ -482,13 +523,39 @@ export default function InventoryPage() {
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <Label className="text-gray-400 text-xs">Selling Price (₹)</Label>
+                <Label className="text-gray-400 text-xs">Selling Price excl. GST (₹)</Label>
                 <Input type="number" min="0" step="0.01" className="input-premium mt-1" value={productForm.unit_price} onChange={e => setProductForm({...productForm, unit_price: parseFloat(e.target.value) || 0})} />
               </div>
               <div>
                 <Label className="text-gray-400 text-xs">Cost Price (₹)</Label>
                 <Input type="number" min="0" step="0.01" className="input-premium mt-1" value={productForm.cost_price} onChange={e => setProductForm({...productForm, cost_price: parseFloat(e.target.value) || 0})} />
               </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-gray-400 text-xs">HSN Code</Label>
+                <Input className="input-premium mt-1" value={productForm.hsn_code} onChange={(e) => setProductForm({ ...productForm, hsn_code: e.target.value })} placeholder="e.g. 8471" />
+              </div>
+              <div>
+                <Label className="text-gray-400 text-xs">Tax Rate (%)</Label>
+                <select
+                  className="input-premium mt-1 w-full h-10 rounded-md"
+                  value={productForm.tax_rate}
+                  onChange={(e) => setProductForm({ ...productForm, tax_rate: Number(e.target.value) })}
+                >
+                  {PRODUCT_TAX_OPTIONS.map((t) => (
+                    <option key={t} value={t}>{t}%</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <div>
+              <Label className="text-gray-400 text-xs">Barcode</Label>
+              <Input className="input-premium mt-1" value={productForm.barcode} onChange={(e) => setProductForm({ ...productForm, barcode: e.target.value })} placeholder="Optional" />
+            </div>
+            <div>
+              <Label className="text-gray-400 text-xs">Selling Price incl. GST (₹)</Label>
+              <Input readOnly className="input-premium mt-1 bg-white/5 text-gray-200" value={sellingPriceInclGst.toFixed(2)} />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>

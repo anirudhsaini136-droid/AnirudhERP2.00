@@ -1002,25 +1002,38 @@ export default function CreateInvoicePage() {
                         value={item.description}
                         onChange={(val) => updateItem(idx, 'description', val)}
                         onSelect={(product) => {
-                          const items = [...form.items];
-                          items[idx] = {
-                            ...items[idx],
-                            product_id: product.id,
-                            available_stock:
-                              typeof product.current_stock === 'number'
-                                ? product.current_stock
-                                : Number(product.current_stock ?? 0),
-                            minimum_stock:
-                              typeof product.minimum_stock === 'number'
-                                ? product.minimum_stock
-                                : Number(product.minimum_stock ?? 0),
-                            description: product.name,
-                            unit_price: product.unit_price,
-                            hsn_code: product.hsn_code || items[idx].hsn_code || '',
-                            amount:
-                              (items[idx].quantity * product.unit_price) - (items[idx].item_discount || 0),
-                          };
-                          setForm({ ...form, items: padInvoiceItemsTrailingBlank(items) });
+                          const tr = Number(product.tax_rate ?? product.gst_rate ?? 0) || 0;
+                          setForm((prev) => {
+                            const items = [...prev.items];
+                            const row = items[idx];
+                            items[idx] = {
+                              ...row,
+                              product_id: product.id,
+                              available_stock:
+                                typeof product.current_stock === 'number'
+                                  ? product.current_stock
+                                  : Number(product.current_stock ?? 0),
+                              minimum_stock:
+                                typeof product.minimum_stock === 'number'
+                                  ? product.minimum_stock
+                                  : Number(product.minimum_stock ?? 0),
+                              description: product.name,
+                              unit_price: product.unit_price,
+                              hsn_code: product.hsn_code || row.hsn_code || '',
+                              line_tax_rate: prev.per_item_tax ? tr : Number(row.line_tax_rate) || 0,
+                              amount:
+                                (Number(row.quantity) * Number(product.unit_price)) -
+                                (Number(row.item_discount) || 0),
+                            };
+                            const next = {
+                              ...prev,
+                              items: padInvoiceItemsTrailingBlank(items),
+                            };
+                            if (!prev.per_item_tax && tr > 0) {
+                              next.tax_rate = tr;
+                            }
+                            return next;
+                          });
                           if (!showHSN && product.hsn_code) {
                             setShowHSN(true);
                             savePref('hsn', true);
