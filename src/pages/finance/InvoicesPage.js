@@ -208,7 +208,12 @@ export default function InvoicesPage() {
     if (!deleteConfirm) return;
     setDeleting(true);
     try {
-      if (deleteConfirm.sync_status === 'local_draft') {
+      const localOnly =
+        deleteConfirm.sync_status === 'local_draft' ||
+        deleteConfirm.sync_status === 'local_pending' ||
+        deleteConfirm.sync_status === 'sync_failed' ||
+        !deleteConfirm.server_invoice_id;
+      if (localOnly) {
         removeLocalInvoiceById(deleteConfirm.id);
       } else {
         await api.delete(`/finance/invoices/${deleteConfirm.id}`);
@@ -242,9 +247,14 @@ export default function InvoicesPage() {
       const inv = invoices.find((x) => x.id === id);
       if (!inv) continue;
       try {
-        if (inv.sync_status === 'local_draft') {
+        const localOnly =
+          inv.sync_status === 'local_draft' ||
+          inv.sync_status === 'local_pending' ||
+          inv.sync_status === 'sync_failed' ||
+          !inv.server_invoice_id;
+        if (localOnly) {
           removeLocalInvoiceById(id);
-        } else if (inv.sync_status !== 'local_pending') {
+        } else {
           await api.delete(`/finance/invoices/${id}`);
         }
         deleted += 1;
