@@ -80,6 +80,17 @@ export default function ChallansPage() {
       items: [...(s.items || []), { description: '', hsn_code: '', quantity: 1, unit_price: 0, item_discount: 0, line_tax_rate: 0 }],
     }));
   const removeItemRow = (idx) => setForm((s) => ({ ...s, items: (s.items || []).filter((_, i) => i !== idx) }));
+
+  const deleteChallan = async (c) => {
+    if (!window.confirm('Are you sure you want to delete this challan?')) return;
+    try {
+      await api.delete(`/finance/challans/${encodeURIComponent(c.id)}`);
+      toast.success('Challan deleted');
+      setList((prev) => prev.filter((row) => row.id !== c.id));
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || 'Failed to delete challan');
+    }
+  };
   const setItemField = (idx, field, value) =>
     setForm((s) => ({ ...s, items: (s.items || []).map((it, i) => (i === idx ? { ...it, [field]: value } : it)) }));
 
@@ -198,14 +209,24 @@ export default function ChallansPage() {
                     <td className="text-white">{c.status}</td>
                     <td className="text-white">{c.subtotal}</td>
                     <td>
-                      <button
-                        type="button"
-                        className="btn-premium btn-secondary text-xs"
-                        disabled={String(c.status || '').toLowerCase() === 'converted'}
-                        onClick={() => navigate(`/finance/invoices/create?challan=${encodeURIComponent(c.id)}`)}
-                      >
-                        Convert to Invoice
-                      </button>
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          className="btn-premium btn-secondary text-xs"
+                          disabled={String(c.status || '').toLowerCase() === 'converted'}
+                          onClick={() => navigate(`/finance/invoices/create?challan=${encodeURIComponent(c.id)}`)}
+                        >
+                          Convert to Invoice
+                        </button>
+                        <button
+                          type="button"
+                          className="btn-premium btn-secondary text-xs text-red-300"
+                          disabled={String(c.status || '').toLowerCase() === 'converted'}
+                          onClick={() => deleteChallan(c)}
+                        >
+                          Delete
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}

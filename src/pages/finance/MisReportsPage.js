@@ -5,10 +5,16 @@ import { toast } from 'sonner';
 
 const REPORTS = [
   { id: 'sales_by_customer', label: 'Sales by customer' },
+  { id: 'sales_by_product', label: 'Sales by product' },
+  { id: 'sales_by_salesman', label: 'Sales by salesman' },
   { id: 'purchase_by_vendor', label: 'Purchase by vendor' },
+  { id: 'purchase_by_product', label: 'Purchase by product' },
+  { id: 'receivables_aging', label: 'Outstanding aging' },
   { id: 'expense_by_category', label: 'Expense by category' },
   { id: 'stock_movement', label: 'Stock movement' },
   { id: 'profit_by_product', label: 'Profit by product' },
+  { id: 'profit_by_category', label: 'Profit by category' },
+  { id: 'gst_liability', label: 'GST liability' },
 ];
 
 export default function MisReportsPage() {
@@ -26,14 +32,21 @@ export default function MisReportsPage() {
     }
   };
   React.useEffect(() => { run(); }, [report]); // eslint-disable-line
-  const exportCsv = () => {
-    if (!rows.length) return;
-    const cols = Object.keys(rows[0]);
-    const data = [cols.join(','), ...rows.map((r) => cols.map((c) => JSON.stringify(r[c] ?? '')).join(','))].join('\n');
-    const blob = new Blob([data], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url; a.download = `${report}.csv`; a.click(); URL.revokeObjectURL(url);
+  const exportCsv = async () => {
+    try {
+      const r = await api.get('/advanced/mis/export', {
+        params: { report, from_date: fromDate, to_date: toDate },
+        responseType: 'blob',
+      });
+      const url = URL.createObjectURL(new Blob([r.data], { type: 'text/csv' }));
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${report}_${fromDate}_${toDate}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      toast.error('Export failed');
+    }
   };
   return (
     <DashboardLayout>
