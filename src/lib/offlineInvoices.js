@@ -45,6 +45,24 @@ function isPermanentClientError(status) {
   return [400, 401, 403, 404, 409, 422].includes(Number(status));
 }
 
+function compactQueue(queue) {
+  const items = Array.isArray(queue) ? queue : [];
+  const seenCreate = new Set();
+  const out = [];
+  for (let i = items.length - 1; i >= 0; i -= 1) {
+    const a = items[i];
+    if (!a || a.status !== "pending") continue;
+    if (a.type === "CREATE_INVOICE") {
+      const key = String(a.local_invoice_id || "").trim();
+      if (!key) continue;
+      if (seenCreate.has(key)) continue;
+      seenCreate.add(key);
+    }
+    out.push(a);
+  }
+  return out.reverse();
+}
+
 const DRAFT_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 
 /** Remove local-only drafts older than 24h. Returns how many were removed. */
@@ -407,7 +425,8 @@ export function recordLocalPaymentAndQueue({ businessId, localInvoiceId, form })
 
 export async function syncOfflineInvoiceQueue({ api, businessId }) {
   if (!isOnline()) return { synced: 0, failed: 0, skipped: 0 };
-  const queue = loadLocalQueue(businessId);
+  const queue = compactQueue(loadLocalQueue(businessId));
+  setLocalQueue(businessId, queue);
   if (!queue.length) return { synced: 0, failed: 0, skipped: 0 };
 
   let synced = 0;
