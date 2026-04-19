@@ -1,0 +1,595 @@
+// Offline MVP storage for invoices + payments (Part 1).
+// MVP uses localStorage (simple + reliable for small data). Can be migrated to IndexedDB later.
+import { splitGstTotal, safeJsonParse } from "../shared-core";
+
+const PARTY_GSTIN_RE = /^[A-Z0-9]{15}$/;
+function clientGstinFromForm(form) {
+  const g = (form?.client_gstin || "").trim().toUpperCase();
+  return g && PARTY_GSTIN_RE.test(g) ? g : null;
+}
+
+const PREFIX = "nexa_offline_v1";
+
+function getBusinessKey(businessId) {
+  return `${PREFIX}:biz:${businessId}`;
+}
+
+function getQueueKey(businessId) {
+  return `${getBusinessKey(businessId)}:queue`;
+}
+
+function getInvoicesKey(businessId) {
+  return `${getBusinessKey(businessId)}:invoices`;
+}
+
+function getPaymentsKey(businessId) {
+  return `${getBusinessKey(businessId)}:payments`;
+}
+
+function nowIso() {
+  return new Date().toISOString();
+}
+
+function uuid() {
+  // eslint-disable-next-line no-undef
+  if (typeof crypto !== "undefined" && crypto.randomUUID) return crypto.randomUUID();
+  return `offline_${Math.random().toString(16).slice(2)}_${Date.now()}`;
+}
+
+function isOnline() {
+  if (typeof navigator === "undefined") return true;
+  return navigator.onLine;
+}
+
+function isPermanentClientError(status) {
+  return [400, 401, 403, 404, 409, 422].includes(Number(status));
+}
+
+function normalizeDateInput(v) {
+  const s = String(v || "").trim();
+  if (!s) return null;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+  const m = s.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if (m) return `${m[3]}-${m[2]}-${m[1]}`;
+  const iso = new Date(s);
+  if (!Number.isNaN(iso.getTime())) return iso.toISOString().slice(0, 10);
+  return null;
+}
+
+function nullableId(v) {
+  const s = String(v ?? "").trim();
+  return s || null;
+}
+
+function normalizeCreateInvoicePayload(payload) {
+  const p = { ...(payload || {}) };
+  const issueDate = normalizeDateInput(p.issue_date) || new Date().toISOString().slice(0, 10);
+  const dueDate = normalizeDateInput(p.due_date) || issueDate;
+  const items = Array.isArray(p.items)
+    ? p.items
+        .filter((i) => String(i?.description || "").trim())
+        .map((i) => ({
+          product_id: nullableId(i.product_id),
+          description: String(i.description || "").trim(),
+          hsn_code: i.hsn_code || null,
+          quantity: Number(i.quantity) || 1,
+          unit_price: Number(i.unit_price) || 0,
+          item_discount: Number(i.item_discount) || 0,
+          ...(i.line_tax_rate != null ? { line_tax_rate: Number(i.line_tax_rate) || 0 } : {}),
+        }))
+    : [];
+  return {
+    ...p,
+    issue_date: issueDate,
+    due_date: dueDate,
+    customer_id: nullableId(p.customer_id),
+    salesman_id: nullableId(p.salesman_id),
+    price_list_id: nullableId(p.price_list_id),
+    challan_id: nullableId(p.challan_id),
+    items,
+  };
+}
+
+function compactQueue(queue) {
+  const items = Array.isArray(queue) ? queue : [];
+  const seenCreate = new Set();
+  const out = [];
+  for (let i = items.length - 1; i >= 0; i -= 1) {
+    const a = items[i];
+    if (!a || a.status !== "pending") continue;
+    if (a.type === "CREATE_INVOICE") {
+      const key = String(a.local_invoice_id || "").trim();
+      if (!key) continue;
+      if (seenCreate.has(key)) continue;
+      seenCreate.add(key);
+    }
+    out.push(a);
+  }
+  return out.reverse();
+}
+
+const DRAFT_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+
+/** Remove local-only drafts older than 24h. Returns how many were removed. */
+export function pruneExpiredLocalDrafts(businessId) {
+  if (!businessId) return 0;
+  const all = loadLocalInvoices(businessId);
+  const cutoff = Date.now() - DRAFT_MAX_AGE_MS;
+  const next = all.filter((inv) => {
+    if (inv.sync_status !== "local_draft") return true;
+    const t = Date.parse(inv.created_at || inv.updated_at || 0);
+    if (Number.isNaN(t)) return false;
+    return t >= cutoff;
+  });
+  const removed = all.length - next.length;
+  if (removed) upsertLocalInvoices(businessId, next);
+  return removed;
+}
+
+/** Count invoices that are drafts (local or synced cache). Does not prune. */
+export function countDraftInvoices(businessId) {
+  if (!businessId) return 0;
+  return loadLocalInvoices(businessId).filter(
+    (inv) => inv.status === "draft" || inv.sync_status === "local_draft"
+  ).length;
+}
+
+export function loadLocalInvoices(businessId) {
+  const raw = localStorage.getItem(getInvoicesKey(businessId));
+  const invoices = safeJsonParse(raw, []);
+  return Array.isArray(invoices) ? invoices : [];
+}
+
+export function getLocalInvoice(businessId, localInvoiceId) {
+  const invoices = loadLocalInvoices(businessId);
+  return invoices.find((i) => i.id === localInvoiceId) || null;
+}
+
+export function upsertLocalInvoices(businessId, invoices) {
+  localStorage.setItem(getInvoicesKey(businessId), JSON.stringify(invoices));
+}
+
+export function upsertServerInvoices(businessId, serverInvoices) {
+  if (!Array.isArray(serverInvoices) || serverInvoices.length === 0) return;
+  const invoices = loadLocalInvoices(businessId);
+
+  for (const s of serverInvoices) {
+    if (!s || !s.id) continue;
+    const existingIdx = invoices.findIndex((i) => i.id === s.id);
+    const local = {
+      ...s,
+      id: s.id,
+      local_invoice_id: s.id,
+      server_invoice_id: s.id,
+      sync_status: "synced",
+      // server list endpoint doesn't include items/payments
+      items: invoices[existingIdx]?.items || [],
+      payments: invoices[existingIdx]?.payments || [],
+      updated_at: s.updated_at || invoices[existingIdx]?.updated_at || nowIso(),
+    };
+    if (existingIdx >= 0) invoices[existingIdx] = { ...invoices[existingIdx], ...local };
+    else invoices.push(local);
+  }
+
+  upsertLocalInvoices(businessId, invoices);
+}
+
+// Reconciles local cache with latest full server invoice ID list.
+// Keeps local drafts/pending actions, removes stale synced invoices that no longer exist on server.
+export function reconcileServerInvoiceCache(businessId, serverInvoiceIds = []) {
+  const idSet = new Set((serverInvoiceIds || []).filter(Boolean));
+  const invoices = loadLocalInvoices(businessId);
+  const next = invoices.filter((inv) => {
+    if (!inv) return false;
+    if (
+      inv.sync_status === "local_pending" ||
+      inv.sync_status === "local_draft" ||
+      inv.sync_status === "sync_failed"
+    ) {
+      return true;
+    }
+    const serverId = inv.server_invoice_id || inv.id;
+    return idSet.has(serverId);
+  });
+  upsertLocalInvoices(businessId, next);
+}
+
+export function upsertLocalInvoiceDetail(businessId, { invoice, items, payments } = {}) {
+  if (!invoice || !invoice.id) return;
+  const invoices = loadLocalInvoices(businessId);
+  const idx = invoices.findIndex((i) => i.id === invoice.id);
+  const base = idx >= 0 ? invoices[idx] : null;
+  const next = {
+    ...(base || {}),
+    ...invoice,
+    id: invoice.id,
+    local_invoice_id: invoice.id,
+    server_invoice_id: base?.server_invoice_id || invoice.id,
+    sync_status: base?.sync_status || "synced",
+    items: Array.isArray(items) ? items : base?.items || [],
+    payments: Array.isArray(payments) ? payments : base?.payments || [],
+    updated_at: invoice.updated_at || nowIso(),
+  };
+  if (idx >= 0) invoices[idx] = next;
+  else invoices.push(next);
+  upsertLocalInvoices(businessId, invoices);
+}
+
+export function loadLocalQueue(businessId) {
+  const raw = localStorage.getItem(getQueueKey(businessId));
+  const q = safeJsonParse(raw, []);
+  return Array.isArray(q) ? q : [];
+}
+
+export function setLocalQueue(businessId, queue) {
+  localStorage.setItem(getQueueKey(businessId), JSON.stringify(queue));
+}
+
+export function loadLocalPayments(businessId) {
+  const raw = localStorage.getItem(getPaymentsKey(businessId));
+  const payments = safeJsonParse(raw, []);
+  return Array.isArray(payments) ? payments : [];
+}
+
+export function upsertLocalPayments(businessId, payments) {
+  localStorage.setItem(getPaymentsKey(businessId), JSON.stringify(payments));
+}
+
+export function nextOfflineInvoiceNumber(businessId, yyyyMm) {
+  const counterKey = `${PREFIX}:biz:${businessId}:counter:${yyyyMm}`;
+  const current = safeJsonParse(localStorage.getItem(counterKey), 0);
+  const next = (Number(current) || 0) + 1;
+  localStorage.setItem(counterKey, JSON.stringify(next));
+  return `OFF-${yyyyMm}-${String(next).padStart(4, "0")}`;
+}
+
+export function dedupeInvoicesForOffline(invoices) {
+  // Prefer server-cached record (id === server_invoice_id) when both exist.
+  const map = new Map();
+  for (const inv of invoices || []) {
+    if (!inv) continue;
+    const serverKey = inv.server_invoice_id || inv.id;
+    const preferServer = inv.id && inv.server_invoice_id && inv.id === inv.server_invoice_id;
+    if (!map.has(serverKey)) {
+      map.set(serverKey, inv);
+      continue;
+    }
+    const existing = map.get(serverKey);
+    const existingPreferServer = existing?.id && existing?.server_invoice_id && existing?.id === existing?.server_invoice_id;
+    if (preferServer && !existingPreferServer) map.set(serverKey, inv);
+  }
+  return Array.from(map.values());
+}
+
+// Builds a local invoice object shaped like backend serialize_model output (enough for InvoiceRenderer).
+export function buildLocalInvoiceFromForm({ business, form, localInvoiceId, invoiceNumber }) {
+  const yyyyMm = new Date().toISOString().slice(0, 7).replace("-", "");
+  const issueDate = form.issue_date || new Date().toISOString().split("T")[0];
+  const dueDate = form.due_date || null;
+
+  const rawLines = (form.items || []).filter((it) => String(it?.description || "").trim());
+
+  const headerTaxRate = Number(form.tax_rate) || 0;
+  const perItem = Boolean(form.per_item_tax);
+  const items = rawLines.map((it) => {
+    const qty = Number(it.quantity) || 0;
+    const unitPrice = Number(it.unit_price) || 0;
+    const disc = Number(it.item_discount) || 0;
+    const taxable = Math.round((qty * unitPrice - disc) * 100) / 100;
+    const tr = perItem ? Number(it.line_tax_rate) || 0 : headerTaxRate;
+    const lineTaxAmount = tr ? Math.round(taxable * (tr / 100) * 100) / 100 : 0;
+    return {
+      product_id: it.product_id || null,
+      description: it.description,
+      hsn_code: it.hsn_code || null,
+      quantity: qty,
+      unit_price: unitPrice,
+      item_discount: disc,
+      total: taxable,
+      line_tax_rate: tr,
+      line_tax_amount: lineTaxAmount,
+    };
+  });
+
+  const subtotal = items.reduce((s, i) => s + (Number(i.total) || 0), 0);
+  const discountAmount = Number(form.discount_amount) || 0;
+  const lineTaxSum = items.reduce((s, i) => s + (Number(i.line_tax_amount) || 0), 0);
+  const taxAmountFinal = Math.round(lineTaxSum * 100) / 100;
+  const gst = splitGstTotal(taxAmountFinal, business?.state || "", form.buyer_state || "");
+  const storedHeaderTaxRate = perItem ? 0 : headerTaxRate;
+  const totalAmount = subtotal + taxAmountFinal - discountAmount;
+
+  const customFieldsFiltered = (form.custom_fields || [])
+    .filter((f) => f && f.label && f.value)
+    .map((f) => ({ label: f.label, value: f.value }));
+
+  return {
+    id: localInvoiceId,
+    local_invoice_id: localInvoiceId,
+    server_invoice_id: null,
+    sync_status: "local_pending", // or "synced"
+
+    status: "draft",
+    invoice_number: invoiceNumber || `OFF-${yyyyMm}-0001`,
+
+    client_name: form.client_name,
+    client_email: form.client_email || null,
+    client_address: form.client_address || null,
+    client_phone: form.client_phone || null,
+    client_gstin: clientGstinFromForm(form),
+    buyer_state: form.buyer_state || null,
+    place_of_supply: form.buyer_state || null,
+    supply_type: gst.supply_type,
+
+    issue_date: issueDate,
+    due_date: dueDate,
+
+    subtotal,
+    tax_rate: storedHeaderTaxRate,
+    tax_amount: taxAmountFinal,
+    discount_amount: discountAmount,
+
+    total_amount: totalAmount,
+    amount_paid: 0,
+    balance_due: totalAmount,
+
+    notes: form.notes || null,
+    payment_terms: form.payment_terms || null,
+    currency: form.currency || "INR",
+
+    cgst_rate: gst.cgst_rate,
+    cgst_amount: gst.cgst_amount,
+    sgst_rate: gst.sgst_rate,
+    sgst_amount: gst.sgst_amount,
+    igst_rate: gst.igst_rate,
+    igst_amount: gst.igst_amount,
+
+    items,
+    // Backend stores custom_fields as JSON string in DB.
+    custom_fields: customFieldsFiltered.length ? JSON.stringify(customFieldsFiltered) : null,
+
+    created_at: nowIso(),
+    updated_at: nowIso(),
+  };
+}
+
+export function enqueueCreateInvoice({ businessId, localInvoiceId, payload }) {
+  const queue = loadLocalQueue(businessId);
+  queue.push({
+    qid: uuid(),
+    type: "CREATE_INVOICE",
+    local_invoice_id: localInvoiceId,
+    payload: normalizeCreateInvoicePayload(payload),
+    created_at: nowIso(),
+    status: "pending",
+    retry_count: 0,
+  });
+  setLocalQueue(businessId, queue);
+}
+
+export function enqueueCreatePayment({ businessId, localInvoiceId, payload }) {
+  const queue = loadLocalQueue(businessId);
+  queue.push({
+    qid: uuid(),
+    type: "CREATE_PAYMENT",
+    local_invoice_id: localInvoiceId,
+    payload,
+    created_at: nowIso(),
+    status: "pending",
+    retry_count: 0,
+  });
+  setLocalQueue(businessId, queue);
+}
+
+export function createLocalInvoiceAndQueue({ businessId, business, form }) {
+  const localInvoiceId = uuid();
+  const yyyyMm = new Date().toISOString().slice(0, 7).replace("-", "");
+  const invoiceNumber = nextOfflineInvoiceNumber(businessId, yyyyMm);
+
+  const localInvoice = buildLocalInvoiceFromForm({
+    business,
+    form,
+    localInvoiceId,
+    invoiceNumber,
+  });
+
+  const invoices = loadLocalInvoices(businessId);
+  invoices.push(localInvoice);
+  upsertLocalInvoices(businessId, invoices);
+
+  // Payload to send to backend when syncing.
+  const cg = clientGstinFromForm(form);
+  const { client_gstin: _omitGstin, per_item_tax: _pit, items: _formItems, ...formRest } = form;
+  const lineItems = (form.items || []).filter((i) => String(i?.description || "").trim());
+  const headerTr = Number(form.tax_rate) || 0;
+  const perItem = Boolean(form.per_item_tax);
+  const invoicePayload = {
+    ...formRest,
+    tax_rate: perItem ? 0 : headerTr,
+    ...(cg ? { client_gstin: cg } : {}),
+    buyer_state: form.buyer_state || null,
+    place_of_supply: form.buyer_state || null,
+    custom_fields: (form.custom_fields || [])
+      .filter((f) => f && f.label && f.value)
+      .map((f) => ({ label: f.label, value: f.value })),
+    items: lineItems.map((i) => {
+      const base = {
+        product_id: i.product_id || null,
+        description: i.description,
+        hsn_code: i.hsn_code || null,
+        quantity: Number(i.quantity),
+        unit_price: Number(i.unit_price),
+        item_discount: Number(i.item_discount) || 0,
+      };
+      if (perItem) {
+        return { ...base, line_tax_rate: Number(i.line_tax_rate) || 0 };
+      }
+      return base;
+    }),
+  };
+
+  enqueueCreateInvoice({ businessId, localInvoiceId, payload: invoicePayload });
+  return localInvoice;
+}
+
+export function recordLocalPaymentAndQueue({ businessId, localInvoiceId, form }) {
+  // form matches InvoicePaymentCreate: { amount, payment_date, payment_method, reference, notes }
+  const invoices = loadLocalInvoices(businessId);
+  const inv = invoices.find((i) => i.id === localInvoiceId);
+  if (!inv) return null;
+
+  const amount = Number(form.amount) || 0;
+  const newPaid = Number(inv.amount_paid) + amount;
+  const newBalance = Math.max(0, Number(inv.total_amount) - newPaid);
+  const newStatus = newBalance <= 0 ? "paid" : "partially_paid";
+
+  inv.amount_paid = newPaid;
+  inv.balance_due = newBalance;
+  inv.status = newStatus;
+  inv.updated_at = nowIso();
+
+  upsertLocalInvoices(businessId, invoices);
+
+  const payload = {
+    amount,
+    payment_date: form.payment_date,
+    payment_method: form.payment_method,
+    reference: form.reference || null,
+    notes: form.notes || null,
+  };
+
+  enqueueCreatePayment({ businessId, localInvoiceId, payload });
+
+  // Also store a local payment list if needed later.
+  const payments = loadLocalPayments(businessId);
+  payments.push({
+    id: uuid(),
+    invoice_local_id: localInvoiceId,
+    ...payload,
+    created_at: nowIso(),
+    sync_status: "local_pending",
+  });
+  upsertLocalPayments(businessId, payments);
+
+  return inv;
+}
+
+export async function syncOfflineInvoiceQueue({ api, businessId }) {
+  if (!isOnline()) return { synced: 0, failed: 0, skipped: 0 };
+  const queue = compactQueue(loadLocalQueue(businessId));
+  setLocalQueue(businessId, queue);
+  if (!queue.length) return { synced: 0, failed: 0, skipped: 0 };
+
+  let synced = 0;
+  let failed = 0;
+  let skipped = 0;
+
+  // Keep order.
+  const nextQueue = [];
+  for (const action of queue) {
+    if (action.status !== "pending") {
+      nextQueue.push(action);
+      continue;
+    }
+    try {
+      if (action.type === "CREATE_INVOICE") {
+        const normalizedPayload = normalizeCreateInvoicePayload(action.payload);
+        const res = await api.post("/finance/invoices", normalizedPayload);
+        const serverInvoiceId = res?.data?.id;
+        const serverInvoiceNumber = res?.data?.invoice_number;
+        const invoices = loadLocalInvoices(businessId);
+        const inv = invoices.find((i) => i.id === action.local_invoice_id);
+        if (inv && serverInvoiceId) {
+          inv.server_invoice_id = serverInvoiceId;
+          inv.sync_status = "synced";
+          if (serverInvoiceNumber) inv.invoice_number = serverInvoiceNumber;
+          inv.updated_at = nowIso();
+          upsertLocalInvoices(businessId, invoices);
+        }
+        synced += 1;
+        continue; // do not re-add to nextQueue
+      }
+
+      if (action.type === "CREATE_PAYMENT") {
+        const localInv = getLocalInvoice(businessId, action.local_invoice_id);
+        const serverInvoiceId = localInv?.server_invoice_id;
+        if (!serverInvoiceId) {
+          // Invoice not synced yet; keep for later.
+          skipped += 1;
+          nextQueue.push(action);
+          continue;
+        }
+        await api.post(`/finance/invoices/${serverInvoiceId}/payments`, action.payload);
+        synced += 1;
+        // Payment sync successful; keep local invoice as-is (UI already updated).
+        continue;
+      }
+
+      // Unknown action: keep.
+      nextQueue.push(action);
+    } catch (e) {
+      failed += 1;
+      const status = e?.response?.status;
+      const detail = e?.response?.data?.detail;
+      const reason = typeof detail === "string" ? detail : JSON.stringify(detail || {});
+
+      // 4xx means payload/user-state issue; endless retries create noise and never recover.
+      if (isPermanentClientError(status)) {
+        if (action.type === "CREATE_INVOICE") {
+          const invoices = loadLocalInvoices(businessId);
+          const inv = invoices.find((i) => i.id === action.local_invoice_id);
+          if (inv) {
+            inv.sync_status = "sync_failed";
+            inv.sync_error = reason || `HTTP ${status}`;
+            inv.updated_at = nowIso();
+            upsertLocalInvoices(businessId, invoices);
+          }
+        }
+        continue;
+      }
+
+      // Retry only transient/server failures.
+      nextQueue.push({
+        ...action,
+        retry_count: Number(action.retry_count || 0) + 1,
+        status: "pending",
+      });
+    }
+  }
+
+  setLocalQueue(businessId, nextQueue);
+  return { synced, failed, skipped };
+}
+
+export async function retrySyncForInvoice({ api, businessId, localInvoiceId }) {
+  const queue = loadLocalQueue(businessId);
+  const hasPending = queue.some(
+    (q) => q.type === "CREATE_INVOICE" && q.local_invoice_id === localInvoiceId && q.status === "pending"
+  );
+  if (!hasPending) {
+    const inv = getLocalInvoice(businessId, localInvoiceId);
+    if (inv) {
+      const payload = normalizeCreateInvoicePayload({
+        client_name: inv.client_name || "",
+        client_email: inv.client_email || null,
+        client_address: inv.client_address || null,
+        client_phone: inv.client_phone || null,
+        client_gstin: inv.client_gstin || null,
+        buyer_state: inv.buyer_state || null,
+        place_of_supply: inv.place_of_supply || inv.buyer_state || null,
+        issue_date: inv.issue_date,
+        due_date: inv.due_date,
+        payment_terms: inv.payment_terms || null,
+        notes: inv.notes || null,
+        currency: inv.currency || "INR",
+        tax_rate: Number(inv.tax_rate) || 0,
+        discount_amount: Number(inv.discount_amount) || 0,
+        custom_fields: [],
+        items: Array.isArray(inv.items) ? inv.items : [],
+      });
+      enqueueCreateInvoice({ businessId, localInvoiceId, payload });
+    }
+  }
+  return syncOfflineInvoiceQueue({ api, businessId });
+}
+

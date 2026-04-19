@@ -1,0 +1,619 @@
+import React, { useState, useEffect, useCallback } from 'react';
+import { useAuth } from '../../contexts/AuthContext';
+import DashboardLayout from '../../components/layout/DashboardLayout';
+import { FileText, Download, TrendingUp, RefreshCw } from 'lucide-react';
+import { toast } from 'sonner';
+import { loadLocalInvoices, syncOfflineInvoiceQueue } from '../../lib/offlineInvoices';
+import { computeGstr3bComponentRows } from '../../shared-core';
+
+const fmt = (n) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 2 }).format(n || 0);
+
+// Get current month start/end
+const getMonthRange = (offset = 0) => {
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = now.getMonth() + offset;
+  const start = new Date(y, m, 1).toISOString().split('T')[0];
+  const end = new Date(y, m + 1, 0).toISOString().split('T')[0];
+  return { start, end };
+};
+
+const MONTHS = [
+  'January','February','March','April','May','June',
+  'July','August','September','October','November','December'
+];
+
+
+function DateInput({ value, onChange, className, required, placeholder }) {
+  const toDisplay = (v) => {
+    if (!v) return '';
+    const parts = v.split('-');
+    if (parts.length === 3) return `${parts[2]}/${parts[1]}/${parts[0]}`;
+    return v;
+  };
+  const [display, setDisplay] = React.useState(() => toDisplay(value));
+  React.useEffect(() => { setDisplay(toDisplay(value)); }, [value]);
+  const handleChange = (e) => {
+    let v = e.target.value.replace(/[^0-9/]/g, '');
+    if (v.length === 2 && display.length === 1) v += '/';
+    if (v.length === 5 && display.length === 4) v += '/';
+    if (v.length > 10) v = v.slice(0, 10);
+    setDisplay(v);
+    if (v.length === 10) {
+      const [d, m, y] = v.split('/');
+      if (d && m && y && y.length === 4)
+        onChange({ target: { value: `${y}-${m.padStart(2,'0')}-${d.padStart(2,'0')}` } });
+    } else if (v === '') onChange({ target: { value: '' } });
+  };
+  return <input type="text" className={className} value={display}
+    onChange={handleChange} placeholder={placeholder || "DD/MM/YYYY"}
+    maxLength={10} required={required} />;
+}
+
+export default function GSTReportsPage() {
+  const { api, business } = useAuth();
+  const [startDate, setStartDate] = useState(() => {
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
+  });
+  const [endDate, setEndDate] = useState(() => {
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0];
+  });
+  const [summary, setSummary] = useState(null);
+  const [gstr1, setGstr1] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [itc, setItc] = useState(null);
+  const [activeTab, setActiveTab] = useState('summary');
+  const [exportMode, setExportMode] = useState('combined');
+  const [syncing, setSyncing] = useState(false);
+
+  const [purchases, setPurchases] = useState(null);
+
+  const toNum = (n) => Number(n || 0);
+  const inRange = (d, start, end) => {
+    if (!d) return false;
+    return d >= start && d <= end;
+  };
+
+  const buildOfflineGst = () => {
+    const businessId = business?.id;
+    if (!businessId) return { invoices: [], rows: [], summary: null };
+    const locals = loadLocalInvoices(businessId) || [];
+    const pending = locals.filter((inv) =>
+      inv &&
+      inv.sync_status === 'local_pending' &&
+      !inv.server_invoice_id &&
+      inv.status !== 'cancelled' &&
+      inRange(inv.issue_date, startDate, endDate)
+    );
+
+    const rows = [];
+    for (const inv of pending) {
+      const items = inv.items || [];
+      for (const item of items) {
+        rows.push({
+          invoice_number: inv.invoice_number,
+          invoice_date: inv.issue_date || '',
+          customer_name: inv.client_name || '',
+          customer_gstin: '',
+          place_of_supply: inv.place_of_supply || inv.buyer_state || '',
+          supply_type: inv.supply_type || 'intrastate',
+          hsn_code: item.hsn_code || '',
+          description: item.description || '',
+          quantity: toNum(item.quantity),
+          unit_price: toNum(item.unit_price),
+          taxable_value: toNum(item.total),
+          tax_rate: toNum(inv.tax_rate),
+          cgst_rate: toNum(inv.cgst_rate),
+          cgst_amount: toNum(inv.cgst_amount),
+          sgst_rate: toNum(inv.sgst_rate),
+          sgst_amount: toNum(inv.sgst_amount),
+          igst_rate: toNum(inv.igst_rate),
+          igst_amount: toNum(inv.igst_amount),
+          invoice_value: toNum(inv.total_amount),
+          source: 'offline_pending',
+        });
+      }
+    }
+
+    const total_cgst = pending.reduce((s, i) => s + toNum(i.cgst_amount), 0);
+    const total_sgst = pending.reduce((s, i) => s + toNum(i.sgst_amount), 0);
+    const total_igst = pending.reduce((s, i) => s + toNum(i.igst_amount), 0);
+    const total_tax = total_cgst + total_sgst + total_igst;
+    const total_taxable_value = pending.reduce((s, i) => s + toNum(i.subtotal), 0);
+    const total_sales = pending.reduce((s, i) => s + toNum(i.total_amount), 0);
+    const intrastate_count = pending.filter((i) => (i.supply_type || 'intrastate') === 'intrastate').length;
+    const interstate_count = pending.filter((i) => (i.supply_type || '') === 'interstate').length;
+
+    return {
+      invoices: pending.map((x) => ({ ...x, source: 'offline_pending' })),
+      rows,
+      summary: {
+        total_invoices: pending.length,
+        total_taxable_value,
+        total_cgst,
+        total_sgst,
+        total_igst,
+        total_tax,
+        total_sales,
+        intrastate_count,
+        interstate_count,
+      },
+    };
+  };
+
+  const mergeGstData = (sumData, gstr1Data, offlineData) => {
+    const serverSummary = sumData?.summary || {};
+    const offlineSummary = offlineData?.summary || {};
+    const mergedSummary = {
+      total_invoices: toNum(serverSummary.total_invoices) + toNum(offlineSummary.total_invoices),
+      total_taxable_value: toNum(serverSummary.total_taxable_value) + toNum(offlineSummary.total_taxable_value),
+      total_cgst: toNum(serverSummary.total_cgst) + toNum(offlineSummary.total_cgst),
+      total_sgst: toNum(serverSummary.total_sgst) + toNum(offlineSummary.total_sgst),
+      total_igst: toNum(serverSummary.total_igst) + toNum(offlineSummary.total_igst),
+      total_tax: toNum(serverSummary.total_tax) + toNum(offlineSummary.total_tax),
+      total_sales: toNum(serverSummary.total_sales) + toNum(offlineSummary.total_sales),
+      intrastate_count: toNum(serverSummary.intrastate_count) + toNum(offlineSummary.intrastate_count),
+      interstate_count: toNum(serverSummary.interstate_count) + toNum(offlineSummary.interstate_count),
+      server_total_invoices: toNum(serverSummary.total_invoices),
+      offline_pending_invoices: toNum(offlineSummary.total_invoices),
+    };
+
+    const mergedInvoices = [...(sumData?.invoices || []), ...(offlineData?.invoices || [])];
+    const mergedRows = [...(gstr1Data?.rows || []), ...(offlineData?.rows || [])];
+
+    return {
+      summaryData: {
+        ...sumData,
+        summary: mergedSummary,
+        invoices: mergedInvoices,
+      },
+      gstr1Data: {
+        ...gstr1Data,
+        rows: mergedRows,
+        total_rows: mergedRows.length,
+      },
+    };
+  };
+
+  const runAutoSync = useCallback(async (showToast = false) => {
+    if (!business?.id) return false;
+    if (typeof navigator !== 'undefined' && !navigator.onLine) return false;
+    setSyncing(true);
+    try {
+      const res = await syncOfflineInvoiceQueue({ api, businessId: business.id });
+      if (showToast) {
+        const syncedCount = Number(res?.synced || 0);
+        if (syncedCount > 0) toast.success(`Synced ${syncedCount} offline invoice action(s)`);
+        else toast.success('Already up to date');
+      }
+      return true;
+    } catch {
+      if (showToast) toast.error('Sync failed');
+      return false;
+    } finally {
+      setSyncing(false);
+    }
+  }, [api, business?.id]);
+
+  useEffect(() => {
+    if (!business?.id) return;
+    const onOnline = () => {
+      runAutoSync(false).then(() => fetchData());
+    };
+    window.addEventListener('online', onOnline);
+    if (typeof navigator !== 'undefined' && navigator.onLine) {
+      runAutoSync(false).then(() => fetchData());
+    }
+    return () => window.removeEventListener('online', onOnline);
+    // fetchData intentionally omitted to avoid re-subscribing listener every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [business?.id, runAutoSync]);
+
+  const fetchData = async () => {
+    setLoading(true);
+    try {
+      if (business?.id && typeof navigator !== 'undefined' && navigator.onLine) {
+        await runAutoSync(false);
+      }
+      const [sumRes, gstr1Res] = await Promise.all([
+        api.get(`/finance/gst/summary?start_date=${startDate}&end_date=${endDate}`),
+        api.get(`/finance/gst/gstr1?start_date=${startDate}&end_date=${endDate}`)
+      ]);
+      const offlineData = buildOfflineGst();
+      const merged = mergeGstData(sumRes.data, gstr1Res.data, offlineData);
+      setSummary(merged.summaryData);
+      setGstr1(merged.gstr1Data);
+      try {
+        const itcRes = await api.get(`/purchases/itc/summary?start_date=${startDate}&end_date=${endDate}`);
+        setItc(itcRes.data);
+      } catch {
+        setItc({ total_purchases: 0, itc: { cgst: 0, sgst: 0, igst: 0, total: 0 } });
+      }
+    } catch {
+      toast.error('Failed to load GST data');
+    }
+    setLoading(false);
+  };
+
+  const exportToCSV = (rows, filename) => {
+    if (!rows || rows.length === 0) { toast.error('No data to export'); return; }
+    const headers = Object.keys(rows[0]);
+    const csv = [
+      headers.join(','),
+      ...rows.map(row => headers.map(h => {
+        const val = row[h] ?? '';
+        return typeof val === 'string' && val.includes(',') ? `"${val}"` : val;
+      }).join(','))
+    ].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = filename; a.click();
+    URL.revokeObjectURL(url);
+    toast.success(`${filename} downloaded`);
+  };
+
+  const exportGSTR1 = () => {
+    if (!gstr1?.rows) return;
+    const rows = gstr1.rows.filter((r) => {
+      if (exportMode === 'combined') return true;
+      if (exportMode === 'server_only') return (r.source || 'server') !== 'offline_pending';
+      return (r.source || '') === 'offline_pending';
+    });
+    exportToCSV(rows, `GSTR1_${exportMode}_${startDate}_to_${endDate}.csv`);
+  };
+
+  const exportSummary = () => {
+    if (!summary) return;
+    const invoices = (summary.invoices || []).filter((inv) => {
+      if (exportMode === 'combined') return true;
+      if (exportMode === 'server_only') return (inv.source || 'server') !== 'offline_pending';
+      return (inv.source || '') === 'offline_pending';
+    });
+    const rows = invoices?.map(inv => ({
+      'Invoice No': inv.invoice_number,
+      'Date': inv.issue_date,
+      'Customer': inv.client_name,
+      'Place of Supply': inv.place_of_supply || inv.buyer_state || '',
+      'Supply Type': inv.supply_type || 'intrastate',
+      'Taxable Value': inv.subtotal,
+      'Tax Rate %': inv.tax_rate,
+      'CGST %': inv.cgst_rate,
+      'CGST Amount': inv.cgst_amount,
+      'SGST %': inv.sgst_rate,
+      'SGST Amount': inv.sgst_amount,
+      'IGST %': inv.igst_rate,
+      'IGST Amount': inv.igst_amount,
+      'Total Amount': inv.total_amount,
+      'Status': inv.status,
+      'Source': inv.source === 'offline_pending' ? 'Offline Pending' : 'Server'
+    })) || [];
+    exportToCSV(rows, `GST_Summary_${exportMode}_${startDate}_to_${endDate}.csv`);
+  };
+
+  const s = summary?.summary;
+  const g3b = summary
+    ? computeGstr3bComponentRows(s || {}, itc?.itc || { cgst: 0, sgst: 0, igst: 0 })
+    : null;
+
+  return (
+    <DashboardLayout>
+      <div className="space-y-6">
+        {/* Header */}
+        <div className="flex items-center justify-between flex-wrap gap-3">
+          <div>
+            <h1 className="font-display text-2xl text-white">GST Reports</h1>
+            <p className="text-sm text-gray-500 mt-1">GSTR-1 · Tax Summary · Export for CA</p>
+          </div>
+        </div>
+
+        {/* Date Filter */}
+        <div className="glass-card rounded-2xl p-4 flex flex-wrap items-end gap-4">
+          <div>
+            <label className="text-xs text-gray-500 block mb-1">From Date</label>
+            <DateInput className="input-premium text-sm h-9" value={startDate} onChange={e => setStartDate(e.target.value)} />
+          </div>
+          <div>
+            <label className="text-xs text-gray-500 block mb-1">To Date</label>
+            <DateInput className="input-premium text-sm h-9" value={endDate} onChange={e => setEndDate(e.target.value)} />
+          </div>
+          {/* Quick month selectors */}
+          <div className="flex flex-wrap gap-1.5">
+            {[
+              { label: 'This Month', offset: 0 },
+              { label: 'Last Month', offset: -1 },
+              { label: '2 Months Ago', offset: -2 }
+            ].map(({ label, offset }) => {
+              const now = new Date();
+              const y = now.getFullYear();
+              const m = now.getMonth() + offset;
+              const s = new Date(y, m, 1).toISOString().split('T')[0];
+              const e = new Date(y, m + 1, 0).toISOString().split('T')[0];
+              return (
+                <button key={offset} onClick={() => { setStartDate(s); setEndDate(e); }}
+                  className="text-xs px-3 py-1.5 rounded-lg border border-white/10 text-gray-400 hover:text-white hover:border-white/20 transition-all">
+                  {label}
+                </button>
+              );
+            })}
+          </div>
+          <button onClick={fetchData} disabled={loading}
+            className="btn-premium btn-primary flex items-center gap-2 h-9 text-sm">
+            <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
+            {loading ? 'Loading...' : 'Generate Report'}
+          </button>
+          <button onClick={() => runAutoSync(true).then(fetchData)} disabled={syncing}
+            className="btn-premium btn-secondary flex items-center gap-2 h-9 text-sm">
+            <RefreshCw size={14} className={syncing ? 'animate-spin' : ''} />
+            {syncing ? 'Syncing...' : 'Sync Now'}
+          </button>
+        </div>
+
+        {summary && (
+          <>
+            {/* Summary Cards */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+              {[
+                { label: 'Total Sales', value: fmt(s.total_sales), color: 'text-gold-400', sub: `${s.total_invoices} invoices` },
+                { label: 'Total Taxable Value', value: fmt(s.total_taxable_value), color: 'text-blue-400', sub: 'Before tax' },
+                { label: 'Total GST Collected', value: fmt(s.total_tax), color: 'text-emerald-400', sub: 'Output tax liability' },
+                { label: 'Net GST Payable', value: fmt(Math.max(0, s.total_tax - (itc?.itc?.total || 0))), color: 'text-rose-400', sub: 'After ITC (add purchases)' },
+              ].map(card => (
+                <div key={card.label} className="glass-card rounded-2xl p-4">
+                  <p className="text-xs text-gray-500 mb-1">{card.label}</p>
+                  <p className={`text-xl font-bold ${card.color}`}>{card.value}</p>
+                  <p className="text-[10px] text-gray-600 mt-1">{card.sub}</p>
+                </div>
+              ))}
+            </div>
+
+            {s.offline_pending_invoices > 0 && (
+              <div className="glass-card rounded-2xl p-3 border border-amber-500/20 bg-amber-500/5">
+                <p className="text-xs text-amber-300">
+                  Included offline pending invoices: <span className="font-semibold">{s.offline_pending_invoices}</span>{' '}
+                  (server invoices: {s.server_total_invoices})
+                </p>
+              </div>
+            )}
+
+            {/* GST Breakdown */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+              <div className="glass-card rounded-2xl p-5">
+                <p className="text-xs text-gray-500 uppercase tracking-wider mb-3">CGST (Intra-State)</p>
+                <p className="text-2xl font-bold text-blue-400">{fmt(s.total_cgst)}</p>
+                <p className="text-xs text-gray-600 mt-1">{s.intrastate_count} intra-state invoices</p>
+              </div>
+              <div className="glass-card rounded-2xl p-5">
+                <p className="text-xs text-gray-500 uppercase tracking-wider mb-3">SGST (Intra-State)</p>
+                <p className="text-2xl font-bold text-blue-400">{fmt(s.total_sgst)}</p>
+                <p className="text-xs text-gray-600 mt-1">Equal to CGST</p>
+              </div>
+              <div className="glass-card rounded-2xl p-5">
+                <p className="text-xs text-gray-500 uppercase tracking-wider mb-3">IGST (Inter-State)</p>
+                <p className="text-2xl font-bold text-purple-400">{fmt(s.total_igst)}</p>
+                <p className="text-xs text-gray-600 mt-1">{s.interstate_count} inter-state invoices</p>
+              </div>
+            </div>
+
+            {/* Tabs */}
+            <div className="flex gap-2 border-b border-white/5 pb-0">
+              {['summary', 'gstr1'].map(tab => (
+                <button key={tab} onClick={() => setActiveTab(tab)}
+                  className={`text-sm px-4 py-2 rounded-t-xl transition-all ${activeTab === tab ? 'bg-white/10 text-white' : 'text-gray-500 hover:text-gray-300'}`}>
+                  {tab === 'summary' ? 'Sales Register' : 'GSTR-1 Detail'}
+                </button>
+              ))}
+            </div>
+
+            {/* Sales Register */}
+            {activeTab === 'summary' && (
+              <div className="glass-card rounded-2xl overflow-hidden">
+                <div className="flex items-center justify-between px-5 py-3 border-b border-white/5">
+                  <p className="text-sm font-semibold text-white">Sales Register ({s.total_invoices} invoices)</p>
+                  <div className="flex items-center gap-2">
+                    <select
+                      value={exportMode}
+                      onChange={(e) => setExportMode(e.target.value)}
+                      className="input-premium text-xs h-8"
+                    >
+                      <option value="combined">Combined</option>
+                      <option value="server_only">Server only</option>
+                      <option value="offline_only">Offline pending only</option>
+                    </select>
+                    <button onClick={exportSummary} className="btn-premium btn-secondary text-xs flex items-center gap-1.5 py-1.5 px-3">
+                      <Download size={13} /> Export CSV
+                    </button>
+                  </div>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="bg-white/[0.02] border-b border-white/5">
+                        {['Invoice No','Date','Customer','Supply Type','Taxable','CGST','SGST','IGST','Total'].map(h => (
+                          <th key={h} className="px-4 py-2.5 text-left text-gray-500 font-semibold uppercase tracking-wider whitespace-nowrap">{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {summary.invoices?.map(inv => (
+                        <tr key={inv.id} className="border-b border-white/[0.03] hover:bg-white/[0.02]">
+                          <td className="px-4 py-2.5 font-mono text-white whitespace-nowrap">{inv.invoice_number}</td>
+                          <td className="px-4 py-2.5 text-gray-400 whitespace-nowrap">{inv.issue_date}</td>
+                          <td className="px-4 py-2.5 text-white max-w-32 truncate">{inv.client_name}</td>
+                          <td className="px-4 py-2.5">
+                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${
+                              inv.supply_type === 'interstate'
+                                ? 'bg-purple-500/20 text-purple-400 border border-purple-500/20'
+                                : 'bg-blue-500/20 text-blue-400 border border-blue-500/20'
+                            }`}>
+                              {inv.supply_type === 'interstate' ? 'IGST' : 'CGST+SGST'}
+                            </span>
+                          </td>
+                          <td className="px-4 py-2.5 text-right text-gray-300">{fmt(inv.subtotal)}</td>
+                          <td className="px-4 py-2.5 text-right text-blue-400">{inv.cgst_amount > 0 ? fmt(inv.cgst_amount) : '—'}</td>
+                          <td className="px-4 py-2.5 text-right text-blue-400">{inv.sgst_amount > 0 ? fmt(inv.sgst_amount) : '—'}</td>
+                          <td className="px-4 py-2.5 text-right text-purple-400">{inv.igst_amount > 0 ? fmt(inv.igst_amount) : '—'}</td>
+                          <td className="px-4 py-2.5 text-right font-bold text-gold-400">{fmt(inv.total_amount)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot>
+                      <tr className="bg-white/[0.03] border-t border-white/10">
+                        <td colSpan={4} className="px-4 py-3 text-xs font-bold text-white">TOTAL</td>
+                        <td className="px-4 py-3 text-right text-xs font-bold text-white">{fmt(s.total_taxable_value)}</td>
+                        <td className="px-4 py-3 text-right text-xs font-bold text-blue-400">{fmt(s.total_cgst)}</td>
+                        <td className="px-4 py-3 text-right text-xs font-bold text-blue-400">{fmt(s.total_sgst)}</td>
+                        <td className="px-4 py-3 text-right text-xs font-bold text-purple-400">{fmt(s.total_igst)}</td>
+                        <td className="px-4 py-3 text-right text-xs font-bold text-gold-400">{fmt(s.total_sales)}</td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {/* GSTR-1 Detail */}
+            {activeTab === 'gstr1' && (
+              <div className="glass-card rounded-2xl overflow-hidden">
+                <div className="flex items-center justify-between px-5 py-3 border-b border-white/5">
+                  <p className="text-sm font-semibold text-white">GSTR-1 ({gstr1?.total_rows} line items)</p>
+                  <div className="flex items-center gap-2">
+                    <select
+                      value={exportMode}
+                      onChange={(e) => setExportMode(e.target.value)}
+                      className="input-premium text-xs h-8"
+                    >
+                      <option value="combined">Combined</option>
+                      <option value="server_only">Server only</option>
+                      <option value="offline_only">Offline pending only</option>
+                    </select>
+                    <button onClick={exportGSTR1} className="btn-premium btn-primary text-xs flex items-center gap-1.5 py-1.5 px-3">
+                      <Download size={13} /> Export for GST Portal
+                    </button>
+                  </div>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="bg-white/[0.02] border-b border-white/5">
+                        {['Invoice No','Date','Customer','Place of Supply','HSN','Description','Qty','Rate','Taxable','Tax%','CGST','SGST','IGST','Total'].map(h => (
+                          <th key={h} className="px-3 py-2.5 text-left text-gray-500 font-semibold uppercase tracking-wider whitespace-nowrap">{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {gstr1?.rows?.map((row, i) => (
+                        <tr key={i} className="border-b border-white/[0.03] hover:bg-white/[0.02]">
+                          <td className="px-3 py-2 font-mono text-white whitespace-nowrap">{row.invoice_number}</td>
+                          <td className="px-3 py-2 text-gray-400 whitespace-nowrap">{row.invoice_date}</td>
+                          <td className="px-3 py-2 text-white max-w-24 truncate">{row.customer_name}</td>
+                          <td className="px-3 py-2 text-gray-400">{row.place_of_supply || '—'}</td>
+                          <td className="px-3 py-2 font-mono text-gray-400">{row.hsn_code || '—'}</td>
+                          <td className="px-3 py-2 text-gray-300 max-w-32 truncate">{row.description}</td>
+                          <td className="px-3 py-2 text-right text-gray-400">{row.quantity}</td>
+                          <td className="px-3 py-2 text-right text-gray-400">{fmt(row.unit_price)}</td>
+                          <td className="px-3 py-2 text-right text-gray-300">{fmt(row.taxable_value)}</td>
+                          <td className="px-3 py-2 text-right text-gray-400">{row.tax_rate}%</td>
+                          <td className="px-3 py-2 text-right text-blue-400">{row.cgst_amount > 0 ? fmt(row.cgst_amount) : '—'}</td>
+                          <td className="px-3 py-2 text-right text-blue-400">{row.sgst_amount > 0 ? fmt(row.sgst_amount) : '—'}</td>
+                          <td className="px-3 py-2 text-right text-purple-400">{row.igst_amount > 0 ? fmt(row.igst_amount) : '—'}</td>
+                          <td className="px-3 py-2 text-right font-bold text-gold-400">{fmt(row.invoice_value)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  {(!gstr1?.rows || gstr1.rows.length === 0) && (
+                    <div className="py-12 text-center text-gray-500 text-sm">No data for selected period</div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* ITC Summary */}
+            {itc && (
+              <div className="glass-card rounded-2xl p-5 border border-emerald-500/20">
+                <div className="flex items-center gap-2 mb-4">
+                  <FileText size={16} className="text-emerald-400" />
+                  <h3 className="text-sm font-semibold text-white">Input Tax Credit (ITC) — From Purchases</h3>
+                </div>
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                  {[
+                    { label: 'Total Purchases', value: itc.total_purchases, color: 'text-white' },
+                    { label: 'ITC CGST', value: itc.itc?.cgst, color: 'text-emerald-400' },
+                    { label: 'ITC SGST', value: itc.itc?.sgst, color: 'text-emerald-400' },
+                    { label: 'ITC IGST', value: itc.itc?.igst, color: 'text-emerald-400' },
+                  ].map(c => (
+                    <div key={c.label}>
+                      <p className="text-[10px] text-gray-500 uppercase tracking-wider">{c.label}</p>
+                      <p className={`text-lg font-bold mt-1 ${c.color}`}>{fmt(c.value)}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* GSTR-3B Summary */}
+            <div className="glass-card rounded-2xl p-5 border border-gold-500/20">
+              <div className="flex items-center gap-2 mb-4">
+                <FileText size={16} className="text-gold-400" />
+                <h3 className="text-sm font-semibold text-white">GSTR-3B Summary</h3>
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-gold-500/10 text-gold-400 border border-gold-500/20">Share with CA</span>
+              </div>
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+                <div><p className="text-[10px] text-gray-500 uppercase tracking-wider">Outward Taxable</p><p className="text-lg font-bold text-white mt-1">{fmt(s.total_taxable_value)}</p></div>
+                <div><p className="text-[10px] text-gray-500 uppercase tracking-wider">Output Tax</p><p className="text-lg font-bold text-rose-400 mt-1">{fmt(s.total_tax)}</p></div>
+                <div><p className="text-[10px] text-gray-500 uppercase tracking-wider">Total ITC</p><p className="text-lg font-bold text-emerald-400 mt-1">{fmt(itc?.itc?.total || 0)}</p></div>
+                <div><p className="text-[10px] text-gray-500 uppercase tracking-wider">Net GST Payable</p><p className="text-xl font-bold text-gold-400 mt-1">{fmt(Math.max(0, s.total_tax - (itc?.itc?.total || 0)))}</p></div>
+              </div>
+              <div className="grid grid-cols-3 gap-3">
+                {g3b &&
+                  [
+                    { label: 'CGST', row: g3b.cgst },
+                    { label: 'SGST', row: g3b.sgst },
+                    { label: 'IGST', row: g3b.igst, cross: true },
+                  ].map(({ label, row, cross }) => (
+                    <div key={label} className="p-3 rounded-xl bg-white/[0.02] border border-white/5">
+                      <p className="text-xs font-semibold text-gray-400 mb-2">{label}</p>
+                      <div className="flex justify-between text-xs">
+                        <span className="text-gray-500">Output</span>
+                        <span className="text-rose-400">{fmt(row.output)}</span>
+                      </div>
+                      <div className="flex justify-between text-xs mt-1">
+                        <span className="text-gray-500">ITC</span>
+                        <span className="text-emerald-400">{row.itc > 0 ? `-${fmt(row.itc)}` : fmt(0)}</span>
+                      </div>
+                      {cross && row.itc > (itc?.itc?.igst || 0) + 1e-6 && (
+                        <p className="text-[10px] text-gray-500 mt-1 leading-snug">
+                          Includes CGST/SGST ITC set off against IGST output (Rule 88A).
+                        </p>
+                      )}
+                      <div className="flex justify-between text-xs mt-1 pt-1 border-t border-white/5 font-bold">
+                        <span className="text-white">Net</span>
+                        <span className="text-gold-400">{fmt(row.net)}</span>
+                      </div>
+                    </div>
+                  ))}
+              </div>
+              {g3b && (
+                <p className="text-[10px] text-gray-500 mt-3 leading-relaxed">
+                  CGST/SGST ITC may be cross-utilized against IGST output as per GST rules. Net GST Payable above is unchanged
+                  (total output tax minus total ITC).
+                </p>
+              )}
+            </div>
+        )}
+          </>
+        )}
+
+        {!summary && !loading && (
+          <div className="glass-card rounded-2xl py-16 text-center">
+            <TrendingUp size={40} className="mx-auto mb-3 text-gray-600" />
+            <p className="text-gray-500 text-sm">Select a date range and click Generate Report</p>
+          </div>
+        )}
+      </div>
+    </DashboardLayout>
+  );
+}

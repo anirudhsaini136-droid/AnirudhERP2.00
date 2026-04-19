@@ -1,0 +1,29 @@
+{
+  "name": "nexaerp-android-app",
+  "version": "0.1.0",
+  "private": true,
+  "main": "index.js",
+  "scripts": {
+    "start": "expo start",
+    "android": "expo run:android",
+    "ios": "expo run:ios",
+    "build:apk": "npx eas-cli build -p android --profile production",
+    "ota:prod": "npx eas-cli update --branch production --message \"OTA update\""
+  },
+  "dependencies": {
+    "@react-native-async-storage/async-storage": "1.23.1",
+    "@react-navigation/drawer": "^6.6.15",
+    "@react-navigation/native": "^6.1.18",
+    "@react-navigation/native-stack": "^6.11.0",
+    "expo": "^51.0.28",
+    "expo-constants": "~16.0.2",
+    "expo-updates": "~0.25.28",
+    "react": "18.2.0",
+    "react-native": "0.74.5",
+    "react-native-gesture-handler": "~2.16.1",
+    "react-native-razorpay": "^2.3.1",
+    "react-native-reanimated": "~3.10.1",
+    "react-native-safe-area-context": "4.10.5",
+    "react-native-screens": "3.31.1"
+  }
+}

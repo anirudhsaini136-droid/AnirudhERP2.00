@@ -1,0 +1,29 @@
+{
+  "name": "nexaerp-windows-app",
+  "version": "0.1.0",
+  "private": true,
+  "erpWebOrigin": "https://erp.thenextwebsolution.com",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --win"
+  },
+  "dependencies": {
+    "electron-log": "^5.2.0",
+    "electron-updater": "^6.3.9"
+  },
+  "devDependencies": {
+    "electron": "^31.4.0",
+    "electron-builder": "^24.13.3"
+  },
+  "build": {
+    "appId": "com.nexuserp.desktop",
+    "productName": "NexaERP",
+    "files": [
+      "**/*"
+    ],
+    "win": {
+      "target": "nsis"
+    }
+  }
+}
