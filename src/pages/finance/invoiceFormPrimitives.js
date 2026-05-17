@@ -52,6 +52,7 @@ export function padInvoiceItemsTrailingBlank(items) {
 
 export function hasInvoiceFormAnyData(f) {
   if (!f) return false;
+  if ((f.invoice_number || '').trim()) return true;
   if ((f.client_name || '').trim()) return true;
   if ((f.client_phone || '').trim()) return true;
   if ((f.client_email || '').trim()) return true;

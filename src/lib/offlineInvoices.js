@@ -78,8 +78,10 @@ function normalizeCreateInvoicePayload(payload) {
           ...(i.line_tax_rate != null ? { line_tax_rate: Number(i.line_tax_rate) || 0 } : {}),
         }))
     : [];
+  const invoiceNumber = String(p.invoice_number || "").trim();
   return {
     ...p,
+    ...(invoiceNumber ? { invoice_number: invoiceNumber } : {}),
     issue_date: issueDate,
     due_date: dueDate,
     customer_id: nullableId(p.customer_id),
@@ -310,7 +312,7 @@ export function buildLocalInvoiceFromForm({ business, form, localInvoiceId, invo
     sync_status: "local_pending", // or "synced"
 
     status: "draft",
-    invoice_number: invoiceNumber || `OFF-${yyyyMm}-0001`,
+    invoice_number: invoiceNumber || "",
 
     client_name: form.client_name,
     client_email: form.client_email || null,
@@ -377,7 +379,7 @@ export function updateLocalPendingInvoiceFromForm({ businessId, localInvoiceId, 
     business,
     form,
     localInvoiceId,
-    invoiceNumber: prev.invoice_number,
+    invoiceNumber: String(form.invoice_number || "").trim() || prev.invoice_number,
   });
   const amountPaid = Number(prev.amount_paid) || 0;
   const balanceDue = Math.max(0, Number(rebuilt.total_amount) - amountPaid);
@@ -398,6 +400,7 @@ export function updateLocalPendingInvoiceFromForm({ businessId, localInvoiceId, 
   upsertLocalInvoices(businessId, invoices);
 
   const payload = normalizeCreateInvoicePayload({
+    invoice_number: String(form.invoice_number || "").trim() || prev.invoice_number,
     client_name: form.client_name,
     client_email: form.client_email || null,
     client_address: form.client_address || null,
@@ -462,8 +465,10 @@ export function enqueueCreatePayment({ businessId, localInvoiceId, payload }) {
 
 export function createLocalInvoiceAndQueue({ businessId, business, form }) {
   const localInvoiceId = uuid();
-  const yyyyMm = new Date().toISOString().slice(0, 7).replace("-", "");
-  const invoiceNumber = nextOfflineInvoiceNumber(businessId, yyyyMm);
+  const invoiceNumber = String(form.invoice_number || "").trim();
+  if (!invoiceNumber) {
+    throw new Error("Invoice number is required");
+  }
 
   const localInvoice = buildLocalInvoiceFromForm({
     business,
@@ -484,6 +489,7 @@ export function createLocalInvoiceAndQueue({ businessId, business, form }) {
   const perItem = Boolean(form.per_item_tax);
   const invoicePayload = {
     ...formRest,
+    invoice_number: invoiceNumber,
     tax_rate: perItem ? 0 : headerTr,
     ...(cg ? { client_gstin: cg } : {}),
     buyer_state: form.buyer_state || null,

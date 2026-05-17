@@ -56,6 +56,7 @@ export default function CreateInvoicePage() {
 
   const today = new Date().toISOString().split('T')[0];
   const [form, setForm] = useState({
+    invoice_number: '',
     customer_id: '',
     client_name: '',
     client_email: '',
@@ -126,6 +127,7 @@ export default function CreateInvoicePage() {
     setShowItemDiscount(itemDisc);
     setShowCustomFields(hasCF);
     setForm({
+      invoice_number: '',
       customer_id: '',
       client_name: '',
       client_email: '',
@@ -171,6 +173,7 @@ export default function CreateInvoicePage() {
         if (lines.some((i) => Number(i.item_discount) > 0)) setShowItemDiscount(true);
         if (customFields.length) setShowCustomFields(true);
         setForm({
+          invoice_number: inv.invoice_number || '',
           customer_id: inv.customer_id || '',
           client_name: inv.client_name || '',
           client_email: inv.client_email || '',
@@ -274,6 +277,7 @@ export default function CreateInvoicePage() {
     if (!inv) return;
     setActiveDraftId(inv.id);
     setForm({
+      invoice_number: inv.invoice_number || '',
       client_name: inv.client_name || '',
       customer_id: inv.customer_id || '',
       client_email: inv.client_email || '',
@@ -526,7 +530,7 @@ export default function CreateInvoicePage() {
     const sellerState = invoiceBiz?.state || business?.state || '';
     const gst = splitGstTotal(taxAmount, sellerState, form.buyer_state || '');
     return {
-      invoice_number: 'PREVIEW',
+      invoice_number: (form.invoice_number || '').trim() || 'PREVIEW',
       client_name: form.client_name || 'Customer name',
       client_phone: form.client_phone,
       client_email: form.client_email,
@@ -608,6 +612,11 @@ export default function CreateInvoicePage() {
 
   const handleCreate = async (e) => {
     e.preventDefault();
+    const invoiceNumber = String(form.invoice_number || '').trim();
+    if (!invoiceNumber) {
+      toast.error('Invoice number is required (e.g. 26-27/001)');
+      return;
+    }
     if (!form.due_date) {
       toast.error('Due date is required');
       return;
@@ -631,6 +640,7 @@ export default function CreateInvoicePage() {
     const { client_gstin: _omitGstin, per_item_tax: _pit, items: _it, ...formWithoutGstin } = form;
     const makePayload = (ignoreCreditLimitWarning = false) => ({
       ...formWithoutGstin,
+      invoice_number: invoiceNumber,
       tax_rate: form.per_item_tax ? 0 : Number(form.tax_rate) || 0,
       ...(partyGstin ? { client_gstin: partyGstin } : {}),
       buyer_state: form.buyer_state || null,
@@ -704,6 +714,10 @@ export default function CreateInvoicePage() {
         }
         return;
       }
+      if (err?.response?.status === 409 && typeof detail === 'string') {
+        toast.error(detail);
+        return;
+      }
       const status = Number(err?.response?.status || 0);
       if (typeof navigator !== 'undefined' && navigator.onLine && status > 0) {
         const msg =
@@ -747,8 +761,10 @@ export default function CreateInvoicePage() {
       const linesForSave = filterInvoiceItemsForSave(form.items);
       const partyGstin = normalizePartyGstin(form.client_gstin);
       const { client_gstin: _omitGstin, per_item_tax: _pit, items: _it, ...formWithoutGstin } = form;
+      const invNum = String(form.invoice_number || '').trim();
       const payload = {
         ...formWithoutGstin,
+        invoice_number: invNum,
         tax_rate: form.per_item_tax ? 0 : Number(form.tax_rate) || 0,
         ...(partyGstin ? { client_gstin: partyGstin } : {}),
         buyer_state: form.buyer_state || null,
@@ -904,6 +920,17 @@ export default function CreateInvoicePage() {
                 <button type="button" onClick={addByBarcode} className="btn-premium btn-secondary">Add</button>
               </div>
               <div className="grid grid-cols-2 gap-3">
+                <div className="col-span-2">
+                  <Label className="text-gray-400 text-xs">Invoice Number *</Label>
+                  <Input
+                    className="input-premium mt-1 font-mono"
+                    value={form.invoice_number}
+                    onChange={(e) => setForm({ ...form, invoice_number: e.target.value })}
+                    placeholder="e.g. 26-27/001"
+                    required
+                  />
+                  <p className="text-[10px] text-gray-500 mt-1">Enter your own series (financial year / serial). Must be unique.</p>
+                </div>
                 <div>
                   <Label className="text-gray-400 text-xs">Client Name *</Label>
                   <ClientSearch
