@@ -5,9 +5,11 @@ import DashboardLayout from '../../components/layout/DashboardLayout';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../../components/ui/dialog';
 import { Input } from '../../components/ui/input';
 import { Label } from '../../components/ui/label';
-import { Plus, Search, Eye, CheckCircle, Trash2, Bell, RefreshCw } from 'lucide-react';
+import { Plus, Search, Eye, Download, CheckCircle, Trash2, Bell, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 import { toastAfterWhatsAppOpen } from '../../utils/whatsappToast';
+import { downloadElementAsPdf } from '../../utils/exportInvoicePdf';
+import InvoiceRenderer from './InvoiceRenderer';
 import {
   loadLocalInvoices,
   reconcileServerInvoiceCache,
@@ -19,6 +21,7 @@ import {
   dedupeInvoicesForOffline,
   pruneExpiredLocalDrafts,
   countDraftInvoices,
+  getLocalInvoice,
 } from '../../lib/offlineInvoices';
 import { DateInput } from './invoiceFormPrimitives';
 
@@ -47,6 +50,8 @@ export default function InvoicesPage() {
   const [whatsappApiReady, setWhatsappApiReady] = useState(false);
   const [offlineNow, setOfflineNow] = useState(typeof navigator !== 'undefined' ? !navigator.onLine : true);
   const [selectedInvoiceIds, setSelectedInvoiceIds] = useState([]);
+  const [downloadingId, setDownloadingId] = useState(null);
+  const [pdfJob, setPdfJob] = useState(null);
 
   useEffect(() => {
     const on = () => setOfflineNow(!navigator.onLine);
@@ -201,9 +206,107 @@ export default function InvoicesPage() {
         const b = r.data?.business || {};
         setBusinessName(b.name || '');
         setWhatsappApiReady(Boolean((b.wati_api_endpoint || '').trim() && (b.wati_api_token || '').trim()));
+        try {
+          if (business?.id && b) {
+            localStorage.setItem(`offline_business_cache_${business.id}`, JSON.stringify(b));
+          }
+        } catch { /* ignore */ }
       })
       .catch(() => {});
-  }, [api]);
+  }, [api, business?.id]);
+
+  useEffect(() => {
+    if (!pdfJob) return undefined;
+    let cancelled = false;
+    const t = window.setTimeout(async () => {
+      try {
+        const el = document.getElementById('invoice-print');
+        if (!el || cancelled) return;
+        await downloadElementAsPdf(el, pdfJob.filename);
+        if (!cancelled) toast.success('PDF downloaded');
+      } catch (e) {
+        if (!cancelled) {
+          console.error(e);
+          toast.error('Could not download PDF. Open the invoice and try again.');
+        }
+      } finally {
+        if (!cancelled) {
+          setPdfJob(null);
+          setDownloadingId(null);
+        }
+      }
+    }, 1800);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(t);
+    };
+  }, [pdfJob]);
+
+  const getCachedBusiness = () => {
+    try {
+      if (business?.id) {
+        const raw = localStorage.getItem(`offline_business_cache_${business.id}`);
+        if (raw) return JSON.parse(raw);
+      }
+    } catch { /* ignore */ }
+    return business || null;
+  };
+
+  const downloadInvoicePdf = async (inv) => {
+    if (!inv?.id) return;
+    setDownloadingId(inv.id);
+    try {
+      const isLocalOnly =
+        inv.sync_status === 'local_pending' ||
+        inv.sync_status === 'sync_failed' ||
+        inv.sync_status === 'local_draft' ||
+        !inv.server_invoice_id;
+
+      let invoiceData;
+      let items = [];
+      let payments = [];
+      let biz = getCachedBusiness();
+
+      if (isLocalOnly && business?.id) {
+        const local = getLocalInvoice(business.id, inv.id);
+        if (!local) throw new Error('Invoice not found on this device');
+        invoiceData = local;
+        items = local.items || [];
+        payments = local.payments || [];
+      } else {
+        const serverId = inv.server_invoice_id || inv.id;
+        const offline = typeof navigator !== 'undefined' && !navigator.onLine;
+        if (offline) {
+          const local = business?.id ? getLocalInvoice(business.id, inv.id) : null;
+          if (!local) throw new Error('Go online to download this invoice');
+          invoiceData = local;
+          items = local.items || [];
+          payments = local.payments || [];
+        } else {
+          const [invRes, settingsRes] = await Promise.all([
+            api.get(`/finance/invoices/${serverId}`),
+            api.get('/dashboard/settings').catch(() => null),
+          ]);
+          invoiceData = invRes.data.invoice;
+          items = invRes.data.items || [];
+          payments = invRes.data.payments || [];
+          if (settingsRes?.data?.business) {
+            biz = settingsRes.data.business;
+            try {
+              localStorage.setItem(`offline_business_cache_${business.id}`, JSON.stringify(biz));
+            } catch { /* ignore */ }
+          }
+        }
+      }
+
+      const filename = String(inv.invoice_number || inv.id || 'invoice').replace(/[^\w.\-]+/g, '_');
+      setPdfJob({ invoice: invoiceData, items, business: biz, payments, filename });
+    } catch (e) {
+      const detail = e?.response?.data?.detail;
+      toast.error(typeof detail === 'string' ? detail : e.message || 'Could not load invoice for PDF');
+      setDownloadingId(null);
+    }
+  };
 
   const handleDeleteConfirmed = async () => {
     if (!deleteConfirm) return;
@@ -555,6 +658,15 @@ export default function InvoicesPage() {
                   <td className="text-right">
                     <div className="flex items-center justify-end gap-1">
                       <button
+                        type="button"
+                        onClick={() => downloadInvoicePdf(inv)}
+                        disabled={downloadingId === inv.id}
+                        className="p-1.5 text-gold-400 hover:text-gold-300 disabled:opacity-40"
+                        title="Download PDF"
+                      >
+                        <Download size={15} className={downloadingId === inv.id ? 'animate-pulse' : ''} />
+                      </button>
+                      <button
                         onClick={() =>
                           ['local_draft', 'local_pending', 'sync_failed'].includes(inv.sync_status)
                             ? navigate(`/finance/invoices/create?draft=${encodeURIComponent(inv.id)}`)
@@ -678,6 +790,27 @@ export default function InvoicesPage() {
           )}
         </DialogContent>
       </Dialog>
+
+      {pdfJob ? (
+        <div
+          aria-hidden
+          style={{
+            position: 'absolute',
+            left: -9999,
+            top: 0,
+            width: 800,
+            overflow: 'visible',
+            pointerEvents: 'none',
+          }}
+        >
+          <InvoiceRenderer
+            invoice={pdfJob.invoice}
+            items={pdfJob.items}
+            business={pdfJob.business}
+            payments={pdfJob.payments}
+          />
+        </div>
+      ) : null}
     </DashboardLayout>
   );
 }

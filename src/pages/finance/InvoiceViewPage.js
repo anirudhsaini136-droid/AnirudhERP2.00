@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
-import { ArrowLeft, Printer, MessageCircle, ShieldCheck, Truck, X } from 'lucide-react';
+import { ArrowLeft, Printer, Download, MessageCircle, ShieldCheck, Truck, X } from 'lucide-react';
+import { downloadElementAsPdf } from '../../utils/exportInvoicePdf';
 import { Input } from '../../components/ui/input';
 import { Button } from '../../components/ui/button';
 import { toast } from 'sonner';
@@ -37,6 +38,7 @@ export default function InvoiceViewPage() {
   const [showEway, setShowEway] = useState(false);
   const [ewayVehicle, setEwayVehicle] = useState('');
   const [ewayDistance, setEwayDistance] = useState('100');
+  const [downloadingPdf, setDownloadingPdf] = useState(false);
   // Email sending removed
 
   useEffect(() => {
@@ -131,6 +133,24 @@ export default function InvoiceViewPage() {
   }, [id, api, navigate, authBusiness]);
 
   const handlePrint = () => window.print();
+
+  const handleDownloadPdf = async () => {
+    if (!invoice) return;
+    setDownloadingPdf(true);
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 600));
+      const el = document.getElementById('invoice-print');
+      if (!el) throw new Error('Invoice not ready');
+      const safe = String(invoice.invoice_number || invoice.id || 'invoice').replace(/[^\w.\-]+/g, '_');
+      await downloadElementAsPdf(el, safe);
+      toast.success('PDF downloaded');
+    } catch (e) {
+      console.error(e);
+      toast.error('Could not download PDF. Try Print → Save as PDF instead.');
+    } finally {
+      setDownloadingPdf(false);
+    }
+  };
 
   // handleSendEmail removed
 
@@ -294,8 +314,16 @@ export default function InvoiceViewPage() {
             style={{ background: 'rgba(37,211,102,0.1)', borderColor: 'rgba(37,211,102,0.3)', color: '#25d366' }}>
             <MessageCircle size={15} /> Send on WhatsApp
           </button>
+          <button
+            type="button"
+            onClick={handleDownloadPdf}
+            disabled={downloadingPdf}
+            className="btn-premium text-sm flex items-center gap-2 px-4 py-2 rounded-xl border border-gold-500/40 bg-gold-500/10 text-gold-300 hover:bg-gold-500/20 disabled:opacity-50"
+          >
+            <Download size={15} /> {downloadingPdf ? 'Preparing…' : 'Download PDF'}
+          </button>
           <button onClick={handlePrint} className="btn-premium btn-primary text-sm flex items-center gap-2">
-            <Printer size={15} /> Print / PDF
+            <Printer size={15} /> Print
           </button>
         </div>
       </div>

@@ -531,11 +531,11 @@ export default function CreateInvoicePage() {
       if (offline) {
         if (!business?.id) throw new Error('Business context missing');
         if (activeDraftId) removeLocalInvoiceByIdCb(activeDraftId);
-        createLocalInvoiceAndQueue({ businessId: business.id, business, form });
+        const localInv = createLocalInvoiceAndQueue({ businessId: business.id, business, form });
         toast.success('Saved offline. Will sync when online.');
         resetForm();
         setActiveDraftId(null);
-        navigate('/finance/invoices');
+        navigate(`/finance/invoices/${localInv.id}`);
         return;
       }
 
@@ -544,7 +544,7 @@ export default function CreateInvoicePage() {
       if (activeDraftId) removeLocalInvoiceByIdCb(activeDraftId);
       resetForm();
       setActiveDraftId(null);
-      navigate('/finance/invoices');
+      navigate(`/finance/invoices/${res.data.id}`);
     } catch (err) {
       const detail = err?.response?.data?.detail;
       if (err?.response?.status === 409 && detail?.code === 'CREDIT_LIMIT_EXCEEDED') {
@@ -567,14 +567,14 @@ export default function CreateInvoicePage() {
       try {
         if (!business?.id) throw err;
         if (activeDraftId) removeLocalInvoiceByIdCb(activeDraftId);
-        createLocalInvoiceAndQueue({ businessId: business.id, business, form });
+        const localInv = createLocalInvoiceAndQueue({ businessId: business.id, business, form });
         if (typeof navigator !== 'undefined' && navigator.onLine) {
           syncOfflineInvoiceQueue({ api, businessId: business.id }).catch(() => {});
         }
         toast.success('Saved offline. Will sync when online.');
         resetForm();
         setActiveDraftId(null);
-        navigate('/finance/invoices');
+        navigate(`/finance/invoices/${localInv.id}`);
       } catch {
         toast.error(err.response?.data?.detail || 'Failed to create invoice');
       }
@@ -590,7 +590,7 @@ export default function CreateInvoicePage() {
       const linesForSave = filterInvoiceItemsForSave(form.items);
       const partyGstin = normalizePartyGstin(form.client_gstin);
       const { client_gstin: _omitGstin, per_item_tax: _pit, items: _it, ...formWithoutGstin } = form;
-      await api.post('/finance/invoices', {
+      const res = await api.post('/finance/invoices', {
         ...formWithoutGstin,
         tax_rate: form.per_item_tax ? 0 : Number(form.tax_rate) || 0,
         ...(partyGstin ? { client_gstin: partyGstin } : {}),
@@ -612,7 +612,7 @@ export default function CreateInvoicePage() {
       if (activeDraftId) removeLocalInvoiceByIdCb(activeDraftId);
       resetForm();
       setActiveDraftId(null);
-      navigate('/finance/invoices');
+      navigate(`/finance/invoices/${res.data.id}`);
     } catch (err) {
       toast.error(err?.response?.data?.detail?.message || err?.response?.data?.detail || 'Failed to create invoice');
     } finally {
