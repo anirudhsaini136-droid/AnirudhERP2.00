@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
-import { ArrowLeft, Printer, Download, MessageCircle, ShieldCheck, Truck, X } from 'lucide-react';
+import { ArrowLeft, Printer, Download, Pencil, MessageCircle, ShieldCheck, Truck, X } from 'lucide-react';
 import { downloadElementAsPdf } from '../../utils/exportInvoicePdf';
 import { Input } from '../../components/ui/input';
 import { Button } from '../../components/ui/button';
@@ -16,7 +16,7 @@ const fmtDate = (d) => d ? new Date(d).toLocaleDateString('en-IN', { day: 'numer
 
 export default function InvoiceViewPage() {
   const { id } = useParams();
-  const { api, business: authBusiness } = useAuth();
+  const { api, business: authBusiness, user } = useAuth();
   const navigate = useNavigate();
 
   const { allowEinvoice, allowEway } = useMemo(() => {
@@ -243,6 +243,10 @@ export default function InvoiceViewPage() {
   };
 
   const hasIrn = Boolean(invoice?.einvoice_irn || invoice?.einvoice_status === 'generated');
+  const canEdit =
+    user?.role !== 'ca_admin' &&
+    invoice?.status !== 'cancelled' &&
+    !hasIrn;
 
   if (loading) return (
     <div className="min-h-screen bg-obsidian flex items-center justify-center">
@@ -314,6 +318,15 @@ export default function InvoiceViewPage() {
             style={{ background: 'rgba(37,211,102,0.1)', borderColor: 'rgba(37,211,102,0.3)', color: '#25d366' }}>
             <MessageCircle size={15} /> Send on WhatsApp
           </button>
+          {canEdit && (
+            <button
+              type="button"
+              onClick={() => navigate(`/finance/invoices/create?edit=${encodeURIComponent(id)}`)}
+              className="btn-premium text-sm flex items-center gap-2 px-4 py-2 rounded-xl border border-sky-500/40 bg-sky-500/10 text-sky-300 hover:bg-sky-500/20"
+            >
+              <Pencil size={15} /> Edit
+            </button>
+          )}
           <button
             type="button"
             onClick={handleDownloadPdf}

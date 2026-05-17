@@ -13,6 +13,7 @@ import {
   upsertLocalInvoices,
   createLocalInvoiceAndQueue,
   syncOfflineInvoiceQueue,
+  updateLocalPendingInvoiceFromForm,
 } from '../../lib/offlineInvoices';
 import {
   fmt,
@@ -36,6 +37,7 @@ export default function CreateInvoicePage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const draftIdParam = searchParams.get('draft');
+  const editIdParam = searchParams.get('edit');
   const challanIdParam = searchParams.get('challan');
 
   const getSavedPref = (key, fallback) => {
@@ -89,6 +91,9 @@ export default function CreateInvoicePage() {
   const [salesmen, setSalesmen] = useState([]);
   const [selectedCustomerCredit, setSelectedCustomerCredit] = useState(null);
   const [allowOverCredit, setAllowOverCredit] = useState(false);
+  const [editingInvoiceId, setEditingInvoiceId] = useState(null);
+  const [editLoading, setEditLoading] = useState(false);
+  const [editLocalOnly, setEditLocalOnly] = useState(false);
 
   useEffect(() => {
     const on = () => setOfflineNow(!navigator.onLine);
@@ -143,7 +148,127 @@ export default function CreateInvoicePage() {
   }, [today]);
 
   useEffect(() => {
-    if (!draftIdParam || !business?.id) return;
+    if (!editIdParam || draftIdParam) return;
+    let cancelled = false;
+    const loadForEdit = async () => {
+      setEditLoading(true);
+      setEditingInvoiceId(editIdParam);
+      setEditLocalOnly(false);
+
+      const applyInvoiceToForm = (inv, items) => {
+        const lines = items || inv.items || [];
+        const hasLineTax = lines.some((i) => Number(i.line_tax_rate) > 0);
+        let customFields = inv.custom_fields;
+        if (typeof customFields === 'string') {
+          try {
+            customFields = JSON.parse(customFields);
+          } catch {
+            customFields = [];
+          }
+        }
+        if (!Array.isArray(customFields)) customFields = [];
+        if (lines.some((i) => i.hsn_code)) setShowHSN(true);
+        if (lines.some((i) => Number(i.item_discount) > 0)) setShowItemDiscount(true);
+        if (customFields.length) setShowCustomFields(true);
+        setForm({
+          customer_id: inv.customer_id || '',
+          client_name: inv.client_name || '',
+          client_email: inv.client_email || '',
+          client_address: inv.client_address || '',
+          client_phone: inv.client_phone || '',
+          client_gstin: inv.client_gstin || '',
+          issue_date: inv.issue_date || today,
+          due_date: inv.due_date || '',
+          tax_rate: hasLineTax ? 0 : Number(inv.tax_rate) || 0,
+          discount_amount: Number(inv.discount_amount) || 0,
+          notes: inv.notes || '',
+          currency: inv.currency || 'INR',
+          challan_id: inv.challan_id || '',
+          salesman_id: inv.salesman_id || '',
+          buyer_state: inv.buyer_state || '',
+          per_item_tax: hasLineTax,
+          items: padInvoiceItemsTrailingBlank(
+            lines.length
+              ? lines.map((i) => ({
+                  ...emptyItem,
+                  product_id: i.product_id || null,
+                  description: i.description || '',
+                  hsn_code: i.hsn_code || '',
+                  quantity: Number(i.quantity) || 1,
+                  unit_price: Number(i.unit_price) || 0,
+                  item_discount: Number(i.item_discount) || 0,
+                  line_tax_rate: Number(i.line_tax_rate) || 0,
+                  amount:
+                    Number(i.total) ||
+                    (Number(i.quantity) || 0) * (Number(i.unit_price) || 0) - (Number(i.item_discount) || 0),
+                }))
+              : [{ ...emptyItem }]
+          ),
+          custom_fields: customFields.map((cf) => ({ label: cf.label, value: cf.value })),
+        });
+      };
+
+      try {
+        if (business?.id) {
+          const local = loadLocalInvoices(business.id).find(
+            (x) => x.id === editIdParam || x.server_invoice_id === editIdParam
+          );
+          if (local && ['local_pending', 'sync_failed'].includes(local.sync_status) && !local.server_invoice_id) {
+            if (!cancelled) {
+              setEditLocalOnly(true);
+              setEditingInvoiceId(local.id);
+              applyInvoiceToForm(local, local.items);
+            }
+            return;
+          }
+        }
+
+        const offline = typeof navigator !== 'undefined' && !navigator.onLine;
+        if (offline && business?.id) {
+          const local = loadLocalInvoices(business.id).find(
+            (x) => x.id === editIdParam || x.server_invoice_id === editIdParam
+          );
+          if (!local) throw new Error('Invoice not available offline');
+          if (!cancelled) {
+            setEditLocalOnly(true);
+            setEditingInvoiceId(local.id);
+            applyInvoiceToForm(local, local.items);
+          }
+          return;
+        }
+
+        const res = await api.get(`/finance/invoices/${encodeURIComponent(editIdParam)}`);
+        if (cancelled) return;
+        const inv = res.data.invoice;
+        if (inv.status === 'cancelled') {
+          toast.error('Cancelled invoices cannot be edited');
+          navigate('/finance/invoices');
+          return;
+        }
+        if (inv.einvoice_irn || inv.einvoice_status === 'generated') {
+          toast.error('Cannot edit after e-invoice (IRN) is generated');
+          navigate(`/finance/invoices/${editIdParam}`);
+          return;
+        }
+        setEditingInvoiceId(inv.id);
+        applyInvoiceToForm(inv, res.data.items);
+      } catch (e) {
+        if (!cancelled) {
+          toast.error(e.response?.data?.detail || e.message || 'Could not load invoice');
+          navigate('/finance/invoices');
+        }
+      } finally {
+        if (!cancelled) setEditLoading(false);
+      }
+    };
+    loadForEdit();
+    return () => {
+      cancelled = true;
+    };
+  }, [editIdParam, draftIdParam, api, business?.id, today, navigate]);
+
+  useEffect(() => {
+    if (!draftIdParam || editIdParam || !business?.id) return;
     const all = loadLocalInvoices(business.id);
     const inv = all.find((x) => x.id === draftIdParam);
     if (!inv) return;
@@ -528,6 +653,30 @@ export default function CreateInvoicePage() {
       }),
     });
     try {
+      if (editingInvoiceId) {
+        if (editLocalOnly) {
+          if (!business?.id) throw new Error('Business context missing');
+          const updated = updateLocalPendingInvoiceFromForm({
+            businessId: business.id,
+            localInvoiceId: editingInvoiceId,
+            business,
+            form,
+          });
+          if (!updated) throw new Error('Could not update local invoice');
+          toast.success('Invoice updated (will sync when online)');
+          navigate(`/finance/invoices/${editingInvoiceId}`);
+          return;
+        }
+        if (offline) {
+          toast.error('Go online to save changes to this invoice');
+          return;
+        }
+        await api.put(`/finance/invoices/${encodeURIComponent(editingInvoiceId)}`, makePayload(false));
+        toast.success('Invoice updated');
+        navigate(`/finance/invoices/${editingInvoiceId}`);
+        return;
+      }
+
       if (offline) {
         if (!business?.id) throw new Error('Business context missing');
         if (activeDraftId) removeLocalInvoiceByIdCb(activeDraftId);
@@ -560,8 +709,16 @@ export default function CreateInvoicePage() {
         const msg =
           (typeof detail === 'string' && detail) ||
           detail?.message ||
-          `Invoice create failed (HTTP ${status}). Please fix and try again.`;
+          (editingInvoiceId
+            ? `Invoice update failed (HTTP ${status}). Please fix and try again.`
+            : `Invoice create failed (HTTP ${status}). Please fix and try again.`);
         toast.error(msg);
+        return;
+      }
+      if (editingInvoiceId) {
+        toast.error(
+          typeof detail === 'string' ? detail : err.message || 'Failed to update invoice'
+        );
         return;
       }
       try {
@@ -590,7 +747,7 @@ export default function CreateInvoicePage() {
       const linesForSave = filterInvoiceItemsForSave(form.items);
       const partyGstin = normalizePartyGstin(form.client_gstin);
       const { client_gstin: _omitGstin, per_item_tax: _pit, items: _it, ...formWithoutGstin } = form;
-      const res = await api.post('/finance/invoices', {
+      const payload = {
         ...formWithoutGstin,
         tax_rate: form.per_item_tax ? 0 : Number(form.tax_rate) || 0,
         ...(partyGstin ? { client_gstin: partyGstin } : {}),
@@ -607,14 +764,21 @@ export default function CreateInvoicePage() {
           item_discount: Number(i.item_discount) || 0,
           ...(form.per_item_tax ? { line_tax_rate: Number(i.line_tax_rate) || 0 } : {}),
         })),
-      });
+      };
+      if (editingInvoiceId && !editLocalOnly) {
+        await api.put(`/finance/invoices/${encodeURIComponent(editingInvoiceId)}`, payload);
+        toast.success('Invoice updated');
+        navigate(`/finance/invoices/${editingInvoiceId}`);
+        return;
+      }
+      const res = await api.post('/finance/invoices', payload);
       toast.success('Invoice created');
       if (activeDraftId) removeLocalInvoiceByIdCb(activeDraftId);
       resetForm();
       setActiveDraftId(null);
       navigate(`/finance/invoices/${res.data.id}`);
     } catch (err) {
-      toast.error(err?.response?.data?.detail?.message || err?.response?.data?.detail || 'Failed to create invoice');
+      toast.error(err?.response?.data?.detail?.message || err?.response?.data?.detail || 'Failed to save invoice');
     } finally {
       setCreating(false);
     }
@@ -638,6 +802,10 @@ export default function CreateInvoicePage() {
 
   const requestGoBack = () => {
     if (creating) return;
+    if (editingInvoiceId) {
+      navigate(`/finance/invoices/${editingInvoiceId}`);
+      return;
+    }
     if (!hasInvoiceFormAnyData(form)) {
       navigate('/finance/invoices');
       return;
@@ -672,6 +840,16 @@ export default function CreateInvoicePage() {
     return null;
   }
 
+  if (editLoading) {
+    return (
+      <DashboardLayout>
+        <div className="flex items-center justify-center min-h-[40vh]">
+          <div className="w-8 h-8 border-2 border-gold-500 border-t-transparent rounded-full animate-spin" />
+        </div>
+      </DashboardLayout>
+    );
+  }
+
   return (
     <DashboardLayout>
       <div className="space-y-4 pb-10">
@@ -699,7 +877,7 @@ export default function CreateInvoicePage() {
           </label>
         </div>
         <div>
-          <h1 className="font-display text-2xl text-white">Create Invoice</h1>
+          <h1 className="font-display text-2xl text-white">{editingInvoiceId ? 'Edit Invoice' : 'Create Invoice'}</h1>
           {showPreview ? (
             <p className="text-sm text-gray-500 font-sans mt-1">Live preview updates as you type</p>
           ) : null}
@@ -1139,7 +1317,13 @@ export default function CreateInvoicePage() {
 
               <div className="flex flex-wrap gap-2 pt-2">
                 <button type="submit" disabled={creating} className="btn-premium btn-primary">
-                  {creating ? 'Creating...' : 'Create Invoice'}
+                  {creating
+                    ? editingInvoiceId
+                      ? 'Saving...'
+                      : 'Creating...'
+                    : editingInvoiceId
+                      ? 'Update Invoice'
+                      : 'Create Invoice'}
                 </button>
               </div>
             </form>

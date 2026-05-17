@@ -367,6 +367,85 @@ export function enqueueCreateInvoice({ businessId, localInvoiceId, payload }) {
   setLocalQueue(businessId, queue);
 }
 
+/** Update a local pending invoice and its sync queue payload before server sync. */
+export function updateLocalPendingInvoiceFromForm({ businessId, localInvoiceId, business, form }) {
+  const invoices = loadLocalInvoices(businessId);
+  const idx = invoices.findIndex((i) => i.id === localInvoiceId);
+  if (idx < 0) return null;
+  const prev = invoices[idx];
+  const rebuilt = buildLocalInvoiceFromForm({
+    business,
+    form,
+    localInvoiceId,
+    invoiceNumber: prev.invoice_number,
+  });
+  const amountPaid = Number(prev.amount_paid) || 0;
+  const balanceDue = Math.max(0, Number(rebuilt.total_amount) - amountPaid);
+  let status = prev.status || "sent";
+  if (balanceDue <= 0.01) status = "paid";
+  else if (amountPaid > 0.01) status = "partially_paid";
+  const next = {
+    ...rebuilt,
+    server_invoice_id: prev.server_invoice_id || null,
+    sync_status: prev.sync_status || "local_pending",
+    amount_paid: amountPaid,
+    balance_due: balanceDue,
+    status,
+    created_at: prev.created_at || rebuilt.created_at,
+    updated_at: nowIso(),
+  };
+  invoices[idx] = next;
+  upsertLocalInvoices(businessId, invoices);
+
+  const payload = normalizeCreateInvoicePayload({
+    client_name: form.client_name,
+    client_email: form.client_email || null,
+    client_address: form.client_address || null,
+    client_phone: form.client_phone || null,
+    client_gstin: clientGstinFromForm(form),
+    buyer_state: form.buyer_state || null,
+    place_of_supply: form.buyer_state || null,
+    issue_date: form.issue_date,
+    due_date: form.due_date,
+    payment_terms: form.payment_terms || null,
+    notes: form.notes || null,
+    currency: form.currency || "INR",
+    tax_rate: form.per_item_tax ? 0 : Number(form.tax_rate) || 0,
+    discount_amount: Number(form.discount_amount) || 0,
+    custom_fields: (form.custom_fields || [])
+      .filter((f) => f && f.label && f.value)
+      .map((f) => ({ label: f.label, value: f.value })),
+    items: (form.items || [])
+      .filter((it) => String(it?.description || "").trim())
+      .map((i) => {
+        const base = {
+          product_id: i.product_id || null,
+          description: i.description,
+          hsn_code: i.hsn_code || null,
+          quantity: Number(i.quantity),
+          unit_price: Number(i.unit_price),
+          item_discount: Number(i.item_discount) || 0,
+        };
+        if (form.per_item_tax) {
+          return { ...base, line_tax_rate: Number(i.line_tax_rate) || 0 };
+        }
+        return base;
+      }),
+  });
+
+  const queue = loadLocalQueue(businessId);
+  let updatedQueue = false;
+  const nextQueue = queue.map((action) => {
+    if (action.type === "CREATE_INVOICE" && action.local_invoice_id === localInvoiceId) {
+      updatedQueue = true;
+      return { ...action, payload, status: "pending", retry_count: 0 };
+    }
+    return action;
+  });
+  if (updatedQueue) setLocalQueue(businessId, nextQueue);
+  return next;
+}
+
 export function enqueueCreatePayment({ businessId, localInvoiceId, payload }) {
   const queue = loadLocalQueue(businessId);
   queue.push({

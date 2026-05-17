@@ -5,7 +5,7 @@ import DashboardLayout from '../../components/layout/DashboardLayout';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../../components/ui/dialog';
 import { Input } from '../../components/ui/input';
 import { Label } from '../../components/ui/label';
-import { Plus, Search, Eye, Download, CheckCircle, Trash2, Bell, RefreshCw } from 'lucide-react';
+import { Plus, Search, Eye, Download, Pencil, CheckCircle, Trash2, Bell, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 import { toastAfterWhatsAppOpen } from '../../utils/whatsappToast';
 import { downloadElementAsPdf } from '../../utils/exportInvoicePdf';
@@ -30,6 +30,21 @@ const fmtDate = (d) => d ? new Date(d).toLocaleDateString('en-IN', { day: 'numer
 const STATUS_COLORS = {
   draft: 'badge-neutral', sent: 'badge-info', paid: 'badge-success',
   overdue: 'badge-danger', cancelled: 'badge-danger', partially_paid: 'badge-warning'
+};
+
+const canEditInvoiceRow = (inv) => {
+  if (!inv) return false;
+  if (inv.status === 'cancelled') return false;
+  if (inv.einvoice_irn || inv.einvoice_status === 'generated') return false;
+  return true;
+};
+
+const invoiceEditHref = (inv) => {
+  if (inv.sync_status === 'local_draft') {
+    return `/finance/invoices/create?draft=${encodeURIComponent(inv.id)}`;
+  }
+  const editId = inv.server_invoice_id || inv.id;
+  return `/finance/invoices/create?edit=${encodeURIComponent(editId)}`;
 };
 
 export default function InvoicesPage() {
@@ -666,6 +681,16 @@ export default function InvoicesPage() {
                       >
                         <Download size={15} className={downloadingId === inv.id ? 'animate-pulse' : ''} />
                       </button>
+                      {user?.role !== 'ca_admin' && canEditInvoiceRow(inv) && (
+                        <button
+                          type="button"
+                          onClick={() => navigate(invoiceEditHref(inv))}
+                          className="p-1.5 text-sky-400 hover:text-sky-300"
+                          title="Edit invoice"
+                        >
+                          <Pencil size={15} />
+                        </button>
+                      )}
                       <button
                         onClick={() =>
                           ['local_draft', 'local_pending', 'sync_failed'].includes(inv.sync_status)
