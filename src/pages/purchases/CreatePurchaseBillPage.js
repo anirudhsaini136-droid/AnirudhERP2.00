@@ -17,7 +17,7 @@ import {
   filterInvoiceItemsForSave,
   itemRowHasDraftSignal,
 } from '../finance/invoiceFormPrimitives';
-import { splitGstTotal } from '../../shared-core';
+import { splitGstTotal, applyRoundOff } from '../../shared-core';
 
 const purchaseEmptyItem = { ...emptyItem, update_stock: true };
 
@@ -159,7 +159,9 @@ export default function CreatePurchaseBillPage() {
     [taxAmount, form.vendor_state, recipientState]
   );
 
-  const totalAmount = subtotal + taxAmount - (Number(form.discount_amount) || 0);
+  const { roundOff, total: totalAmount } = applyRoundOff(
+    subtotal + taxAmount - (Number(form.discount_amount) || 0)
+  );
 
   const previewBill = useMemo(
     () => ({
@@ -597,6 +599,12 @@ export default function CreatePurchaseBillPage() {
                     <span>-{fmt(form.discount_amount)}</span>
                   </div>
                 )}
+                <div className="flex justify-between text-gray-400">
+                  <span>Round Off</span>
+                  <span className={roundOff < 0 ? 'text-rose-400' : roundOff > 0 ? 'text-emerald-400' : ''}>
+                    {roundOff > 0 ? '+' : ''}{fmt(roundOff)}
+                  </span>
+                </div>
                 <div className="flex justify-between text-white font-semibold text-base pt-2 border-t border-white/5">
                   <span>Total</span>
                   <span className="text-gold-400">{fmt(totalAmount)}</span>

@@ -30,7 +30,7 @@ import {
   filterInvoiceItemsForSave,
   padInvoiceItemsTrailingBlank,
 } from './invoiceFormPrimitives';
-import { splitGstTotal } from '../../shared-core';
+import { splitGstTotal, applyRoundOff } from '../../shared-core';
 
 export default function CreateInvoicePage() {
   const { api, business, user } = useAuth();
@@ -371,7 +371,7 @@ export default function CreateInvoicePage() {
         return s + (lt * (Number(i.line_tax_rate) || 0)) / 100;
       }, 0);
     }
-    const totalAmount = subtotal + taxAmount - (Number(form.discount_amount) || 0);
+    const { total: totalAmount } = applyRoundOff(subtotal + taxAmount - (Number(form.discount_amount) || 0));
     const localId = activeDraftId || `draft-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     const gstDraft = splitGstTotal(taxAmount, business?.state || '', form.buyer_state || '');
     const headerTaxStored = form.per_item_tax ? 0 : Number(form.tax_rate) || 0;
@@ -517,7 +517,8 @@ export default function CreateInvoicePage() {
         )
       : subtotal * ((Number(form.tax_rate) || 0) / 100)) * 100
   ) / 100;
-  const totalAmount = subtotal + taxAmount - (Number(form.discount_amount) || 0);
+  const preRoundTotal = subtotal + taxAmount - (Number(form.discount_amount) || 0);
+  const { roundOff, total: totalAmount } = applyRoundOff(preRoundTotal);
   const projectedOutstanding = Number(selectedCustomerCredit?.existing_outstanding || 0) + Number(totalAmount || 0);
   const creditLimitExceeded =
     Number(selectedCustomerCredit?.credit_limit || 0) > 0 &&
@@ -1327,6 +1328,12 @@ export default function CreateInvoicePage() {
                     <span>-{fmt(form.discount_amount)}</span>
                   </div>
                 )}
+                <div className="flex justify-between text-gray-400">
+                  <span>Round Off</span>
+                  <span className={roundOff < 0 ? 'text-rose-400' : roundOff > 0 ? 'text-emerald-400' : ''}>
+                    {roundOff > 0 ? '+' : ''}{fmt(roundOff)}
+                  </span>
+                </div>
                 <div className="flex justify-between text-white font-semibold text-base pt-2 border-t border-white/5">
                   <span>Total</span>
                   <span className="text-gold-400">{fmt(totalAmount)}</span>

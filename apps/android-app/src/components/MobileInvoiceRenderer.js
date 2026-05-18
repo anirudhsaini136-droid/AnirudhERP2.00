@@ -2,6 +2,7 @@ import React, { useMemo } from "react";
 import { Image, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { useTheme } from "../theme/ThemeProvider";
 import { fmtInr } from "../utils/format";
+import { applyRoundOff, documentPreRoundTotal } from "../../../../src/shared-core/money";
 
 function fmtDate(d) {
   try {
@@ -48,9 +49,10 @@ export default function MobileInvoiceRenderer({ invoice, items, business, qrUrl,
   const igst = Number(invoice?.igst_amount || 0);
   const tax = Number(invoice?.tax_amount || 0);
   const discount = Number(invoice?.discount_amount || 0);
-  const total = Number(invoice?.total_amount || 0);
+  const preRoundTotal = documentPreRoundTotal(invoice, subtotal);
+  const { roundOff, total } = applyRoundOff(preRoundTotal);
   const paid = Number(invoice?.amount_paid || 0);
-  const due = Number(invoice?.balance_due || 0);
+  const due = paid > 0 ? Math.max(0, total - paid) : Number(invoice?.balance_due ?? total);
 
   return (
     <View style={styles.paper}>
@@ -133,6 +135,12 @@ export default function MobileInvoiceRenderer({ invoice, items, business, qrUrl,
         {igst > 0 ? <View style={styles.totalRow}><Text style={styles.totalK}>IGST ({invoice?.igst_rate || 0}%)</Text><Text style={styles.totalV}>{fmtInr(igst)}</Text></View> : null}
         {!cgst && !igst && tax > 0 ? <View style={styles.totalRow}><Text style={styles.totalK}>Tax ({invoice?.tax_rate || 0}%)</Text><Text style={styles.totalV}>{fmtInr(tax)}</Text></View> : null}
         {discount > 0 ? <View style={styles.totalRow}><Text style={styles.totalK}>Discount</Text><Text style={[styles.totalV, { color: "#ef4444" }]}>-{fmtInr(discount)}</Text></View> : null}
+        <View style={styles.totalRow}>
+          <Text style={styles.totalK}>Round Off</Text>
+          <Text style={[styles.totalV, { color: roundOff < 0 ? "#ef4444" : roundOff > 0 ? "#10b981" : undefined }]}>
+            {roundOff > 0 ? "+" : ""}{fmtInr(roundOff)}
+          </Text>
+        </View>
         <View style={styles.grandBand}>
           <Text style={styles.grandK}>Total</Text>
           <Text style={styles.grandV}>{fmtInr(total)}</Text>

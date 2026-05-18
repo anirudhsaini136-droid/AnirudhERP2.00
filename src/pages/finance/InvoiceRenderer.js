@@ -2,7 +2,7 @@
 // Props: invoice, items, business, payments
 import React from 'react';
 import QRCode from 'qrcode';
-import { splitGstTotal } from '../../shared-core';
+import { splitGstTotal, applyRoundOff, documentPreRoundTotal } from '../../shared-core';
 
 const fmt = (n) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 2 }).format(n || 0);
 const fmtDate = (d) => d ? new Date(d).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' }) : '-';
@@ -164,9 +164,10 @@ export default function InvoiceRenderer({ invoice, items, business, payments }) 
   customFields = customFields.filter(f => f.label && f.value);
 
   const computedSubtotal = lineRows.reduce((s, r) => s + r.taxable, 0);
-  const total = Number(invoice.total_amount || 0);
+  const preRoundTotal = documentPreRoundTotal(invoice, computedSubtotal);
+  const { roundOff, total } = applyRoundOff(preRoundTotal);
   const paid = Number(invoice.amount_paid || 0);
-  const balance = Number(invoice.balance_due || Math.max(0, total - paid));
+  const balance = paid > 0 ? Math.max(0, total - paid) : Number(invoice.balance_due ?? total);
 
   const termsOfSale = business?.terms_of_sale || '';
 
@@ -341,6 +342,12 @@ export default function InvoiceRenderer({ invoice, items, business, payments }) 
               <span>Discount</span><span>-{fmt(invoice.discount_amount)}</span>
             </div>
           )}
+          <div style={{ display: 'flex', justifyContent: 'space-between', padding: '5px 0', fontSize: 13, color: '#6b7280' }}>
+            <span>Round Off</span>
+            <span style={{ color: roundOff < 0 ? '#ef4444' : roundOff > 0 ? '#10b981' : '#6b7280' }}>
+              {roundOff > 0 ? '+' : ''}{fmt(roundOff)}
+            </span>
+          </div>
           {/* Grand total */}
           <div className="inv-grand-row" style={{
             display: 'flex', justifyContent: 'space-between', alignItems: 'center',

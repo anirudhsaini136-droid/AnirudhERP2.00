@@ -1,6 +1,6 @@
 // Purchase bill print/preview — mirrors InvoiceRenderer layout; vendor = supplier, business = recipient.
 import React from 'react';
-import { splitGstTotal } from '../../shared-core';
+import { splitGstTotal, applyRoundOff, documentPreRoundTotal } from '../../shared-core';
 
 const fmt = (n) =>
   new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 2 }).format(n || 0);
@@ -88,9 +88,10 @@ export default function PurchaseBillRenderer({ bill, items, business }) {
     lineRows.some((r) => r.pct > 0 || r.taxAmt > 0) || Number(bill.tax_amount || 0) > 0;
 
   const computedSubtotal = lineRows.reduce((s, r) => s + r.taxable, 0);
-  const total = Number(bill.total_amount || 0);
+  const preRoundTotal = documentPreRoundTotal(bill, computedSubtotal);
+  const { roundOff, total } = applyRoundOff(preRoundTotal);
   const paid = Number(bill.amount_paid || 0);
-  const balance = Number(bill.balance_due ?? Math.max(0, total - paid));
+  const balance = paid > 0 ? Math.max(0, total - paid) : Number(bill.balance_due ?? total);
 
   const recipientState = business?.state || '';
 
@@ -492,6 +493,12 @@ export default function PurchaseBillRenderer({ bill, items, business }) {
               <span>-{fmt(bill.discount_amount)}</span>
             </div>
           )}
+          <div style={{ display: 'flex', justifyContent: 'space-between', padding: '5px 0', fontSize: 13, color: '#6b7280' }}>
+            <span>Round Off</span>
+            <span style={{ color: roundOff < 0 ? '#ef4444' : roundOff > 0 ? '#10b981' : '#6b7280' }}>
+              {roundOff > 0 ? '+' : ''}{fmt(roundOff)}
+            </span>
+          </div>
           <div
             className="inv-grand-row"
             style={{

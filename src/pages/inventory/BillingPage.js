@@ -6,6 +6,7 @@ import { Input } from '../../components/ui/input';
 import { Label } from '../../components/ui/label';
 import { ArrowLeft, Search, Plus, Minus, Trash2, ShoppingCart, CheckCircle, FileText, MessageCircle, User } from 'lucide-react';
 import { toast } from 'sonner';
+import { applyRoundOff } from '../../shared-core';
 
 const fmt = (n) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(n || 0);
 
@@ -188,7 +189,7 @@ export default function BillingPage() {
   const chargesTotal = extraCharges.reduce((s, c) => s + (c.amount || 0), 0);
   const subtotal = productsSubtotal + chargesTotal;
   const taxAmount = subtotal * (taxRate / 100);
-  const total = subtotal + taxAmount - discount;
+  const { roundOff, total } = applyRoundOff(subtotal + taxAmount - discount);
 
   const openWhatsApp = (invoiceId, invoiceNumber, totalAmount, phone, custName, bizName) => {
     // ✅ FIXED: Using public invoice URL /invoice/:id (no login required for customer)
@@ -628,6 +629,12 @@ export default function BillingPage() {
                     <span>Discount</span><span>-{fmt(discount)}</span>
                   </div>
                 )}
+                <div className="flex justify-between text-xs text-gray-500">
+                  <span>Round Off</span>
+                  <span className={roundOff < 0 ? 'text-rose-400' : roundOff > 0 ? 'text-emerald-400' : ''}>
+                    {roundOff > 0 ? '+' : ''}{fmt(roundOff)}
+                  </span>
+                </div>
                 <div className="flex justify-between text-base font-bold pt-1 border-t border-white/5">
                   <span className="text-white">Total</span>
                   <span className="text-gold-400 text-xl">{fmt(total)}</span>
